@@ -37,7 +37,7 @@ func NewFromBytes(data []byte) (doc Pdf, err error) {
 }
 
 //Text returns the plain text content of the document
-func (d *Pdf) Text() (string) {
+func (d *Pdf) Text() string {
 	ch := make(chan *poppler.Page, d.GetNPages())
 	go closePages(ch)
 	log.Printf("Number of Pages: %d", d.GetNPages())
