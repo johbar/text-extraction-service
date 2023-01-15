@@ -9,5 +9,3 @@ This is an excercise in using Golang, probably unsuitable for any real-world usa
 ## Setup
 
 Poppler is needed for PDFs: `apt-get install libpoppler-glib-dev libcairo2-dev`
-
-## Usage

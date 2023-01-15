@@ -1,19 +1,21 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
+	"strings"
 
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/johbar/go-poppler"
 )
 
-type PopplerPdf struct {
+type Pdf struct {
 	*poppler.Document
 }
 
-func NewFromStream(stream io.ReadCloser) (doc PopplerPdf, err error) {
+func NewFromStream(stream io.ReadCloser) (doc Pdf, err error) {
 	data, err := io.ReadAll(stream)
 	if err != nil {
 		log.Println("NewFromStream: ", err)
@@ -22,42 +24,49 @@ func NewFromStream(stream io.ReadCloser) (doc PopplerPdf, err error) {
 	return NewFromBytes(data)
 }
 
-func NewFromBytes(data []byte) (doc PopplerPdf, err error) {
+func NewFromBytes(data []byte) (doc Pdf, err error) {
+	if mimetype.Detect(data).Extension() != ".pdf" {
+		return Pdf{nil}, errors.New("not a PDF")
+	}
 	pDoc, err := poppler.Load(data)
 	if err != nil {
 		log.Println(err)
 	}
-	doc = PopplerPdf{pDoc}
+	doc = Pdf{pDoc}
 	return
 }
 
 //Text returns the plain text content of the document
-func (d *PopplerPdf) Text() string {
+func (d *Pdf) Text() (string) {
+	ch := make(chan *poppler.Page, d.GetNPages())
+	go closePages(ch)
+	log.Printf("Number of Pages: %d", d.GetNPages())
+	var buf strings.Builder
 
-	buf := bytes.NewBufferString("")
-	d.StreamText(buf)
+	for n := 0; n < d.GetNPages(); n++ {
+		page := d.GetPage(n)
+		buf.WriteString(strings.TrimSpace(page.Text()))
+		ch <- page
+	}
+	close(ch)
 	return buf.String()
 }
 
 //StreamText writes the document's plain text content to an io.Writer
-func (d *PopplerPdf) StreamText(w io.Writer) {
-	ch := make (chan *poppler.Page, 100)
+func (d *Pdf) StreamText(w io.Writer) {
+	ch := make(chan *poppler.Page, d.GetNPages())
 	go closePages(ch)
 	log.Printf("Number of Pages: %d", d.GetNPages())
 	for n := 0; n < d.GetNPages(); n++ {
 		page := d.GetPage(n)
-		w.Write([]byte(page.Text()))
+		pText := strings.TrimSpace(page.Text())
+		w.Write([]byte(pText))
 		ch <- page
 	}
 	close(ch)
 }
 
-func (d *PopplerPdf) HasMetadata() bool {
-	return true
-}
-
-func (d *PopplerPdf) Metadata() *map[string]interface{} {
-	var m map[string]interface{}
+func (d *Pdf) Metadata() (m map[string]interface{}) {
 	tmpJson, _ := json.Marshal(d.Info())
 	err := json.Unmarshal(tmpJson, &m)
 	//remove Metadata xml foo
@@ -65,10 +74,10 @@ func (d *PopplerPdf) Metadata() *map[string]interface{} {
 	if err != nil {
 		log.Println("Could not convert metadata: ", err)
 	}
-	return &m
+	return
 }
 
-func (d *PopplerPdf) DocInfo() poppler.DocumentInfo {
+func (d *Pdf) DocInfo() poppler.DocumentInfo {
 	return d.Info()
 }
 
