@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/gabriel-vasile/mimetype v1.4.1
+	github.com/gen2brain/go-fitz v1.20.2
 	github.com/gin-gonic/gin v1.8.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/goccy/go-json v0.10.0 // indirect

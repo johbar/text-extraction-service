@@ -1,3 +1,4 @@
+//go:build poppler
 package main
 
 import (

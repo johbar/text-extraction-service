@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/gin-gonic/gin"
@@ -83,7 +82,7 @@ func ExtractRemote(c *gin.Context) {
 		return
 	}
 
-	addMetadataAsHeaders(c, doc)
+	// addMetadataAsHeaders(c, doc)
 	log.Println("Parsing done for:", url)
 	defer func() {
 		closeDocChan <- doc
@@ -115,30 +114,33 @@ func ExtractAsJson(c *gin.Context) {
 	c.JSON(status, m)
 }
 
-func addMetadataAsHeaders(c *gin.Context, doc Pdf) {
+// func addMetadataAsHeaders(c *gin.Context, doc Pdf) {
 
-	for k, v := range doc.Metadata() {
-		k := "X-PDF-" + k
-		switch vStr := v.(type) {
-		case string:
-			c.Writer.Header().Add(k, v.(string))
-		case int:
-			c.Writer.Header().Add(k, strconv.Itoa(vStr))
-		}
-	}
+// 	for k, v := range doc.Metadata() {
+// 		k := "X-PDF-" + k
+// 		c.Writer.Header().Add(k, v)
+// 		// switch vStr := v.(type) {
+// 		// case string:
+// 			// c.Writer.Header().Add(k, v.(string))
+// 		// case int:
+// 			// c.Writer.Header().Add(k, strconv.Itoa(vStr))
+// 		// }
+// 	}
 
-}
+// }
 
 func getRemoteDoc(url string) (doc Pdf, err error) {
 	response, err := http.Get(url)
 	if response.StatusCode >= 400 {
 		log.Println("Error fetching ", url, err)
 		response.Body.Close()
-		return Pdf{nil}, errors.New(response.Status)
+		return Pdf{}, errors.New(response.Status)
+		// return Pdf{nil}, errors.New(response.Status)
 	}
 	if err != nil {
 		log.Println("Error fetching ", url, err)
-		return Pdf{nil}, err
+		// return Pdf{nil}, err
+		return Pdf{}, err
 	}
 	defer response.Body.Close()
 	doc, err = NewFromStream(response.Body)
