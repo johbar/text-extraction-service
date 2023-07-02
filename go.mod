@@ -3,15 +3,19 @@ module github.com/johbar/text-extraction-service/v2
 go 1.16
 
 require (
-	github.com/gabriel-vasile/mimetype v1.4.1
-	github.com/gen2brain/go-fitz v1.20.2
-	github.com/gin-gonic/gin v1.8.2 // indirect
-	github.com/go-playground/locales v0.14.1 // indirect
-	github.com/goccy/go-json v0.10.0 // indirect
-	github.com/johbar/go-poppler v0.0.0-20221016201615-2d089fcde50c
-	github.com/julienschmidt/httprouter v1.3.0
-	github.com/mattn/go-isatty v0.0.17 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/ugorji/go/codec v1.2.8 // indirect
-	golang.org/x/crypto v0.5.0 // indirect
+	github.com/bytedance/sonic v1.9.2 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.2
+	github.com/gen2brain/go-fitz v1.22.2
+	github.com/gin-contrib/expvar v0.0.1
+	github.com/gin-gonic/gin v1.9.1
+	github.com/go-playground/validator/v10 v10.14.1 // indirect
+	github.com/johbar/go-poppler v0.0.0-20230701225544-580adedb8a97
+	github.com/klauspost/compress v1.16.6
+	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
+	github.com/nats-io/nats-server/v2 v2.9.19
+	github.com/nats-io/nats.go v1.27.1
+	github.com/spf13/viper v1.16.0
+	github.com/ugorji/go v1.2.11 // indirect
+	golang.org/x/net v0.11.0 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 )

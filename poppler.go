@@ -1,12 +1,13 @@
-//go:build poppler
+//go:build !mupdf
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"log"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/johbar/go-poppler"
@@ -14,6 +15,10 @@ import (
 
 type Pdf struct {
 	*poppler.Document
+}
+
+func init() {
+	println("Using Poppler (GLib) library.")
 }
 
 func NewFromStream(stream io.ReadCloser) (doc Pdf, err error) {
@@ -53,33 +58,6 @@ func (d *Pdf) Text() string {
 	return buf.String()
 }
 
-// dehyphenateString replaces hyphens at the end of a line
-// with the first word from the following line, and removes
-// that word from its line.
-// taken from https://git.rescribe.xyz/cgit/cgit.cgi/utils/tree/cmd/dehyphenate/main.go
-func dehyphenateString(in string) string {
-	var newlines []string
-	lines := strings.Split(in, "\n")
-	for i, line := range lines {
-		words := strings.Split(line, " ")
-		last := words[len(words)-1]
-		// the - 2 here is to account for a trailing newline and counting from zero
-		if len(last) > 0 && last[len(last)-1] == '-' && i < len(lines)-2 {
-			nextwords := strings.Split(lines[i+1], " ")
-			if len(nextwords) > 0 {
-				line = line[0:len(line)-1] + nextwords[0]
-			}
-			if len(nextwords) > 1 {
-				lines[i+1] = strings.Join(nextwords[1:], " ")
-			} else {
-				lines[i+1] = ""
-			}
-		}
-		newlines = append(newlines, line)
-	}
-	return strings.Join(newlines, " ")
-}
-
 //StreamText writes the document's plain text content to an io.Writer
 func (d *Pdf) StreamText(w io.Writer) {
 	ch := make(chan *poppler.Page, d.GetNPages())
@@ -88,22 +66,43 @@ func (d *Pdf) StreamText(w io.Writer) {
 	for n := 0; n < d.GetNPages(); n++ {
 		page := d.GetPage(n)
 		dehyph := dehyphenateString(page.Text())
-		// pText := strings.TrimSpace(page.Text())
 		w.Write([]byte(dehyph))
 		ch <- page
 	}
 	close(ch)
 }
 
-func (d *Pdf) Metadata() (m map[string]interface{}) {
-	tmpJson, _ := json.Marshal(d.Info())
-	err := json.Unmarshal(tmpJson, &m)
-	//remove Metadata xml foo
-	m["Metadata"] = nil
-	if err != nil {
-		log.Println("Could not convert metadata: ", err)
+//Metadata returns some of the PDF metadata as map with keys compatible to HTTP headers
+func (d *Pdf) Metadata() Metadata {
+	m := make(map[string]string)
+	if d.Info().PdfVersion != "" {
+		m["x-pdf-version"] = d.Info().PdfVersion
 	}
-	return
+	if d.Info().Author != "" {
+		m["x-pdf-author"] = d.Info().Author
+	}
+	if d.Info().Title != "" {
+		m["x-pdf-title"] = d.Info().Title
+	}
+	if d.Info().Subject != "" {
+		m["x-pdf-subject"] = d.Info().Subject
+	}
+	if d.Info().KeyWords != "" {
+		m["x-pdf-keywords"] = d.Info().KeyWords
+	}
+	if d.Info().Pages != 0 {
+		m["x-pdf-pages"] = strconv.Itoa(d.Info().Pages)
+	}
+	if d.Info().CreationDate != 0 {
+		modTime := time.Unix(int64(d.Info().CreationDate), 0)
+		m["x-pdf-created"] = modTime.Format(time.RFC3339)
+	}
+	if d.Info().ModificationDate != 0 {
+		modTime := time.Unix(int64(d.Info().ModificationDate), 0)
+		m["x-pdf-modified"] = modTime.Format(time.RFC3339)
+	}
+	m["x-parsed-by"] = "Poppler"
+	return m
 }
 
 func (d *Pdf) DocInfo() poppler.DocumentInfo {
