@@ -1,0 +1,22 @@
+FROM docker.io/golang:alpine as builder
+
+WORKDIR /app
+
+RUN apk add --no-cache git build-base  musl-dev mupdf-dev
+
+COPY go.mod go.sum ./
+COPY *.go ./
+
+ENV CGO_ENABLED=1
+
+RUN go mod download && go mod verify
+
+RUN go build -tags extlib,mupdf -o /usr/local/bin/text-extraction-service
+
+FROM docker.io/alpine:latest
+
+COPY --from=builder /usr/local/bin/text-extraction-service /usr/local/bin/text-extraction-service
+
+RUN apk update && apk add --no-cache mupdf
+
+CMD text-extraction-service
