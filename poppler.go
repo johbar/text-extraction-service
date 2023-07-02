@@ -18,7 +18,8 @@ type Pdf struct {
 }
 
 func init() {
-	println("Using Poppler (GLib) library.")
+	println("Using Poppler (GLib) library. Version:", poppler.Version())
+	
 }
 
 func NewFromStream(stream io.ReadCloser) (doc Pdf, err error) {
