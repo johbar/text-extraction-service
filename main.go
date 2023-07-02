@@ -44,9 +44,14 @@ func main() {
 	var maxPayload int32 = viper.GetInt32("max_payload")
 
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	ns, err := server.NewServer(&server.Options{Host: "localhost",
-		JetStream:  true,
-		MaxPayload: maxPayload, JetStreamMaxMemory: 1024 * 1000})
+	ns, err := server.NewServer(
+		&server.Options{
+			// Host:               "localhost",
+			JetStream:          true,
+			MaxPayload:         maxPayload,
+			JetStreamMaxMemory: 1024 * 1000,
+			TLS:                false,
+		})
 	if err != nil {
 		panic(err)
 	}
