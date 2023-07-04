@@ -139,11 +139,11 @@ func ExtractRemote(c *gin.Context) {
 		c.AbortWithError(http.StatusUnprocessableEntity, err)
 		return
 	}
+	defer doc.Close()
 	c.Status(http.StatusCreated)
 	metadata = doc.Metadata()
 	addMetadataAsHeaders(c, metadata)
 	log.Println("Parsing done for:", url)
-	defer doc.Close()
 	var text bytes.Buffer
 	var mWriter io.Writer
 	if silent {
@@ -159,14 +159,14 @@ func ExtractRemote(c *gin.Context) {
 	if noCache {
 		return
 	}
-	go SaveToCache(response, text, metadata)
+	SaveToCache(response, text, metadata)
 }
 
 func SaveToCache(response *http.Response, text bytes.Buffer, metadata map[string]string) {
 	url := response.Request.URL.String()
 	savePlaintextToCache(url, text)
 	metadata["etag"] = response.Header.Get("etag")
-	metadata["last-modified"] = response.Header.Get("last-modified")
+	metadata["http-last-modified"] = response.Header.Get("last-modified")
 	_, err := saveMetadataToCache(url, metadata)
 	if err != nil {
 		log.Printf("Error saving metadata to Cache: %v", err)

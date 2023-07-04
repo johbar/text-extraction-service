@@ -91,7 +91,7 @@ func savePlaintextToCache(url string, value bytes.Buffer) {
 	log.Printf("Compressed %d bytes to %d bytes (%.2fx)", uncompressedSize, compressedValue.Len(), ratio)
 	rev, err := plaintextBucket.Put(key, compressedValue.Bytes())
 	if err != nil {
-		log.Printf("ERROR in saveToNatsZstd: %v", err)
+		log.Printf("ERROR: %v", err)
 	}
 	log.Printf("Saved %d bytes to Nats. Revision %d", compressedValue.Len(), rev)
 }
