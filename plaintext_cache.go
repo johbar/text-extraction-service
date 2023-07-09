@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"log"
 	"strings"
 	"time"
@@ -11,6 +9,20 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/nats-io/nats.go"
 )
+
+var (
+	compressor   *zstd.Encoder
+	decompressor *zstd.Decoder
+)
+
+func init() {
+	var err1, err2 error
+	compressor, err1 = zstd.NewWriter(nil)
+	decompressor, err2 = zstd.NewReader(nil)
+	if err1 != nil || err2 != nil {
+		log.Fatalf("Could not instantiate (de)compressor: %v, %v", err1, err2)
+	}
+}
 
 func urlToKey(url string) string {
 	k := strings.TrimPrefix(url, "https://")
@@ -67,56 +79,35 @@ func getPlaintextFromCache(url string) []byte {
 	}
 	log.Printf("Retrieved %d compressed bytes from plaintext cache for key %s", len(entry.Value()), key)
 
-	var buf bytes.Buffer
-	val := bytes.NewBuffer(entry.Value())
-
-	err = decompress(val, &buf)
+	var val []byte
+	val, err = decompressBytes(entry.Value())
 	if err != nil {
 		log.Printf("%v", err)
 		return nil
 	}
-	return buf.Bytes()
+	log.Printf("Decompressed %d bytes to %d bytes", len(entry.Value()), len(val))
+	return val
 }
 
-func savePlaintextToCache(url string, value bytes.Buffer) {
+func savePlaintextToCache(url string, value []byte) {
 	key := urlToKey(url)
 	log.Printf("Compressing value for key %s", key)
-	var compressedValue bytes.Buffer
-	uncompressedSize := value.Len()
-	err := compress(&value, &compressedValue)
-	if err != nil {
-		log.Printf("%v", err)
-	}
-	ratio := float32(uncompressedSize) / float32(compressedValue.Len())
-	log.Printf("Compressed %d bytes to %d bytes (%.2fx)", uncompressedSize, compressedValue.Len(), ratio)
-	rev, err := plaintextBucket.Put(key, compressedValue.Bytes())
+	uncompressedSize := len(value)
+	compressedValue := compressBytes(value)
+	ratio := float32(uncompressedSize) / float32(len(compressedValue))
+	log.Printf("Compressed %d bytes to %d bytes (%.2fx)", uncompressedSize, len(compressedValue), ratio)
+	rev, err := plaintextBucket.Put(key, compressedValue)
 	if err != nil {
 		log.Printf("ERROR: %v", err)
 	}
-	log.Printf("Saved %d bytes to Nats. Revision %d", compressedValue.Len(), rev)
+	log.Printf("Saved %s to Nats. Revision %d", key, rev)
 }
 
-func compress(in io.Reader, out io.Writer) error {
-	enc, err := zstd.NewWriter(out)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(enc, in)
-	if err != nil {
-		enc.Close()
-		return err
-	}
-	return enc.Close()
+func compressBytes(b []byte) []byte {
+	dst := make([]byte, 0, len(b))
+	return compressor.EncodeAll(b, dst)
 }
 
-func decompress(in io.Reader, out io.Writer) error {
-	d, err := zstd.NewReader(in)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-
-	// Copy content...
-	_, err = io.Copy(out, d)
-	return err
+func decompressBytes(b []byte) ([]byte, error) {
+	return decompressor.DecodeAll(b, make([]byte, 0, 4*len(b)))
 }

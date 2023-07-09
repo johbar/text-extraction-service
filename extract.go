@@ -164,7 +164,7 @@ func ExtractRemote(c *gin.Context) {
 
 func SaveToCache(response *http.Response, text bytes.Buffer, metadata map[string]string) {
 	url := response.Request.URL.String()
-	savePlaintextToCache(url, text)
+	savePlaintextToCache(url, text.Bytes())
 	metadata["etag"] = response.Header.Get("etag")
 	metadata["http-last-modified"] = response.Header.Get("last-modified")
 	_, err := saveMetadataToCache(url, metadata)
