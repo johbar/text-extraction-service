@@ -27,7 +27,7 @@ func NewFromStream(stream io.ReadCloser) (doc Pdf, err error) {
 	if err != nil {
 		log.Println("NewFromStream: ", err)
 	}
-	defer stream.Close()
+	stream.Close()
 	return NewFromBytes(data)
 }
 
@@ -45,32 +45,24 @@ func NewFromBytes(data []byte) (doc Pdf, err error) {
 
 //Text returns the plain text content of the document
 func (d *Pdf) Text() string {
-	ch := make(chan *poppler.Page, d.GetNPages())
-	go closePages(ch)
 	log.Printf("Number of Pages: %d", d.GetNPages())
 	var buf strings.Builder
-
 	for n := 0; n < d.GetNPages(); n++ {
 		page := d.GetPage(n)
 		buf.WriteString(dehyphenateString(page.Text()))
-		ch <- page
+		page.Close()
 	}
-	close(ch)
 	return buf.String()
 }
 
 //StreamText writes the document's plain text content to an io.Writer
 func (d *Pdf) StreamText(w io.Writer) {
-	ch := make(chan *poppler.Page, d.GetNPages())
-	go closePages(ch)
 	log.Printf("Number of Pages: %d", d.GetNPages())
 	for n := 0; n < d.GetNPages(); n++ {
 		page := d.GetPage(n)
 		dehyph := dehyphenateString(page.Text())
 		w.Write([]byte(dehyph))
-		ch <- page
 	}
-	close(ch)
 }
 
 //Metadata returns some of the PDF metadata as map with keys compatible to HTTP headers
@@ -108,12 +100,4 @@ func (d *Pdf) Metadata() Metadata {
 
 func (d *Pdf) DocInfo() poppler.DocumentInfo {
 	return d.Info()
-}
-
-func closePages(ch chan *poppler.Page) {
-	for page := range ch {
-		if page != nil {
-			page.Close()
-		}
-	}
 }
