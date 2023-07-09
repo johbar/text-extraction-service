@@ -5,7 +5,10 @@ WORKDIR /usr/src/app
 # Install build dependenies
 RUN apk update && apk add build-base poppler-glib poppler-dev
 
+# Do the Build rootless
 USER nobody
+
+ENV HOME=/tmp GOPATH=/tmp
 
 # pre-copy/cache go.mod for pre-downloading dependencies and only redownloading them in subsequent builds if they change
 COPY go.mod go.sum ./
@@ -15,18 +18,20 @@ COPY *.go .
 
 ENV CGO_ENABLED=1
 
-RUN go build -v -o /tmp/text-extraction-service
-
+RUN go build -tags nomsgpack -v -o /go/text-extraction-service
+## Runtime Image ##
 FROM docker.io/alpine:latest
 
-COPY --from=builder /tmp/text-extraction-service /usr/local/bin/text-extraction-service
+COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
+
+# Needed at runtime, too:
 RUN apk update && apk add poppler-glib
 
 USER nobody
 
 EXPOSE 8080
 
-#Nats:
+# Nats:
 EXPOSE 4222
 
 VOLUME /tmp/nats
