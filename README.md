@@ -16,23 +16,37 @@ Install on Debian via `apt-get install libpoppler-glib-dev`.
 ## Use MuPDF instead of Poppler via build tag
 
 ```sh
-go build -tags mupdf
+go build -tags mupdf,nomsgpack
 ```
 
 ## MuPDF or Poppler?
 
-MuPDF is very fast for small documents. Poppler is rather slow but faster and more memory-efficient for large documents.
+MuPDF is very fast for small documents.
+Poppler is rather slow but faster and more memory-efficient for large documents.
 
-## Container build
+In my experience Poppler offers the overall best quality when performing text extraction.
 
-The repo includes two Containerfiles for building minimal Alpine-based images.
+## Build container images
+
+The repo includes two Containerfiles for building minimal Alpine-based images in a multi-stage style.
 
 ```sh
-# Use volumes to speed up subsequent builds -- remove the need to re-download and re-compile all dependencies:
-podman build . -f Containerfile.mupdf-alpine -t tes-mupdf:alpine-minimal --volume /tmp/buildcache:/go --volume /tmp/cache:/.cache/
+# Use a volume to speed up subsequent builds—remove the need to re-download and re-compile all dependencies
+# MuPDF-based:
+podman build . -f Containerfile.mupdf-alpine -t tes-mupdf:alpine-minimal --volume /tmp/cache:/tmp
 
-# for Poppler-based build:
-podman build . -f Containerfile.poppler-alpine -t tes-poppler:alpine-minimal --volume /tmp/buildcache:/go --volume /tmp/cache:/.cache/
+# Poppler-based:
+podman build . -f Containerfile.poppler-alpine -t tes-poppler:alpine-minimal --volume /tmp/cache:/tmp
+```
+
+## Run containers
+
+```sh
+# MuPDF based, using a volume for Nats JetStream storage
+podman run --rm -it -v nats:/tmp/nats -p 8080:8080 -p 4222:4222 tes-mupdf:alpine-minimal
+
+# poppler based, using a volume for Nats JetStream storage
+podman run --rm -it -v nats:/tmp/nats -p 8080:8080 -p 4222:4222 tes-poppler:alpine-minimal
 ```
 
 ## Config
