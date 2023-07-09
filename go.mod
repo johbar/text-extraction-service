@@ -17,7 +17,7 @@ require (
 	github.com/spf13/viper v1.16.0
 	github.com/ugorji/go v1.2.11 // indirect
 	golang.org/x/arch v0.4.0 // indirect
-	golang.org/x/net v0.11.0 // indirect
+	golang.org/x/net v0.12.0 // indirect
 	golang.org/x/sys v0.10.0 // indirect
 	golang.org/x/text v0.11.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
