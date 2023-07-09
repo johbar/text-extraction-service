@@ -9,7 +9,7 @@ require (
 	github.com/gin-contrib/expvar v0.0.1
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-playground/validator/v10 v10.14.1 // indirect
-	github.com/johbar/go-poppler v0.0.0-20230704214425-5fcc3e7da422
+	github.com/johbar/go-poppler v0.0.0-20230709165954-40cb454c5585
 	github.com/klauspost/compress v1.16.7
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/nats-io/nats-server/v2 v2.9.19
