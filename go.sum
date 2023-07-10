@@ -881,6 +881,10 @@ github.com/johbar/go-poppler v0.0.0-20230704214425-5fcc3e7da422 h1:X1zbYyol/EPP2
 github.com/johbar/go-poppler v0.0.0-20230704214425-5fcc3e7da422/go.mod h1:i6Ge1MOVAjySSApCo09UeCLJn+3gTCmTx8GqE0NVBFk=
 github.com/johbar/go-poppler v0.0.0-20230709165954-40cb454c5585 h1:PiPCxBRwSN1U/3cV5ZZ//sk1JK2hjw0DCb3LaKm0vTI=
 github.com/johbar/go-poppler v0.0.0-20230709165954-40cb454c5585/go.mod h1:i6Ge1MOVAjySSApCo09UeCLJn+3gTCmTx8GqE0NVBFk=
+github.com/johbar/go-poppler v0.0.0-20230709171903-6eef239bbde9 h1:uKRzyFKEiH8Ef+4/78y7i5o/p98imAME2/cEOChYR0A=
+github.com/johbar/go-poppler v0.0.0-20230709171903-6eef239bbde9/go.mod h1:i6Ge1MOVAjySSApCo09UeCLJn+3gTCmTx8GqE0NVBFk=
+github.com/johbar/go-poppler v1.0.0 h1:KIHlXdm/cl5jW1cpQhQ1ALcByb+llPudEWgiiozBQpE=
+github.com/johbar/go-poppler v1.0.0/go.mod h1:i6Ge1MOVAjySSApCo09UeCLJn+3gTCmTx8GqE0NVBFk=
 github.com/jpillora/backoff v1.0.0/go.mod h1:J/6gKK9jxlEcS3zixgDgUAsiuZ7yrSoa/FX5e0EB2j4=
 github.com/json-iterator/go v1.1.6/go.mod h1:+SdeFBvtyEkXs7REEP0seUULqWtbJapLOCVDaaPEHmU=
 github.com/json-iterator/go v1.1.9/go.mod h1:KdQUCv79m/52Kvf8AW2vK1V8akMuk1QjK/uOdHXbAo4=
