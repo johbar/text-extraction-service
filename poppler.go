@@ -1,4 +1,5 @@
 //go:build !mupdf
+
 package main
 
 import (
@@ -19,7 +20,7 @@ type Pdf struct {
 
 func init() {
 	println("Using Poppler (GLib) library. Version:", poppler.Version())
-	
+
 }
 
 func NewFromStream(stream io.ReadCloser) (doc Pdf, err error) {
@@ -43,7 +44,7 @@ func NewFromBytes(data []byte) (doc Pdf, err error) {
 	return
 }
 
-//Text returns the plain text content of the document
+// Text returns the plain text content of the document
 func (d *Pdf) Text() string {
 	log.Printf("Number of Pages: %d", d.GetNPages())
 	var buf strings.Builder
@@ -55,7 +56,7 @@ func (d *Pdf) Text() string {
 	return buf.String()
 }
 
-//StreamText writes the document's plain text content to an io.Writer
+// StreamText writes the document's plain text content to an io.Writer
 func (d *Pdf) StreamText(w io.Writer) {
 	log.Printf("Number of Pages: %d", d.GetNPages())
 	for n := 0; n < d.GetNPages(); n++ {
@@ -65,8 +66,8 @@ func (d *Pdf) StreamText(w io.Writer) {
 	}
 }
 
-//Metadata returns some of the PDF metadata as map with keys compatible to HTTP headers
-func (d *Pdf) Metadata() Metadata {
+// Metadata returns some of the PDF metadata as map with keys compatible to HTTP headers
+func (d *Pdf) Metadata() PdfMetadata {
 	m := make(map[string]string)
 	if d.Info().PdfVersion != "" {
 		m["x-pdf-version"] = d.Info().PdfVersion
