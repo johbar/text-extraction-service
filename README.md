@@ -13,6 +13,13 @@ It embeds [Nats](https://nats.io/) as a key-value-store that acts as a persisten
 By default poppler is used for PDFs.
 Install on Debian via `apt-get install libpoppler-glib-dev`.
 
+## Build locally
+
+```sh
+# Omit a large, yet unused dependency of Gin
+go build -tags nomsgpack
+```
+
 ## Use MuPDF instead of Poppler via build tag
 
 ```sh
@@ -32,6 +39,10 @@ The repo includes two Containerfiles for building minimal Alpine-based images in
 
 ```sh
 # Use a volume to speed up subsequent builds—remove the need to re-download and re-compile all dependencies
+mkdir --parents /tmp/cache
+# The build cache must be writable for the container user
+chmod 777 /tmp/cache
+
 # MuPDF-based:
 podman build . -f Containerfile.mupdf-alpine -t tes-mupdf:alpine-minimal --volume /tmp/cache:/tmp
 
