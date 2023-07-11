@@ -10,19 +10,37 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type Metadata map[string]string
+type PdfMetadata map[string]string
 
-func closeDocs(ch chan Pdf) {
-	i := 1
-	for doc := range ch {
-		doc.Close()
-		log.Printf("Document closed: %d", i)
-		i++
+// ExtractedDocument contains pointers to
+type ExtractedDocument struct {
+	Metadata *PdfMetadata
+	Url      *string
+	Text     *bytes.Buffer
+}
+
+func saveAndCloseExtracedDocs() {
+	for {
+		select {
+		case doc := <-closeDocChan:
+			doc.Close()
+			log.Println("Document closed.")
+		case data := <-saveExtractedDocChan:
+			_, err := saveMetadataToCache(*data)
+			if err != nil {
+				log.Fatalf("ERROR: Failed to save metadata to cache: %v", err)
+			}
+			_, err2 := savePlaintextToCache(data)
+			if err2 != nil {
+				log.Fatalf("ERROR: Failed to save Text to cache: %v", err)
+			}
+			log.Printf("Saved to Cache: %s", *data.Url)
+		}
 	}
 }
 
-//ExtractBody returns the request body's plain text content.
-//Returns a JSON encoded error message if the body is not a PDF.
+// ExtractBody returns the request body's plain text content.
+// Returns a JSON encoded error message if the body is not a PDF.
 func ExtractBody(c *gin.Context) {
 	payload, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -66,7 +84,7 @@ func ExtractRemote(c *gin.Context) {
 	var (
 		silent   bool
 		noCache  bool
-		metadata Metadata
+		metadata PdfMetadata
 	)
 
 	if c.Query("silent") == "true" || c.Request.Method == "HEAD" {
@@ -139,7 +157,6 @@ func ExtractRemote(c *gin.Context) {
 		c.AbortWithError(http.StatusUnprocessableEntity, err)
 		return
 	}
-	defer doc.Close()
 	c.Status(http.StatusCreated)
 	metadata = doc.Metadata()
 	addMetadataAsHeaders(c, metadata)
@@ -155,24 +172,18 @@ func ExtractRemote(c *gin.Context) {
 	if !silent {
 		log.Printf("Streaming response done for %s", url)
 	}
-	// do this out-of-band with responding to the client
+	closeDocChan <- doc
 	if noCache {
 		return
 	}
-	SaveToCache(response, text, metadata)
-}
-
-func SaveToCache(response *http.Response, text bytes.Buffer, metadata map[string]string) {
-	url := response.Request.URL.String()
-	savePlaintextToCache(url, text.Bytes())
 	metadata["etag"] = response.Header.Get("etag")
 	metadata["http-last-modified"] = response.Header.Get("last-modified")
-	_, err := saveMetadataToCache(url, metadata)
-	if err != nil {
-		log.Printf("Error saving metadata to Cache: %v", err)
-		return
+	extracted := &ExtractedDocument{
+		Url:      &url,
+		Text:     &text,
+		Metadata: &metadata,
 	}
-	log.Printf("Finished updating cache: %s", url)
+	saveExtractedDocChan <- extracted
 }
 
 // func ExtractAsJson(c *gin.Context) {

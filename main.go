@@ -1,7 +1,8 @@
 package main
 
 import (
-	_ "strconv"
+	"os"
+	"runtime/debug"
 	"time"
 
 	"log"
@@ -15,16 +16,23 @@ import (
 )
 
 var (
-	closeDocChan    chan Pdf
-	srv             http.Server
-	nc              *nats.Conn
-	plaintextBucket nats.KeyValue
-	metadataBucket  nats.KeyValue
+	closeDocChan         chan Pdf
+	saveExtractedDocChan chan *ExtractedDocument
+	srv                  http.Server
+	nc                   *nats.Conn
+	plaintextBucket      nats.KeyValue
+	metadataBucket       nats.KeyValue
 )
 
 func main() {
+	if os.Getenv("GOMEMLIMIT") != "" {
+		log.Printf("GOMEMLIMIT=%v (%d MiB)", debug.SetMemoryLimit(-1), debug.SetMemoryLimit(-1)/1024/1024)
+	}
+	// buildinfo, _ := debug.ReadBuildInfo()
+	// log.Printf("%v", buildinfo)
 	closeDocChan = make(chan Pdf, 100)
-	go closeDocs(closeDocChan)
+	saveExtractedDocChan = make(chan *ExtractedDocument, 10)
+	go saveAndCloseExtracedDocs()
 	router := gin.Default()
 	router.POST("/pdf", ExtractBody)
 	router.GET("/pdf", ExtractRemote)

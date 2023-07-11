@@ -30,7 +30,7 @@ func urlToKey(url string) string {
 	return k
 }
 
-func getMetaDataFromCache(url string) Metadata {
+func getMetaDataFromCache(url string) PdfMetadata {
 	key := urlToKey(url)
 	entry, err := metadataBucket.Get(key)
 
@@ -56,9 +56,9 @@ func getMetaDataFromCache(url string) Metadata {
 	return metadata
 }
 
-func saveMetadataToCache(url string, metadata Metadata) (uint64, error) {
-	key := urlToKey(url)
-	metadataJson, err := json.Marshal(metadata)
+func saveMetadataToCache(data ExtractedDocument) (uint64, error) {
+	key := urlToKey(*data.Url)
+	metadataJson, err := json.Marshal(*data.Metadata)
 	if err != nil {
 		log.Printf("%v %s", err, key)
 		return 0, err
@@ -89,18 +89,16 @@ func getPlaintextFromCache(url string) []byte {
 	return val
 }
 
-func savePlaintextToCache(url string, value []byte) {
+func savePlaintextToCache(doc *ExtractedDocument) (revision uint64, err error) {
+	url := *doc.Url
+	text := doc.Text.Bytes()
 	key := urlToKey(url)
 	log.Printf("Compressing value for key %s", key)
-	uncompressedSize := len(value)
-	compressedValue := compressBytes(value)
-	ratio := float32(uncompressedSize) / float32(len(compressedValue))
-	log.Printf("Compressed %d bytes to %d bytes (%.2fx)", uncompressedSize, len(compressedValue), ratio)
-	rev, err := plaintextBucket.Put(key, compressedValue)
-	if err != nil {
-		log.Printf("ERROR: %v", err)
-	}
-	log.Printf("Saved %s to Nats. Revision %d", key, rev)
+	uncompressedSize := len(text)
+	value := compressBytes(text)
+	ratio := float32(uncompressedSize) / float32(len(value))
+	log.Printf("Compressed %d bytes to %d bytes (%.2fx)", uncompressedSize, len(value), ratio)
+	return plaintextBucket.Put(key, value)
 }
 
 func compressBytes(b []byte) []byte {
