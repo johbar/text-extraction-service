@@ -63,6 +63,7 @@ func (d *Pdf) StreamText(w io.Writer) {
 		page := d.GetPage(n)
 		dehyph := dehyphenateString(page.Text())
 		w.Write([]byte(dehyph))
+		page.Close()
 	}
 }
 
