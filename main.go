@@ -85,7 +85,7 @@ func main() {
 				DontListen:         !viper.GetBool("expose_nats"),
 				Host:               natsHost,
 				Port:               natsPort,
-				StoreDir: viper.GetString(confNatsDir),
+				StoreDir:           viper.GetString(confNatsDir),
 			})
 		if err != nil {
 			panic(err)
