@@ -4,14 +4,18 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
+	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/johbar/go-poppler"
+	"golang.org/x/sys/unix"
 )
 
 type Pdf struct {
@@ -41,6 +45,67 @@ func NewFromBytes(data []byte) (doc Pdf, err error) {
 		log.Println(err)
 	}
 	doc = Pdf{pDoc}
+	return
+}
+
+func NewFromPipe(r io.Reader) (doc Pdf, err error) {
+
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		panic("os.Pipe(): " + err.Error())
+	}
+
+	log.Printf("Pipe FD: %d and %d", pr.Fd(), pw.Fd())
+	ch := make(chan *poppler.Document, )
+	go func() {
+		pdoc, err := poppler.LoadFromFd(pr.Fd())
+		log.Printf("Document created from FD %d. Error: %v", pr.Fd(), err)
+		ch <- pdoc
+	}()
+	byteCount, err2 := io.Copy(pw, r)
+	log.Printf("Copy to pw finished after %d bytes. Error: %v", byteCount, err2)
+	if err2 != nil {
+		log.Printf("ERROR: %v, FD: %d", err2, pw.Fd())
+		return Pdf{nil}, err2
+	}
+	pw.Close()
+	// time.Sleep(time.Microsecond*100)
+	log.Printf("Waiting for Poppler doc to arrive...")
+	pdoc := <-ch
+	return Pdf{pdoc}, err
+}
+
+func NewFromFifo(r io.Reader) (doc Pdf, err error) {
+	// log.Print("NewFromFifo entered.")
+	fifoPath := fmt.Sprintf("%s/poppler-%d.fifo", os.TempDir(), rand.Int())
+	fifoErr := unix.Mkfifo(fifoPath, 0666)
+	if fifoErr != nil {
+		panic(fifoErr)
+	}
+	defer os.Remove(fifoPath)
+	go func() {
+		// log.Print("Goroutine entered.")
+		wfifo, wfifoErr := os.OpenFile(fifoPath, os.O_WRONLY, 0)
+		if wfifoErr != nil {
+			panic(wfifoErr)
+		}
+		// log.Print("wfifo created.")
+		byteCount, err := io.Copy(wfifo, r)
+		log.Printf("io.Copy() to %s done: %d", fifoPath, byteCount)
+		if err != nil {
+			log.Printf("ERROR: %v, FD: %d", err, wfifo.Fd())
+			// panic(err)
+		}
+		wfifo.Close()
+	}()
+	rfifo, rfifoErr := os.OpenFile(fifoPath, os.O_RDONLY, 0)
+	if rfifoErr != nil {
+		panic(rfifoErr)
+	}
+	// log.Print("rfifo created.")
+	pdoc, err := poppler.LoadFromFd(rfifo.Fd())
+	doc = Pdf{pdoc}
+	log.Printf("Document created from FD %d, %s, %v", rfifo.Fd(), fifoPath, err)
 	return
 }
 

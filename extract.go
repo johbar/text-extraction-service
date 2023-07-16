@@ -150,8 +150,8 @@ func ExtractRemote(c *gin.Context) {
 	}
 	// We have no current version of the document but fetched it
 	// so parse and extract it
-	log.Println("Start parsing:", url)
-	doc, err := NewFromStream(response.Body)
+	log.Printf("Start parsing of %s. Length: %d", url, response.ContentLength)
+	doc, err := NewFromPipe(response.Body)
 	if err != nil {
 		log.Printf("ExtractRemote: %v, %s", err, url)
 		c.AbortWithError(http.StatusUnprocessableEntity, err)
