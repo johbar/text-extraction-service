@@ -19,6 +19,12 @@ type ExtractedDocument struct {
 	Text     *bytes.Buffer
 }
 
+type RequestParams struct {
+	Url string `form:"url"`
+	NoCache bool `form:"noCache"`
+	Silent bool `form:"silent"`
+}
+
 func saveAndCloseExtracedDocs() {
 	for {
 		select {
@@ -77,21 +83,27 @@ func ExtractRemoteAsync(c *gin.Context) {
 }
 
 func ExtractRemote(c *gin.Context) {
-	url := validateUriParamUrl(c)
-	if url == "" {
+	var params RequestParams
+	bindErr := c.BindQuery(&params)
+	if bindErr != nil {
+		c.AbortWithError(http.StatusBadRequest, bindErr)
+		log.Printf("%v", c.Errors.JSON())
 		return
 	}
+
+	url := params.Url
+
 	var (
 		silent   bool
 		noCache  bool
 		metadata PdfMetadata
 	)
 
-	if c.Query("silent") == "true" || c.Request.Method == "HEAD" {
+	if params.Silent || c.Request.Method == "HEAD" {
 		silent = true
 	}
 
-	if c.Query("nocache") == "true" {
+	if params.NoCache {
 		noCache = true
 	}
 	// log.Printf("Got metadata from Cache: %v", metadata)
