@@ -2,27 +2,35 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
 type PdfMetadata map[string]string
 
-// ExtractedDocument contains pointers to
+var validate *validator.Validate
+
+// ExtractedDocument contains pointers to PDF metadata, textual content and URL of origin
 type ExtractedDocument struct {
-	Metadata *PdfMetadata
 	Url      *string
+	Metadata *PdfMetadata
 	Text     *bytes.Buffer
 }
 
 type RequestParams struct {
-	Url string `form:"url"`
-	NoCache bool `form:"noCache"`
-	Silent bool `form:"silent"`
+	Url     string `form:"url" binding:"required" validate:"http_url"`
+	NoCache bool   `form:"noCache"`
+	Silent  bool   `form:"silent"`
+}
+
+func init() {
+	validate = validator.New()
 }
 
 func saveAndCloseExtracedDocs() {
@@ -72,22 +80,17 @@ func ExtractBody(c *gin.Context) {
 	}
 }
 
-func ExtractRemoteAsync(c *gin.Context) {
-	url := validateUriParamUrl(c)
-	if url == "" {
-		return
-	}
-	defer log.Println("Enqueued:", url)
-	processChan <- url
-	c.JSON(http.StatusCreated, gin.H{"enqueued": true, "url": url})
-}
-
 func ExtractRemote(c *gin.Context) {
 	var params RequestParams
 	bindErr := c.BindQuery(&params)
 	if bindErr != nil {
 		c.AbortWithError(http.StatusBadRequest, bindErr)
 		log.Printf("%v", c.Errors.JSON())
+		return
+	}
+	valErr := validate.Struct(params)
+	if valErr != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"err": fmt.Sprintf("%s is not a valid HTTP(S) URL", params.Url)})
 		return
 	}
 
@@ -115,11 +118,11 @@ func ExtractRemote(c *gin.Context) {
 	if !noCache {
 		metadata = getMetaDataFromCache(url)
 		if metadata != nil {
-			if metadata["etag"] != "" {
-				req.Header.Add("If-None-Match", metadata["etag"])
+			if etag, ok := metadata["etag"]; ok {
+				req.Header.Add("If-None-Match", etag)
 			}
-			if metadata["http-last-modified"] != "" {
-				req.Header.Add("If-Modified-Since", metadata["http-last-modified"])
+			if lastMod, ok := metadata["http-last-modified"]; ok {
+				req.Header.Add("If-Modified-Since", lastMod)
 			}
 		}
 	}
@@ -143,7 +146,7 @@ func ExtractRemote(c *gin.Context) {
 		text := getPlaintextFromCache(url)
 		if text != nil {
 			log.Printf("Found plain text in cache: %s", url)
-			addMetadataAsHeaders(c, metadata)
+			addMetadataAsHeaders(c, &metadata)
 			if silent {
 				c.Status(http.StatusNotModified)
 				return
@@ -163,7 +166,8 @@ func ExtractRemote(c *gin.Context) {
 	// We have no current version of the document but fetched it
 	// so parse and extract it
 	log.Printf("Start parsing of %s. Length: %d", url, response.ContentLength)
-	doc, err := NewFromPipe(response.Body)
+	// doc, err := NewFromPipe(response.Body)
+	doc, err := NewFromStream(response.Body)
 	if err != nil {
 		log.Printf("ExtractRemote: %v, %s", err, url)
 		c.AbortWithError(http.StatusUnprocessableEntity, err)
@@ -171,7 +175,9 @@ func ExtractRemote(c *gin.Context) {
 	}
 	c.Status(http.StatusCreated)
 	metadata = doc.Metadata()
-	addMetadataAsHeaders(c, metadata)
+	metadata["etag"] = response.Header.Get("etag")
+	metadata["http-last-modified"] = response.Header.Get("last-modified")
+	addMetadataAsHeaders(c, &metadata)
 	log.Println("Parsing done for:", url)
 	var text bytes.Buffer
 	var mWriter io.Writer
@@ -188,8 +194,6 @@ func ExtractRemote(c *gin.Context) {
 	if noCache {
 		return
 	}
-	metadata["etag"] = response.Header.Get("etag")
-	metadata["http-last-modified"] = response.Header.Get("last-modified")
 	extracted := &ExtractedDocument{
 		Url:      &url,
 		Text:     &text,
@@ -218,8 +222,8 @@ func ExtractRemote(c *gin.Context) {
 // 	c.JSON(status, m)
 // }
 
-func addMetadataAsHeaders(c *gin.Context, metadata map[string]string) {
-	for k, v := range metadata {
+func addMetadataAsHeaders(c *gin.Context, metadata *PdfMetadata) {
+	for k, v := range *metadata {
 		c.Writer.Header().Add(k, v)
 	}
 }
