@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/gabriel-vasile/mimetype"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 )
@@ -16,7 +15,7 @@ type PdfMetadata map[string]string
 
 var validate *validator.Validate
 
-// ExtractedDocument contains pointers to PDF metadata, textual content and URL of origin
+// ExtractedDocument contains pointers to metadata, textual content and URL of origin
 type ExtractedDocument struct {
 	Url      *string
 	Metadata *map[string]string
@@ -56,28 +55,14 @@ func saveAndCloseExtracedDocs() {
 // ExtractBody returns the request body's plain text content.
 // Returns a JSON encoded error message if the body is not a PDF.
 func ExtractBody(c *gin.Context) {
-	payload, err := io.ReadAll(c.Request.Body)
+	doc, err := NewDocFromStream(c.Request.Body)
 	if err != nil {
 		log.Println(err)
-	}
-	var doc *Pdf
-	contentType := mimetype.Detect(payload).Extension()
-	if contentType == ".pdf" {
-		doc, err = NewFromBytes(payload)
-		if err != nil {
-			log.Println(err)
-			c.AbortWithStatus(http.StatusUnprocessableEntity)
-			return
-		}
-		defer doc.Close()
-		w := c.Writer
-		w.WriteString(doc.Text())
-	} else {
-		log.Printf("Payload not a PDF, but " + contentType)
-		c.AbortWithStatusJSON(http.StatusUnprocessableEntity,
-			gin.H{"error": "Not a PDF", "content_type": contentType})
+		c.AbortWithStatus(http.StatusUnprocessableEntity)
 		return
 	}
+	defer doc.Close()
+	doc.StreamText(c.Writer)
 }
 
 func ExtractRemote(c *gin.Context) {
