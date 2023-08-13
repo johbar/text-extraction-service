@@ -2,27 +2,29 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
+	"net/http"
 	"os"
 	"runtime/debug"
 	"time"
-
-	"log"
-	"net/http"
 
 	"github.com/gin-contrib/expvar"
 	"github.com/gin-gonic/gin"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/spf13/viper"
+	sloggin "github.com/samber/slog-gin"
 )
 
 var (
-	closeDocChan         chan Pdf
+	closeDocChan         chan Document
 	saveExtractedDocChan chan *ExtractedDocument
 	srv                  http.Server
 	nc                   *nats.Conn
 	plaintextBucket      nats.KeyValue
 	metadataBucket       nats.KeyValue
+
+	logger *slog.Logger = slog.Default()
 )
 
 const (
@@ -37,16 +39,17 @@ const (
 )
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	// log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	if os.Getenv("GOMEMLIMIT") != "" {
-		log.Printf("GOMEMLIMIT=%v (%d MiB)", debug.SetMemoryLimit(-1), debug.SetMemoryLimit(-1)/1024/1024)
+		logger.Info("GOMEMLIMIT", "Bytes", debug.SetMemoryLimit(-1), "MBytes", debug.SetMemoryLimit(-1)/1024/1024)
 	}
 	// buildinfo, _ := debug.ReadBuildInfo()
 	// log.Printf("%v", buildinfo)
-	closeDocChan = make(chan Pdf, 100)
+	closeDocChan = make(chan Document, 100)
 	saveExtractedDocChan = make(chan *ExtractedDocument, 10)
 	go saveAndCloseExtracedDocs()
-	router := gin.Default()
+	router := gin.New()
+	router.Use(sloggin.New(logger), gin.Recovery())
 	router.POST("/pdf", ExtractBody)
 	router.GET("/pdf", ExtractRemote)
 	router.HEAD("/pdf", ExtractRemote)
@@ -110,7 +113,7 @@ func main() {
 		}
 	} else {
 		connStr := fmt.Sprintf("nats://%s:%d", natsHost, natsPort)
-		log.Printf("Connecting to Nats %s", connStr)
+		logger.Info("Connecting to Nats", "server", connStr)
 		nc, err = nats.Connect(connStr)
 		if err != nil {
 			panic(err)
@@ -118,27 +121,27 @@ func main() {
 	}
 	js, err := nc.JetStream()
 	if err != nil {
-		log.Fatalf("%e", err)
+		logger.Error(err.Error())
 	}
+	logger.Info("NATS server connected. JetStream enabled.")
 
 	kvPlainTexts := &nats.KeyValueConfig{Bucket: "plaintexts_zstd", MaxValueSize: maxPayload, Storage: nats.FileStorage}
 	kvMetaConf := &nats.KeyValueConfig{Bucket: "metadata", MaxValueSize: maxPayload, Storage: nats.FileStorage}
 	plaintextBucket, err = js.CreateKeyValue(kvPlainTexts)
 	if err != nil {
-		log.Fatalf("%v", err)
+		logger.Error(err.Error())
 	}
 	metadataBucket, err = js.CreateKeyValue(kvMetaConf)
-	log.Println("NATS server connected. ")
 	if err != nil {
-		log.Fatalf("%v", err)
+		logger.Error(err.Error())
 	}
-	log.Println("Service started at", srv.Addr)
+	logger.Info("Service started", "address", srv.Addr)
 
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		// Error starting or closing listener:
-		log.Printf("ERROR in webserver: %v", err)
+		logger.Error("Weberserver", "error", err)
 	}
-	log.Printf("Nats server still running...")
-	log.Println("HTTP Server stopped.")
+	logger.Info("Nats server still running...")
+	logger.Info("HTTP Server stopped.")
 
 }

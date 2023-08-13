@@ -24,7 +24,7 @@ func init() {
 
 }
 
-func NewFromStream(stream io.ReadCloser) (doc Pdf, err error) {
+func NewFromStream(stream io.ReadCloser) (doc *Pdf, err error) {
 	data, err := io.ReadAll(stream)
 	if err != nil {
 		log.Println("NewFromStream: ", err)
@@ -33,15 +33,15 @@ func NewFromStream(stream io.ReadCloser) (doc Pdf, err error) {
 	return NewFromBytes(data)
 }
 
-func NewFromBytes(data []byte) (doc Pdf, err error) {
+func NewFromBytes(data []byte) (doc *Pdf, err error) {
 	if mimetype.Detect(data).Extension() != ".pdf" {
-		return Pdf{nil}, errors.New("not a PDF")
+		return &Pdf{nil}, errors.New("not a PDF")
 	}
 	pDoc, err := poppler.Load(data)
 	if err != nil {
 		log.Println(err)
 	}
-	doc = Pdf{pDoc}
+	doc = &Pdf{pDoc}
 	return
 }
 
@@ -92,35 +92,36 @@ func (d *Pdf) StreamText(w io.Writer) {
 }
 
 // Metadata returns some of the PDF metadata as map with keys compatible to HTTP headers
-func (d *Pdf) Metadata() PdfMetadata {
+func (d *Pdf) MetadataMap() map[string]string {
 	m := make(map[string]string)
 	if d.Info().PdfVersion != "" {
-		m["x-pdf-version"] = d.Info().PdfVersion
+		m["x-document-version"] = d.Info().PdfVersion
 	}
 	if d.Info().Author != "" {
-		m["x-pdf-author"] = d.Info().Author
+		m["x-document-author"] = d.Info().Author
 	}
 	if d.Info().Title != "" {
-		m["x-pdf-title"] = d.Info().Title
+		m["x-document-title"] = d.Info().Title
 	}
 	if d.Info().Subject != "" {
-		m["x-pdf-subject"] = d.Info().Subject
+		m["x-document-subject"] = d.Info().Subject
 	}
 	if d.Info().KeyWords != "" {
-		m["x-pdf-keywords"] = d.Info().KeyWords
+		m["x-document-keywords"] = d.Info().KeyWords
 	}
 	if d.Info().Pages != 0 {
-		m["x-pdf-pages"] = strconv.Itoa(d.Info().Pages)
+		m["x-document-pages"] = strconv.Itoa(d.Info().Pages)
 	}
 	if d.Info().CreationDate != 0 {
 		modTime := time.Unix(int64(d.Info().CreationDate), 0)
-		m["x-pdf-created"] = modTime.Format(time.RFC3339)
+		m["x-document-created"] = modTime.Format(time.RFC3339)
 	}
 	if d.Info().ModificationDate != 0 {
 		modTime := time.Unix(int64(d.Info().ModificationDate), 0)
-		m["x-pdf-modified"] = modTime.Format(time.RFC3339)
+		m["x-document-modified"] = modTime.Format(time.RFC3339)
 	}
 	m["x-parsed-by"] = "Poppler"
+	m["x-doctype"] = "pdf"
 	return m
 }
 

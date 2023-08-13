@@ -25,7 +25,7 @@ FROM docker.io/alpine:latest
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
 # Needed at runtime, too:
-RUN apk update && apk add poppler-glib
+RUN apk update && apk add poppler-glib wv
 
 USER nobody
 

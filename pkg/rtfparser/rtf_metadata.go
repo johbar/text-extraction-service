@@ -12,7 +12,7 @@ type RtfMetadata struct {
 	Author, Comment, Company, Category, Operator, Subject, Title string
 	// Created and last modified times have no timezone information attached in RTF files.
 	// This packages returns them as local times, effectively attaching the running systems timezone information.
-	Created, Modified time.Time
+	Created, Modified *time.Time
 }
 
 var nul = regexp2.None
@@ -31,7 +31,7 @@ var modified = regexp2.MustCompile(`\{\\revtim\\yr(?<year>\d{4})\\mo(?<month>\d{
 func GetRtfInfo(inputRtf string) (m RtfMetadata, err error) {
 	infoMatch, err := infoGroup.FindStringMatch(inputRtf)
 	if err != nil || infoMatch == nil {
-		err = errors.New("getInfo: failed to find any RTF metadata")
+		err = errors.New("rtfparser: failed to find any RTF metadata")
 		return
 	}
 	info := infoMatch.String()
@@ -65,13 +65,14 @@ func GetRtfInfo(inputRtf string) (m RtfMetadata, err error) {
 	return
 }
 
-func parseDate(match *regexp2.Match) (date time.Time, err error) {
+func parseDate(match *regexp2.Match) (date *time.Time, err error) {
 	m := map[string]int{}
 	for _, x := range []string{"year", "month", "day", "hour", "minute"} {
 		if tmp, err := strconv.Atoi(match.GroupByName(x).String()); err == nil {
 			m[x] = tmp
 		}
-		date = time.Date(m["year"], (time.Month)(m["month"]), m["day"], m["hour"], m["minute"], 0, 0, time.Local)
+		t := time.Date(m["year"], (time.Month)(m["month"]), m["day"], m["hour"], m["minute"], 0, 0, time.Local)
+		date = &t
 	}
 	return
 }

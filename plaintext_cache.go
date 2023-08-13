@@ -30,7 +30,7 @@ func urlToKey(url string) string {
 	return k
 }
 
-func getMetaDataFromCache(url string) PdfMetadata {
+func getMetaDataFromCache(url string) map[string]string {
 	key := urlToKey(url)
 	entry, err := metadataBucket.Get(key)
 

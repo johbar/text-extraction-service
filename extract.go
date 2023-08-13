@@ -19,7 +19,7 @@ var validate *validator.Validate
 // ExtractedDocument contains pointers to PDF metadata, textual content and URL of origin
 type ExtractedDocument struct {
 	Url      *string
-	Metadata *PdfMetadata
+	Metadata *map[string]string
 	Text     *bytes.Buffer
 }
 
@@ -60,7 +60,7 @@ func ExtractBody(c *gin.Context) {
 	if err != nil {
 		log.Println(err)
 	}
-	var doc Pdf
+	var doc *Pdf
 	contentType := mimetype.Detect(payload).Extension()
 	if contentType == ".pdf" {
 		doc, err = NewFromBytes(payload)
@@ -99,10 +99,10 @@ func ExtractRemote(c *gin.Context) {
 	var (
 		silent   bool
 		noCache  bool
-		metadata PdfMetadata
+		metadata map[string]string
 	)
 
-	if params.Silent || c.Request.Method == "HEAD" {
+	if params.Silent || c.Request.Method == http.MethodHead {
 		silent = true
 	}
 
@@ -167,14 +167,14 @@ func ExtractRemote(c *gin.Context) {
 	// so parse and extract it
 	log.Printf("Start parsing of %s. Length: %d", url, response.ContentLength)
 	// doc, err := NewFromPipe(response.Body)
-	doc, err := NewFromStream(response.Body)
+	doc, err := NewDocFromStream(response.Body)
 	if err != nil {
 		log.Printf("ExtractRemote: %v, %s", err, url)
 		c.AbortWithError(http.StatusUnprocessableEntity, err)
 		return
 	}
 	c.Status(http.StatusCreated)
-	metadata = doc.Metadata()
+	metadata = doc.MetadataMap()
 	metadata["etag"] = response.Header.Get("etag")
 	metadata["http-last-modified"] = response.Header.Get("last-modified")
 	addMetadataAsHeaders(c, &metadata)
@@ -222,7 +222,7 @@ func ExtractRemote(c *gin.Context) {
 // 	c.JSON(status, m)
 // }
 
-func addMetadataAsHeaders(c *gin.Context, metadata *PdfMetadata) {
+func addMetadataAsHeaders(c *gin.Context, metadata *map[string]string) {
 	for k, v := range *metadata {
 		c.Writer.Header().Add(k, v)
 	}

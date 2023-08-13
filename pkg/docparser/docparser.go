@@ -3,21 +3,28 @@ Package docparser implements a parser for legacy MS Word documents (.doc).
 It depends on the wvWare tool which must be installed.
 
 The metadata parser is mainly taken from https://github.com/sajari/docconv/blob/master/doc.go,
-but 
+but avoids writing to the filesystem.
 */
 package docparser
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"log"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/richardlehane/mscfb"
 	"github.com/richardlehane/msoleps"
 	"github.com/richardlehane/msoleps/types"
 )
+
+// RegExp matching ugly control characters (possibly surrounded by whitespace)
+// and duplicate whitespace
+var reCleaner = regexp.MustCompile(`\s*?\pC\pS*?|\s{2,}`)
 
 type DocMetadata struct {
 	Author   string `json:"author,omitempty"`
@@ -29,11 +36,11 @@ type DocMetadata struct {
 	Subject  string `json:"subject,omitempty"`
 	Title    string `json:"title,omitempty"`
 
-	Created   time.Time `json:"created,omitempty"`
-	Modified  time.Time `json:"modified,omitempty"`
-	PageCount int32     `json:"page_count,omitempty"`
-	CharCount int32     `json:"char_count,omitempty"`
-	WordCount int32     `json:"word_count,omitempty"`
+	Created   *time.Time `json:"created,omitempty"`
+	Modified  *time.Time `json:"modified,omitempty"`
+	PageCount int32      `json:"page_count,omitempty"`
+	CharCount int32      `json:"char_count,omitempty"`
+	WordCount int32      `json:"word_count,omitempty"`
 }
 
 type WordDoc struct {
@@ -108,9 +115,11 @@ func readMetadata(r io.ReaderAt) (m DocMetadata, err error) {
 				if d, ok := prop.T.(types.FileTime); ok {
 					switch prop.Name {
 					case "CreateTime":
-						m.Created = d.Time()
+						t := d.Time()
+						m.Created = &t
 					case "LastSaveTime":
-						m.Modified = d.Time()
+						t := d.Time()
+						m.Modified = &t
 					}
 				} else if i, ok := prop.T.(types.I4); ok {
 					switch prop.Name {
@@ -132,6 +141,42 @@ func (d *WordDoc) Metadata() DocMetadata {
 	return d.metadata
 }
 
+func (d *WordDoc) MetadataMap() map[string]string {
+	m := map[string]string{
+		"x-doctype":           "msword",
+		"x-document-author":   d.metadata.Author,
+		"x-document-category": d.metadata.Category,
+		"x-document-comment":  d.metadata.Comment,
+		"x-document-company":  d.metadata.Company,
+		"x-document-keywords": d.metadata.Keywords,
+		"x-document-manager":  d.metadata.Manager,
+		"x-document-subject":  d.metadata.Subject,
+		"x-document-title":    d.metadata.Title,
+	}
+	if d.metadata.Created != nil {
+		m["x-document-created"] = d.metadata.Created.Format(time.RFC3339)
+	}
+	if d.metadata.Modified != nil {
+		m["x-document-modified"] = d.metadata.Modified.Format(time.RFC3339)
+	}
+	if d.metadata.PageCount != 0 {
+		m["x-document-page-count"] = strconv.Itoa(int(d.metadata.PageCount))
+	}
+	if d.metadata.CharCount != 0 {
+		m["x-document-char-count"] = strconv.Itoa(int(d.metadata.CharCount))
+	}
+	if d.metadata.WordCount != 0 {
+		m["x-document-word-count"] = strconv.Itoa(int(d.metadata.WordCount))
+	}
+	// omit empty
+	for k, v := range m {
+		if v == "" {
+			delete(m, k)
+		}
+	}
+	return m
+}
+
 func (d *WordDoc) Text() string {
 	if d.text == "" {
 		buf := bytes.NewBuffer(*d.data)
@@ -144,10 +189,32 @@ func (d *WordDoc) StreamText(w io.Writer) {
 	if d.text != "" {
 		w.Write([]byte(d.text))
 	} else {
+
 		cmd := exec.Command("wvWare", "-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8", "/dev/stdin")
+
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			log.Printf("docparser: %v", err)
+		}
+		s := bufio.NewScanner(stdout)
 		cmd.Stdin = bytes.NewBuffer(*d.data)
-		cmd.Stdout = w
-		err := cmd.Run()
+		err = cmd.Start()
+		if err != nil {
+			log.Printf("docparser: %v", err)
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				log.Printf("%s", exitErr.Stderr)
+			}
+		}
+
+		for s.Scan() {
+			line := s.Text() + " "
+			line = reCleaner.ReplaceAllLiteralString(line, " ")
+			// don't add empty lines
+			if line != "" && line != " " {
+				w.Write([]byte(line))
+			}
+		}
+		err = cmd.Wait()
 		if err != nil {
 			log.Printf("docparser: %v", err)
 			if exitErr, ok := err.(*exec.ExitError); ok {
@@ -169,4 +236,8 @@ func doc2text(r io.Reader) string {
 		}
 	}
 	return string(out)
+}
+
+// Close is a no-op
+func (d *WordDoc) Close() {
 }
