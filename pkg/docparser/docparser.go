@@ -53,7 +53,7 @@ func NewFromBytes(data []byte) (doc *WordDoc, err error) {
 	buf := bytes.NewReader(data)
 	doc.metadata, err = readMetadata(buf)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("docparser: %v", err)
 	}
 	return
 }
