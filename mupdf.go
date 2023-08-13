@@ -1,4 +1,5 @@
 //go:build mupdf
+
 package main
 
 import (
@@ -66,36 +67,36 @@ func (d *Pdf) Metadata() Metadata {
 	m := d.Document.Metadata()
 	r := make(Metadata)
 	if m["format"] != "" {
-		r["x-pdf-version"] = m["format"]
+		r["x-document-version"] = m["format"]
 	}
 	if m["author"] != "" {
-		r["x-pdf-author"] = m["author"]
+		r["x-document-author"] = m["author"]
 	}
 	if m["title"] != "" {
-		r["x-pdf-title"] = m["title"]
+		r["x-document-title"] = m["title"]
 	}
 	if m["subject"] != "" {
-		r["x-pdf-subject"] = m["subject"]
+		r["x-document-subject"] = m["subject"]
 	}
 	if m["keywords"] != "" {
-		r["x-pdf-keywords"] = m["keywords"]
+		r["x-document-keywords"] = m["keywords"]
 	}
 
-	r["x-pdf-pages"] = strconv.Itoa(d.NumPage())
+	r["x-document-pages"] = strconv.Itoa(d.NumPage())
 
 	// dates are in strange format
 	// FIXME: parse dates
 	if m["creationDate"] != "" {
-		r["x-pdf-created"] = m["creationDate"]
+		r["x-document-created"] = m["creationDate"]
 	}
 	if m["modDate"] != "" {
-		r["x-pdf-modified"] = m["modDate"]
+		r["x-document-modified"] = m["modDate"]
 	}
 	if m["producer"] != "" {
-		r["x-pdf-producer"] = m["producer"]
+		r["x-document-producer"] = m["producer"]
 	}
 	if m["creator"] != "" {
-		r["x-pdf-creator"] = m["creator"]
+		r["x-document-creator"] = m["creator"]
 	}
 	r["x-parsed-by"] = "MuPDF"
 	return r
