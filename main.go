@@ -50,13 +50,10 @@ func main() {
 	go saveAndCloseExtracedDocs()
 	router := gin.New()
 	router.Use(sloggin.New(logger), gin.Recovery())
-	router.POST("/pdf", ExtractBody)
-	router.GET("/pdf", ExtractRemote)
-	router.HEAD("/pdf", ExtractRemote)
+	router.POST("/", ExtractBody)
+	router.GET("/", ExtractRemote)
+	router.HEAD("/", ExtractRemote)
 	router.GET("/debug/vars", expvar.Handler())
-	// router.GET("/json", ExtractAsJson)
-	// router.GET("/pdf/forget", ExtractRemoteAsync)
-	// wg := startWorkers()
 
 	viper.SetEnvPrefix("tes")
 	// This service

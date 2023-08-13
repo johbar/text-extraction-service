@@ -2,8 +2,7 @@
 Package docparser implements a parser for legacy MS Word documents (.doc).
 It depends on the wvWare tool which must be installed.
 
-The metadata parser is mainly taken from https://github.com/sajari/docconv/blob/master/doc.go,
-but avoids writing to the filesystem.
+The metadata parser is mainly taken from https://github.com/sajari/docconv/blob/master/doc.go
 */
 package docparser
 
