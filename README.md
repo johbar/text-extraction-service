@@ -39,9 +39,7 @@ The repo includes two Containerfiles for building minimal Alpine-based images in
 
 ```sh
 # Use a volume to speed up subsequent builds—remove the need to re-download and re-compile all dependencies
-mkdir --parents /tmp/cache
-# The build cache must be writable for the container user
-chmod 777 /tmp/cache
+mkdir --mode 777 --parents /tmp/cache
 
 # MuPDF-based:
 podman build . -f Containerfile.mupdf-alpine -t tes-mupdf:alpine-minimal --volume /tmp/cache:/tmp
