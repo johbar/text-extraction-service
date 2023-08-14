@@ -8,7 +8,7 @@ COPY go.mod go.sum ./
 COPY . .
 ENV CGO_ENABLED=1
 RUN go mod download && go mod verify
-RUN go build -tags extlib,mupdf,nomsgpack -o /go/text-extraction-service
+RUN go build -buildvcs=false -tags extlib,mupdf,nomsgpack -o /go/text-extraction-service
 
 
 FROM docker.io/alpine:latest
