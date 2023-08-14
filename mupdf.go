@@ -18,13 +18,13 @@ func init() {
 	println("Using MuPDF (go-fitz) library.")
 }
 
-func NewFromBytes(data []byte) (Pdf, error) {
+func NewFromBytes(data []byte) (*Pdf, error) {
 	fdoc, err := fitz.NewFromMemory(data)
 	if err != nil {
 		log.Println(err.Error())
 	}
 	log.Printf("Opened Doc with %d Pages", fdoc.NumPage())
-	return Pdf{fdoc}, err
+	return &Pdf{fdoc}, err
 }
 
 func NewFromStream(stream io.Reader) (Pdf, error) {
@@ -63,9 +63,9 @@ func (d *Pdf) GetNPages() int {
 	return d.Document.NumPage()
 }
 
-func (d *Pdf) Metadata() Metadata {
+func (d *Pdf) MetadataMap() map[string]string {
 	m := d.Document.Metadata()
-	r := make(Metadata)
+	r := make(map[string]string)
 	if m["format"] != "" {
 		r["x-document-version"] = m["format"]
 	}
@@ -100,4 +100,9 @@ func (d *Pdf) Metadata() Metadata {
 	}
 	r["x-parsed-by"] = "MuPDF"
 	return r
+}
+
+
+func (d Pdf) Close () {
+	d.Close()
 }
