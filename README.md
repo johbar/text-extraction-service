@@ -42,10 +42,10 @@ The repo includes two Containerfiles for building minimal Alpine-based images in
 mkdir --mode 777 --parents /tmp/cache
 
 # MuPDF-based:
-podman build . -f Containerfile.mupdf-alpine -t tes-mupdf:alpine-minimal --volume /tmp/cache:/tmp
+podman build --pull . -f Containerfile.mupdf-alpine -t tes-mupdf:alpine-minimal --volume /tmp/cache:/tmp
 
 # Poppler-based:
-podman build . -f Containerfile.poppler-alpine -t tes-poppler:alpine-minimal --volume /tmp/cache:/tmp
+podman build --pull . -f Containerfile.poppler-alpine -t tes-poppler:alpine-minimal --volume /tmp/cache:/tmp
 ```
 
 ## Run containers
