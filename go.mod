@@ -8,7 +8,7 @@ require (
 	github.com/gen2brain/go-fitz v1.22.2
 	github.com/gin-contrib/expvar v0.0.1
 	github.com/gin-gonic/gin v1.9.1
-	github.com/go-playground/validator/v10 v10.15.0
+	github.com/go-playground/validator/v10 v10.15.1
 	github.com/johbar/go-poppler v1.0.1-0.20230721224815-a1860a344718
 	github.com/klauspost/compress v1.16.7
 	github.com/nats-io/nats-server/v2 v2.9.21
@@ -48,7 +48,7 @@ require (
 	github.com/spf13/cast v1.5.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/subosito/gotenv v1.4.2 // indirect
+	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	golang.org/x/arch v0.4.0 // indirect
