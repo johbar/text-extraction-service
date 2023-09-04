@@ -3,9 +3,9 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"strings"
 	"time"
 
+	"github.com/chenzhuoyu/base64x"
 	"github.com/klauspost/compress/zstd"
 	"github.com/nats-io/nats.go"
 )
@@ -25,9 +25,7 @@ func init() {
 }
 
 func urlToKey(url string) string {
-	k := strings.TrimPrefix(url, "https://")
-	k = strings.TrimPrefix(k, "http://")
-	return k
+	return base64x.JSONStdEncoding.EncodeToString([]byte(url))
 }
 
 func getMetaDataFromCache(url string) map[string]string {
