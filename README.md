@@ -1,6 +1,6 @@
 # text-extraction-service
 
-A simple Golang service for extracting textual content from PDF documents.
+A simple Golang service for extracting textual content from PDF and RTF and legacy MS Word (.doc) documents.
 
 ## Status
 
@@ -8,9 +8,11 @@ This is an exercise in using Golang, probably unsuitable for any real-world usag
 
 It embeds [Nats](https://nats.io/) as a key-value-store that acts as a persistent cache for extracted content.
 
+The RegEx-based RTF parser is very inefficient.
+
 ## Setup
 
-By default poppler is used for PDFs.
+By default Poppler is used for PDFs.
 Install on Debian via `apt-get install libpoppler-glib-dev`.
 
 ## Build locally
