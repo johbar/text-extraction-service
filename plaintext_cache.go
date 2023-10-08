@@ -28,7 +28,7 @@ func urlToKey(url string) string {
 	return base64x.JSONStdEncoding.EncodeToString([]byte(url))
 }
 
-func getMetaDataFromCache(url string) map[string]string {
+func getMetadataFromCache(url string) map[string]string {
 	key := urlToKey(url)
 	entry, err := metadataBucket.Get(key)
 
@@ -37,7 +37,7 @@ func getMetaDataFromCache(url string) map[string]string {
 			// no log message here
 			return nil
 		}
-		log.Printf("getMetaDataFromCache: %v %s", err, key)
+		logger.Error("getMetaDataFromCache", "error", err, "key", key)
 		return nil
 	}
 	rawValue := entry.Value()
@@ -47,7 +47,7 @@ func getMetaDataFromCache(url string) map[string]string {
 	metadata := make(map[string]string)
 	err = json.Unmarshal(rawValue, &metadata)
 	if err != nil {
-		log.Printf("%v %s", err, key)
+		logger.Error("JSON error when loading metadata from cache", "error", err, "key", key)
 		return nil
 	}
 	metadata["x-ingested"] = entry.Created().Local().Format(time.RFC3339)
@@ -58,7 +58,7 @@ func saveMetadataToCache(data ExtractedDocument) (uint64, error) {
 	key := urlToKey(*data.Url)
 	metadataJson, err := json.Marshal(*data.Metadata)
 	if err != nil {
-		log.Printf("%v %s", err, key)
+		logger.Error("JSON error when saving metadata to cache", "error", err, "key", key)
 		return 0, err
 	}
 	return metadataBucket.Put(key, metadataJson)
@@ -72,10 +72,9 @@ func getPlaintextFromCache(url string) []byte {
 			// no log message here
 			return nil
 		}
-		log.Printf("%v %s", err, key)
+		logger.Error("Error retrieving plaintext from cache", "error", err, "key", key)
 		return nil
 	}
-	log.Printf("Retrieved %d compressed bytes from plaintext cache for key %s", len(entry.Value()), key)
 
 	var val []byte
 	val, err = decompressBytes(entry.Value())
@@ -83,7 +82,7 @@ func getPlaintextFromCache(url string) []byte {
 		log.Printf("%v", err)
 		return nil
 	}
-	log.Printf("Decompressed %d bytes to %d bytes", len(entry.Value()), len(val))
+	logger.Debug("Decompressed plaintext", "compressed_bytes", len(entry.Value()), "decompressed_bytes", len(val))
 	return val
 }
 
@@ -91,11 +90,12 @@ func savePlaintextToCache(doc *ExtractedDocument) (revision uint64, err error) {
 	url := *doc.Url
 	text := doc.Text.Bytes()
 	key := urlToKey(url)
-	log.Printf("Compressing value for key %s", key)
+	// log.Printf("Compressing value for key %s", key)
 	uncompressedSize := len(text)
 	value := compressBytes(text)
 	ratio := float32(uncompressedSize) / float32(len(value))
-	log.Printf("Compressed %d bytes to %d bytes (%.2fx)", uncompressedSize, len(value), ratio)
+	logger.Debug("Compressed plaintext", "uncompressed_bytes", uncompressedSize, "compressed_bytes", len(value), "ratio", ratio)
+	// log.Printf("Compressed %d bytes to %d bytes (%.2fx)", uncompressedSize, len(value), ratio)
 	return plaintextBucket.Put(key, value)
 }
 

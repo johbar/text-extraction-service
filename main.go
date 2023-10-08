@@ -12,8 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
-	"github.com/spf13/viper"
 	sloggin "github.com/samber/slog-gin"
+	"github.com/spf13/viper"
 )
 
 var (

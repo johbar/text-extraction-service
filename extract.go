@@ -101,7 +101,7 @@ func ExtractRemote(c *gin.Context) {
 	}
 
 	if !noCache {
-		metadata = getMetaDataFromCache(url)
+		metadata = getMetadataFromCache(url)
 		if metadata != nil {
 			if etag, ok := metadata["etag"]; ok {
 				req.Header.Add("If-None-Match", etag)
