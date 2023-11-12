@@ -113,8 +113,8 @@ func (d *Pdf) MetadataMap() map[string]string {
 		m["x-document-pages"] = strconv.Itoa(d.Info().Pages)
 	}
 	if d.Info().CreationDate != 0 {
-		modTime := time.Unix(int64(d.Info().CreationDate), 0)
-		m["x-document-created"] = modTime.Format(time.RFC3339)
+		createTime := time.Unix(int64(d.Info().CreationDate), 0)
+		m["x-document-created"] = createTime.Format(time.RFC3339)
 	}
 	if d.Info().ModificationDate != 0 {
 		modTime := time.Unix(int64(d.Info().ModificationDate), 0)
