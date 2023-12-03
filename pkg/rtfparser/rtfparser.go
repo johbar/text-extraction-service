@@ -7,6 +7,8 @@ which itself is forked from https://github.com/J45k4/rtf-go and extracts text fr
 I ported it from standard lib's regexp package to github.com/dlclark/regexp2,
 hoping the use of FindNextMatch() instead of FindAllStringSubmatch() might
 lower memory requirements when processing large files.
+While this seems to be the case the parser still is very inefficient for larger files
+(e.g. those containing images.)
 */
 package rtfparser
 
@@ -402,16 +404,16 @@ var charsWithFmt = map[string]string{
 	"rdblquote": "\u201D",
 }
 
-var NoRtf error = errors.New("rtfparser: document is not an RTF")
+var ErrNoRtf error = errors.New("rtfparser: document is not an RTF")
 
 var rtfRegex = regexp2.MustCompile(
 	"(?i)"+
-		`\\([a-z]{1,32})(-?\d{1,10})?[ ]?`+
-		`|\\'([0-9a-f]{2})`+
-		`|\\([^a-z])`+
-		`|([{}])`+
-		`|[\r\n]+`+
-		`|(.)`, 0)
+		`\\([a-z]{1,32})(-?\d{1,10})?[ ]?`+ //word
+		`|\\'([0-9a-f]{2})`+ //arg
+		`|\\([^a-z])`+ //hex
+		`|([{}])`+ //character
+		`|[\r\n]+`+ //brace
+		`|(.)`, 0) //tchar
 
 type stackEntry struct {
 	NumberOfCharactersToSkip int
@@ -429,7 +431,7 @@ func NewFromBytes(data []byte) (d *RichTextDoc, err error) {
 	inputRtf := string(data)
 
 	if !IsFileRTF(data) {
-		err = NoRtf
+		err = ErrNoRtf
 		return
 	}
 	info, err := GetRtfInfo(inputRtf)
@@ -475,8 +477,9 @@ func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.W
 
 	out := bufio.NewWriter(w)
 	match, _ := rtfRegex.FindStringMatch(inputRtf)
-
+	var numMatches uint64 = 0
 	for match != nil {
+		numMatches++
 		word := match.GroupByNumber(1).String()
 		arg := match.GroupByNumber(2).String()
 		hex := match.GroupByNumber(3).String()
@@ -569,6 +572,7 @@ func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.W
 		match, _ = rtfRegex.FindNextMatch(match)
 		out.Flush()
 	}
+	// log.Printf("Number of matches: %v", numMatches)
 }
 
 // IsFileRTF checks if the data indicates a RTF file

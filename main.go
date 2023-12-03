@@ -21,10 +21,9 @@ var (
 	saveExtractedDocChan chan *ExtractedDocument
 	srv                  http.Server
 	nc                   *nats.Conn
-	plaintextBucket      nats.KeyValue
-	metadataBucket       nats.KeyValue
-
-	logger *slog.Logger = slog.Default()
+	js                   nats.JetStreamContext
+	logger               *slog.Logger = slog.Default()
+	maxPayload           int32
 )
 
 const (
@@ -56,9 +55,8 @@ func main() {
 	router.GET("/debug/vars", expvar.Handler())
 
 	viper.SetEnvPrefix("tes")
-	// This service
 	viper.SetDefault(confHostPort, ":8080")
-	viper.SetDefault(confMaxPayload, 8*1024*1024)
+	viper.SetDefault(confMaxPayload, 1024*1024)
 	viper.SetDefault(confExposeNats, false)
 	viper.SetDefault(confNatsPort, 4222)
 	viper.SetDefault(confNatsHost, "localhost")
@@ -68,7 +66,7 @@ func main() {
 
 	srv.Addr = viper.GetString(confHostPort)
 	srv.Handler = router
-	maxPayload := viper.GetInt32(confMaxPayload)
+	maxPayload = viper.GetInt32(confMaxPayload)
 	natsHost := viper.GetString(confNatsHost)
 	natsPort := viper.GetInt(confNatsPort)
 
@@ -116,27 +114,18 @@ func main() {
 			panic(err)
 		}
 	}
-	js, err := nc.JetStream()
+	js, err = nc.JetStream()
 	if err != nil {
 		logger.Error(err.Error())
 	}
 	logger.Info("NATS server connected. JetStream enabled.")
+	initCache()
 
-	kvPlainTexts := &nats.KeyValueConfig{Bucket: "plaintexts_zstd", MaxValueSize: maxPayload, Storage: nats.FileStorage}
-	kvMetaConf := &nats.KeyValueConfig{Bucket: "metadata", MaxValueSize: maxPayload, Storage: nats.FileStorage}
-	plaintextBucket, err = js.CreateKeyValue(kvPlainTexts)
-	if err != nil {
-		logger.Error(err.Error())
-	}
-	metadataBucket, err = js.CreateKeyValue(kvMetaConf)
-	if err != nil {
-		logger.Error(err.Error())
-	}
 	logger.Info("Service started", "address", srv.Addr)
 
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		// Error starting or closing listener:
-		logger.Error("Weberserver", "error", err)
+		logger.Error("Webserver", "error", err)
 	}
 	logger.Info("Nats server still running...")
 	logger.Info("HTTP Server stopped.")

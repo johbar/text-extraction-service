@@ -5,14 +5,14 @@ package main
 import (
 	"errors"
 	"io"
-	"log"
-	"os"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/johbar/go-poppler"
+	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 )
 
 type Pdf struct {
@@ -20,14 +20,13 @@ type Pdf struct {
 }
 
 func init() {
-	println("Using Poppler (GLib) library. Version:", poppler.Version())
-
+	slog.Info("Using Poppler (GLib) library", "version", poppler.Version())
 }
 
 func NewFromStream(stream io.ReadCloser) (doc *Pdf, err error) {
 	data, err := io.ReadAll(stream)
 	if err != nil {
-		log.Println("NewFromStream: ", err)
+		logger.Error("NewFromStream: ", "error", err)
 	}
 	stream.Close()
 	return NewFromBytes(data)
@@ -39,42 +38,18 @@ func NewFromBytes(data []byte) (doc *Pdf, err error) {
 	}
 	pDoc, err := poppler.Load(data)
 	if err != nil {
-		log.Println(err)
+		logger.Error("Could not load PDF", "error", err)
 	}
 	doc = &Pdf{pDoc}
 	return
 }
 
-func NewFromPipe(r io.Reader) (Pdf, error) {
-	pr, pw, err := os.Pipe()
-	if err != nil {
-		panic("os.Pipe(): " + err.Error())
-	}
-
-	log.Printf("Pipe FDs: reader %d; writer: %d", pr.Fd(), pw.Fd())
-	go func() {
-		byteCount, err2 := io.Copy(pw, r)
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Printf("%d Bytes copied to pipe. Error: %v", byteCount, err2)
-		pw.Close()
-	}()
-	pdoc, err2 := poppler.LoadFromFile(pr)
-	log.Printf("Document created from FD %d.", pr.Fd())
-	if err2 != nil {
-		log.Fatalf("ERROR: %v, FD: %d", err2, pw.Fd())
-	}
-	return Pdf{pdoc}, err2
-}
-
 // Text returns the plain text content of the document
 func (d *Pdf) Text() string {
-	log.Printf("Number of Pages: %d", d.GetNPages())
 	var buf strings.Builder
 	for n := 0; n < d.GetNPages(); n++ {
 		page := d.GetPage(n)
-		buf.WriteString(dehyphenateString(page.Text()))
+		buf.WriteString(page.Text())
 		page.Close()
 	}
 	return buf.String()
@@ -82,13 +57,21 @@ func (d *Pdf) Text() string {
 
 // StreamText writes the document's plain text content to an io.Writer
 func (d *Pdf) StreamText(w io.Writer) {
-	log.Printf("Number of Pages: %d", d.GetNPages())
+	logger.Info("Extracting", "pages", d.GetNPages())
+	finished := make(chan bool)
+	pr, pw := io.Pipe()
+	go func() {
+		dehyphenator.DehyphenateReaderToWriter(pr, w)
+		pr.Close()
+		finished <- true
+	}()
 	for n := 0; n < d.GetNPages(); n++ {
 		page := d.GetPage(n)
-		dehyph := dehyphenateString(page.Text())
-		w.Write([]byte(dehyph))
+		pw.Write([]byte(page.Text()))
 		page.Close()
 	}
+	pw.Close()
+	<-finished
 }
 
 // Metadata returns some of the PDF metadata as map with keys compatible to HTTP headers

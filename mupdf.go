@@ -4,10 +4,11 @@ package main
 
 import (
 	"io"
-	"log"
 	"strconv"
 
 	"github.com/gen2brain/go-fitz"
+	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
+	"golang.org/x/exp/slog"
 )
 
 type Pdf struct {
@@ -15,24 +16,24 @@ type Pdf struct {
 }
 
 func init() {
-	println("Using MuPDF (go-fitz) library.")
+	slog.Info("Using MuPDF (go-fitz) library.")
 }
 
 func NewFromBytes(data []byte) (*Pdf, error) {
 	fdoc, err := fitz.NewFromMemory(data)
 	if err != nil {
-		log.Println(err.Error())
+		logger.Error(err.Error())
 	}
-	log.Printf("Opened Doc with %d Pages", fdoc.NumPage())
+	logger.Info("Opened doc", "pages", fdoc.NumPage())
 	return &Pdf{fdoc}, err
 }
 
 func NewFromStream(stream io.Reader) (Pdf, error) {
 	fdoc, err := fitz.NewFromReader(stream)
 	if err != nil {
-		log.Println(err.Error())
+		logger.Error(err.Error())
 	}
-	log.Printf("Opened Doc with %d Pages", fdoc.NumPage())
+	logger.Debug("Opened Doc", "Pages", fdoc.NumPage())
 	return Pdf{fdoc}, err
 }
 
@@ -41,7 +42,7 @@ func (d *Pdf) Text() string {
 	for i := 0; i <= d.NumPage(); i++ {
 		pText, err := d.Document.Text(i)
 		if err != nil {
-			log.Println(err.Error())
+			logger.Error(err.Error())
 		}
 		result += pText
 	}
@@ -49,14 +50,23 @@ func (d *Pdf) Text() string {
 }
 
 func (d *Pdf) StreamText(w io.Writer) {
+	pr, pw := io.Pipe()
+	finished := make(chan bool)
+	go func() {
+		dehyphenator.DehyphenateReaderToWriter(pr, w)
+		pr.Close()
+		finished <- true
+	}()
 	for i := 0; i < d.NumPage(); i++ {
 		pText, err := d.Document.Text(i)
 		if err != nil {
-			log.Println(err.Error())
+			logger.Error(err.Error())
+			continue
 		}
-		text := dehyphenateString(pText)
-		w.Write([]byte(text))
+		pw.Write([]byte(pText))
 	}
+	pw.Close()
+	<-finished
 }
 
 func (d *Pdf) GetNPages() int {
@@ -102,7 +112,6 @@ func (d *Pdf) MetadataMap() map[string]string {
 	return r
 }
 
-
-func (d Pdf) Close () {
-	d.Close()
+func (d Pdf) Close() {
+	d.Document.Close()
 }

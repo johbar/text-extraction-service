@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -37,17 +36,12 @@ func saveAndCloseExtracedDocs() {
 		select {
 		case doc := <-closeDocChan:
 			doc.Close()
-			log.Println("Document closed.")
-		case data := <-saveExtractedDocChan:
-			_, err := saveMetadataToCache(*data)
-			if err != nil {
-				log.Fatalf("ERROR: Failed to save metadata to cache: %v", err)
+			logger.Debug("Document closed.")
+		case doc := <-saveExtractedDocChan:
+			err := saveToCache(doc)
+			if err == nil {
+				logger.Info("Saved to Cache", "url", *doc.Url)
 			}
-			_, err2 := savePlaintextToCache(data)
-			if err2 != nil {
-				log.Fatalf("ERROR: Failed to save Text to cache: %v", err)
-			}
-			log.Printf("Saved to Cache: %s", *data.Url)
 		}
 	}
 }
@@ -57,7 +51,7 @@ func saveAndCloseExtracedDocs() {
 func ExtractBody(c *gin.Context) {
 	doc, err := NewDocFromStream(c.Request.Body)
 	if err != nil {
-		log.Println(err)
+		logger.Error("Error parsing response body", "err", err)
 		c.AbortWithStatus(http.StatusUnprocessableEntity)
 		return
 	}
@@ -70,7 +64,7 @@ func ExtractRemote(c *gin.Context) {
 	bindErr := c.BindQuery(&params)
 	if bindErr != nil {
 		c.AbortWithError(http.StatusBadRequest, bindErr)
-		log.Printf("%v", c.Errors.JSON())
+		logger.Warn("Invalid request", "err", c.Errors.JSON())
 		return
 	}
 	valErr := validate.Struct(params)
@@ -94,10 +88,10 @@ func ExtractRemote(c *gin.Context) {
 	if params.NoCache {
 		noCache = true
 	}
-	// log.Printf("Got metadata from Cache: %v", metadata)
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Printf("ExtractRemote: %v %s", err, url)
+		logger.Error("Error when constructing GET request", "err", err, "url", url)
 	}
 
 	if !noCache {
@@ -111,50 +105,37 @@ func ExtractRemote(c *gin.Context) {
 			}
 		}
 	}
-	log.Printf("Issuing GET request for %s with headers %v", url, req.Header)
+	logger.Debug("Issuing conditional GET request", "url", url, "headers", req.Header)
 	response, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("%v Error fetching %s", err, url)
+		logger.Error("Error fetching", "err", err, "url", url)
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err})
 		return
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= 400 {
-		log.Printf("%v Error fetching %s", err, url)
+		logger.Error("Error fetching", "err", err, "url", url)
 		c.AbortWithStatusJSON(response.StatusCode, gin.H{
 			"code":    response.StatusCode,
 			"message": response.Status})
 		return
 	}
 	if response.StatusCode == http.StatusNotModified {
-		log.Printf("URL %s has not been modified: etag=%s, last-modified=%s. Text will be served from cache", url, response.Header.Get("etag"), response.Header.Get("last-modified"))
-		text := getPlaintextFromCache(url)
-		if text != nil {
-			log.Printf("Found plain text in cache: %s", url)
-			addMetadataAsHeaders(c, &metadata)
-			if silent {
-				c.Status(http.StatusNotModified)
-				return
-			}
-			c.Writer.Write(text)
+		logger.Info("URL has not been modified. Text will be served from cache", "url", url, "etag", response.Header.Get("etag"), "last-modified", response.Header.Get("last-modified"))
+		addMetadataAsHeaders(c, &metadata)
+		if silent {
+			c.Status(http.StatusNotModified)
 			return
 		}
-		log.Printf("Strange: Did not find plain text in cache: %s. Issue another GET request...", url)
-		response, err = http.Get(url)
-		if err != nil {
-			log.Printf("%v Error fetching %s", err, url)
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err})
-			return
-		}
-		defer response.Body.Close()
+		streamPlaintext(url, c.Writer)
+		return
 	}
 	// We have no current version of the document but fetched it
 	// so parse and extract it
-	log.Printf("Start parsing of %s. Length: %d", url, response.ContentLength)
-	// doc, err := NewFromPipe(response.Body)
+	logger.Debug("Start parsing", "url", url, "content-length", response.ContentLength)
 	doc, err := NewDocFromStream(response.Body)
 	if err != nil {
-		log.Printf("ExtractRemote: %v, %s", err, url)
+		logger.Error("Error when parsing", "err", err, "url", url)
 		c.AbortWithError(http.StatusUnprocessableEntity, err)
 		return
 	}
@@ -163,7 +144,7 @@ func ExtractRemote(c *gin.Context) {
 	metadata["etag"] = response.Header.Get("etag")
 	metadata["http-last-modified"] = response.Header.Get("last-modified")
 	addMetadataAsHeaders(c, &metadata)
-	log.Println("Parsing done for:", url)
+	logger.Debug("Finished parsing", "url", url)
 	var text bytes.Buffer
 	var mWriter io.Writer
 	if silent {
@@ -173,7 +154,7 @@ func ExtractRemote(c *gin.Context) {
 	}
 	doc.StreamText(mWriter)
 	if !silent {
-		log.Printf("Streaming response done for %s", url)
+		logger.Debug("Streaming response done", "url", url)
 	}
 	closeDocChan <- doc
 	if noCache {
@@ -186,26 +167,6 @@ func ExtractRemote(c *gin.Context) {
 	}
 	saveExtractedDocChan <- extracted
 }
-
-// func ExtractAsJson(c *gin.Context) {
-// 	url := validateUriParamUrl(c)
-// 	if url == "" {
-// 		return
-// 	}
-// 	doc, err := getRemoteDoc(url)
-// 	if err != nil {
-// 		c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
-// 	}
-// 	defer doc.Close()
-// 	m := doc.Metadata()
-// 	m["content"] = doc.Text()
-// 	// jsonStr, err := json.MarshalIndent(m, "", "  ")
-// 	status := http.StatusAccepted
-// 	if err != nil {
-// 		status = http.StatusUnprocessableEntity
-// 	}
-// 	c.JSON(status, m)
-// }
 
 func addMetadataAsHeaders(c *gin.Context, metadata *map[string]string) {
 	for k, v := range *metadata {
