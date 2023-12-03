@@ -10,7 +10,7 @@ import (
 	"bufio"
 	"bytes"
 	"io"
-	"log"
+	"log/slog"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -48,12 +48,21 @@ type WordDoc struct {
 	text     string
 }
 
+func init(){
+	wv, err := exec.LookPath("wvWare")
+	if err != nil {
+		slog.Error("wvWare is not in PATH! We will not be able to extract legacy MS Word documents.", "err", err)
+		return
+	}
+	slog.Info("wvWare found", "path", wv)
+}
+
 func NewFromBytes(data []byte) (doc *WordDoc, err error) {
 	doc = &WordDoc{data: &data}
 	buf := bytes.NewReader(data)
 	doc.metadata, err = readMetadata(buf)
 	if err != nil {
-		log.Printf("docparser: %v", err)
+		slog.Error("docparser: Metadata extraction failed",  "err", err)
 	}
 	return
 }
@@ -61,7 +70,7 @@ func NewFromBytes(data []byte) (doc *WordDoc, err error) {
 func NewFromStream(stream io.ReadCloser) (doc *WordDoc, err error) {
 	data, err := io.ReadAll(stream)
 	if err != nil {
-		log.Println("NewFromStream: ", err)
+		slog.Error("docparser: could not read stream", "err", err)
 	}
 	// stream.Close()
 	return NewFromBytes(data)
@@ -70,13 +79,13 @@ func NewFromStream(stream io.ReadCloser) (doc *WordDoc, err error) {
 func readMetadata(r io.ReaderAt) (m DocMetadata, err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			log.Printf("panic when reading doc format: %v", e)
+			slog.Error("docparser: panic when reading doc format", "err", e)
 		}
 	}()
 
 	doc, err := mscfb.New(r)
 	if err != nil {
-		log.Printf("docparser: could not read doc: %v", err)
+		slog.Error("docparser: could not read doc", "err", err)
 		return m, err
 	}
 
@@ -85,13 +94,12 @@ func readMetadata(r io.ReaderAt) (m DocMetadata, err error) {
 	for entry, err := doc.Next(); err == nil; entry, err = doc.Next() {
 		if msoleps.IsMSOLEPS(entry.Initial) {
 			if oerr := props.Reset(doc); oerr != nil {
-				log.Printf("docparser: could not reset props: %v", oerr)
+				slog.Error("docparser: could not reset props", "err", oerr)
 				err = oerr
 				break
 			}
 
 			for _, prop := range props.Property {
-				// log.Printf("Prop: %v | %v", prop.Name, prop.Type())
 				// String values:
 				switch prop.Name {
 				case "Author":
@@ -193,15 +201,15 @@ func (d *WordDoc) StreamText(w io.Writer) {
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			log.Printf("docparser: %v", err)
+			slog.Error("docparser: could not connect stdout", "err", err)
 		}
 		s := bufio.NewScanner(stdout)
 		cmd.Stdin = bytes.NewBuffer(*d.data)
 		err = cmd.Start()
 		if err != nil {
-			log.Printf("docparser: %v", err)
+			slog.Error("docparser: could not start wvWare", "err", err)
 			if exitErr, ok := err.(*exec.ExitError); ok {
-				log.Printf("%s", exitErr.Stderr)
+				slog.Error("docpaser: wvWare failed", "err", exitErr.Stderr)
 			}
 		}
 
@@ -215,9 +223,9 @@ func (d *WordDoc) StreamText(w io.Writer) {
 		}
 		err = cmd.Wait()
 		if err != nil {
-			log.Printf("docparser: %v", err)
+			slog.Error("docparser failed", "err", err)
 			if exitErr, ok := err.(*exec.ExitError); ok {
-				log.Printf("%s", exitErr.Stderr)
+				slog.Error("docparser: wvWare failed", "err", exitErr.Stderr)
 			}
 		}
 	}
@@ -229,9 +237,9 @@ func doc2text(r io.Reader) string {
 	cmd.Stdin = r
 	out, err := cmd.Output()
 	if err != nil {
-		log.Printf("docparser: %v", err)
+		slog.Error("docparser failed", "err", err)
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			log.Printf("%s", exitErr.Stderr)
+			slog.Error("docparser: wvWare failed", "err", exitErr.Stderr)
 		}
 	}
 	return string(out)
