@@ -85,7 +85,7 @@ func ExtractRemote(c *gin.Context) {
 		silent = true
 	}
 
-	if params.NoCache {
+	if params.NoCache || cacheNop {
 		noCache = true
 	}
 

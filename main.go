@@ -17,28 +17,28 @@ import (
 )
 
 var (
+	cacheNop             bool
 	closeDocChan         chan Document
+	js                   nats.JetStreamContext
+	logger               *slog.Logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
+	maxPayload           int32
+	nc                   *nats.Conn
 	saveExtractedDocChan chan *ExtractedDocument
 	srv                  http.Server
-	nc                   *nats.Conn
-	js                   nats.JetStreamContext
-	logger               *slog.Logger = slog.Default()
-	maxPayload           int32
 )
 
 const (
 	// config items
+	confExposeNats = "expose_nats"
+	confExtNats    = "external_nats"
 	confHostPort   = "host_port"
 	confMaxPayload = "max_payload"
-	confExposeNats = "expose_nats"
-	confNatsPort   = "nats_port"
-	confNatsHost   = "nats_host"
-	confExtNats    = "external_nats"
 	confNatsDir    = "nats_store_dir"
+	confNatsHost   = "nats_host"
+	confNatsPort   = "nats_port"
 )
 
 func main() {
-	// log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	if os.Getenv("GOMEMLIMIT") != "" {
 		logger.Info("GOMEMLIMIT", "Bytes", debug.SetMemoryLimit(-1), "MBytes", debug.SetMemoryLimit(-1)/1024/1024)
 	}
@@ -72,7 +72,15 @@ func main() {
 
 	useExtNats := viper.GetBool(confExtNats)
 	var err error
-	if !useExtNats {
+
+	if useExtNats {
+		connStr := fmt.Sprintf("nats://%s:%d", natsHost, natsPort)
+		logger.Info("Connecting to Nats", "server", connStr)
+		nc, err = nats.Connect(connStr)
+		if err != nil {
+			panic(err)
+		}
+	} else if !cacheNop {
 		ns, err := server.NewServer(
 			&server.Options{
 				// Host:               "localhost",
@@ -106,20 +114,17 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-	} else {
-		connStr := fmt.Sprintf("nats://%s:%d", natsHost, natsPort)
-		logger.Info("Connecting to Nats", "server", connStr)
-		nc, err = nats.Connect(connStr)
+	}
+	if !cacheNop {
+		js, err = nc.JetStream()
 		if err != nil {
-			panic(err)
+			logger.Error(err.Error())
 		}
+		logger.Info("NATS server connected. JetStream enabled.")
+		initCache()
+	} else {
+		logger.Info("Cache disabled.")
 	}
-	js, err = nc.JetStream()
-	if err != nil {
-		logger.Error(err.Error())
-	}
-	logger.Info("NATS server connected. JetStream enabled.")
-	initCache()
 
 	logger.Info("Service started", "address", srv.Addr)
 

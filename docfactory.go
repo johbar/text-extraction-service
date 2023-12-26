@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 	"io"
-	"log/slog"
+
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/rtfparser"
@@ -22,7 +22,7 @@ func NewDocFromStream(r io.Reader) (Document, error) {
 		return nil, err
 	}
 	mtype := mimetype.Detect(data)
-	slog.Info("Detected", "mimetype", mtype)
+	logger.Info("Detected", "mimetype", mtype.String())
 	switch mtype.String() {
 	case "application/pdf":
 		return NewFromBytes(data)

@@ -1,4 +1,4 @@
-//go:build !cache_nats_kv
+//go:build !cache_nats_kv && !cache_nop
 
 package main
 
