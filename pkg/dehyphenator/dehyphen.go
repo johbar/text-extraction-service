@@ -7,7 +7,7 @@ Package dehyphenator implements a simple algorithm for de-hyphenating German tex
 	them at the end of lines whenever they are not.
 	Not sure if it is of any use when working with other languages.
 	Note: Text returned by this package has no newlines anymore. It's main use
-	is preparing texts for search maschine indexing.
+	is preparing texts for search machine indexing.
 */
 package dehyphenator
 
@@ -80,6 +80,8 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 	return nil
 }
 
+//DehyphenateReaderToWriter reads text from in and writes it back to out,
+//removing all newlines and hyphens at the end of each line when appropriate.
 func DehyphenateReaderToWriter(in io.Reader, out io.Writer) {
 	w := bufio.NewWriter(out)
 	Dehyphenate(in, *w)
