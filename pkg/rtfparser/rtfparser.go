@@ -382,7 +382,7 @@ var charsNoFmt = map[string]string{
 	"rdblquote": "\u201D",
 }
 
-// special characters to be tranlated in a way preserving some layout information
+// special characters to be translated in a way preserving some layout information
 var charsWithFmt = map[string]string{
 	"cell":      " | ",
 	"row":       "\n",

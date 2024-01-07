@@ -47,7 +47,7 @@ func saveAndCloseExtracedDocs() {
 }
 
 // ExtractBody returns the request body's plain text content.
-// Returns a JSON encoded error message if the body is not a PDF.
+// Returns a JSON encoded error message if the body is not parsable.
 func ExtractBody(c *gin.Context) {
 	doc, err := NewDocFromStream(c.Request.Body)
 	if err != nil {
@@ -56,6 +56,8 @@ func ExtractBody(c *gin.Context) {
 		return
 	}
 	defer doc.Close()
+	metadata := doc.MetadataMap()
+	addMetadataAsHeaders(c, &metadata)
 	doc.StreamText(c.Writer)
 }
 

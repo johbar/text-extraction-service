@@ -6,7 +6,7 @@ A simple Golang service for extracting textual content from PDF and RTF and lega
 
 This is an exercise in using Golang, probably unsuitable for any real-world usage.
 
-It embeds [Nats](https://nats.io/) as a key-value-store that acts as a persistent cache for extracted content.
+It embeds [Nats](https://nats.io/) as a key-value-/objectstore that acts as a persistent cache for extracted content.
 
 The RegEx-based RTF parser is very inefficient.
 
