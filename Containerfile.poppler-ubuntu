@@ -1,0 +1,36 @@
+FROM docker.io/golang:bookworm AS builder
+
+WORKDIR /usr/src/app
+
+RUN apt-get update && apt-get install libpoppler-glib-dev -y
+
+ENV HOME=/tmp GOPATH=/tmp
+
+# pre-copy/cache go.mod for pre-downloading dependencies and only redownloading them in subsequent builds if they change
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+
+COPY . .
+
+ENV CGO_ENABLED=1
+
+RUN go build -tags nomsgpack -v -o /go/text-extraction-service
+## Runtime Image ##
+FROM docker.io/ubuntu:jammy
+
+COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
+
+
+RUN apt-get update && apt-get install ca-certificates libpoppler-glib8 -y
+
+
+EXPOSE 8080
+
+# Nats:
+EXPOSE 4222
+
+VOLUME /tmp/nats
+
+ENV GIN_MODE=release
+
+CMD text-extraction-service
