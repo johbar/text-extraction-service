@@ -3,30 +3,61 @@
 package main
 
 import (
+	"context"
 	"io"
+	"os"
 	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/chenzhuoyu/base64x"
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
+	// "github.com/nats-io/nats.go"
 )
 
 var (
-	plaintextBucket nats.KeyValue
-	metadataBucket  nats.KeyValue
+	plaintextBucket jetstream.KeyValue
+	metadataBucket  jetstream.KeyValue
 )
 
 func initCache() {
-	var err error
-	kvPlainTexts := &nats.KeyValueConfig{Bucket: "plaintexts", MaxValueSize: maxPayload, Storage: nats.FileStorage}
-	kvMetaConf := &nats.KeyValueConfig{Bucket: "metadata", MaxValueSize: maxPayload, Storage: nats.FileStorage}
-	plaintextBucket, err = js.CreateKeyValue(kvPlainTexts)
-	if err != nil {
-		logger.Error(err.Error())
+	var err, findErr error
+	plaintextBucket, findErr = js.KeyValue(context.Background(), "plaintexts")
+	if findErr != nil {
+		if findErr == jetstream.ErrBucketNotFound {
+			logger.Info("Nats key value bucket not found. Creating...", "bucket", "plaintexts")
+			kvPlainTexts := jetstream.KeyValueConfig{
+				Bucket:       "plaintexts",
+				MaxValueSize: maxPayload,
+				Storage:      jetstream.FileStorage,
+				Compression:  true}
+			plaintextBucket, err = js.CreateKeyValue(context.Background(), kvPlainTexts)
+			if err != nil {
+				logger.Error(err.Error())
+				os.Exit(1)
+			}
+		} else {
+			logger.Error(findErr.Error())
+			os.Exit(1)
+		}
 	}
-	metadataBucket, err = js.CreateKeyValue(kvMetaConf)
-	if err != nil {
-		logger.Error(err.Error())
+	metadataBucket, findErr = js.KeyValue(context.Background(), "metadata")
+	if findErr != nil {
+		if findErr == jetstream.ErrBucketNotFound {
+			logger.Info("Nats key value bucket not found. Creating...", "bucket", "metadata")
+			kvMetaConf := jetstream.KeyValueConfig{
+				Bucket:       "metadata",
+				MaxValueSize: maxPayload,
+				Storage:      jetstream.FileStorage}
+
+			metadataBucket, err = js.CreateKeyValue(context.Background(), kvMetaConf)
+			if err != nil {
+				logger.Error(err.Error())
+				os.Exit(1)
+			}
+		} else {
+			logger.Error(findErr.Error())
+			os.Exit(1)
+		}
 	}
 	logger.Info("Nats key value buckets initialized.")
 }
@@ -37,10 +68,10 @@ func urlToKey(url string) string {
 
 func getMetadataFromCache(url string) map[string]string {
 	key := urlToKey(url)
-	entry, err := metadataBucket.Get(key)
+	entry, err := metadataBucket.Get(context.Background(), key)
 
 	if err != nil {
-		if err == nats.ErrKeyNotFound {
+		if err == jetstream.ErrKeyNotFound {
 			return nil
 		}
 		logger.Error("getMetaDataFromCache", "error", err, "key", key)
@@ -62,9 +93,9 @@ func getMetadataFromCache(url string) map[string]string {
 
 func getPlaintextFromCache(url string) []byte {
 	key := urlToKey(url)
-	entry, err := plaintextBucket.Get(key)
+	entry, err := plaintextBucket.Get(context.Background(), key)
 	if err != nil {
-		if err == nats.ErrKeyNotFound {
+		if err == jetstream.ErrKeyNotFound {
 			// no log message here
 			return nil
 		}
@@ -87,12 +118,12 @@ func saveToCache(doc *ExtractedDocument) error {
 		logger.Error("JSON error when marshalling metadata", "err", err, "key", key)
 		return err
 	}
-	_, err = metadataBucket.Put(key, metadataJson)
+	_, err = metadataBucket.Put(context.Background(), key, metadataJson)
 	if err != nil {
 		logger.Error("Error putting metadata to KV bucket", "err", err, "key", key)
 		return err
 	}
-	_, err = plaintextBucket.Put(key, doc.Text.Bytes())
+	_, err = plaintextBucket.Put(context.Background(), key, doc.Text.Bytes())
 	if err != nil {
 		logger.Error("Error putting text to KV bucket", "err", err, "key", key)
 		return err

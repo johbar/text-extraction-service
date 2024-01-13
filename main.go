@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
+    "github.com/nats-io/nats.go/jetstream"
 	sloggin "github.com/samber/slog-gin"
 	"github.com/spf13/viper"
 )
@@ -19,7 +20,7 @@ import (
 var (
 	cacheNop             bool
 	closeDocChan         chan Document
-	js                   nats.JetStreamContext
+	js                   jetstream.JetStream
 	logger               *slog.Logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
 	maxPayload           int32
 	nc                   *nats.Conn
@@ -56,7 +57,7 @@ func main() {
 
 	viper.SetEnvPrefix("tes")
 	viper.SetDefault(confHostPort, ":8080")
-	viper.SetDefault(confMaxPayload, 1024*1024)
+	viper.SetDefault(confMaxPayload, 10 * 1024*1024)
 	viper.SetDefault(confExposeNats, false)
 	viper.SetDefault(confNatsPort, 4222)
 	viper.SetDefault(confNatsHost, "localhost")
@@ -83,7 +84,6 @@ func main() {
 	} else if !cacheNop {
 		ns, err := server.NewServer(
 			&server.Options{
-				// Host:               "localhost",
 				JetStream:          true,
 				MaxPayload:         maxPayload,
 				JetStreamMaxMemory: 1024 * 1000,
@@ -116,7 +116,7 @@ func main() {
 		}
 	}
 	if !cacheNop {
-		js, err = nc.JetStream()
+		js, err = jetstream.New(nc)
 		if err != nil {
 			logger.Error(err.Error())
 		}

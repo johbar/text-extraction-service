@@ -3,39 +3,50 @@
 package main
 
 import (
+	"context"
 	"io"
+	"os"
 
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 var (
-	store nats.ObjectStore
+	store jetstream.ObjectStore
 )
 
 func initCache() {
 	var err error
-	storeConf := &nats.ObjectStoreConfig{Bucket: "texts", Storage: nats.FileStorage}
-	store, err = js.CreateObjectStore(storeConf)
+	store, err = js.ObjectStore(context.Background(), "plaintexts")
 	if err != nil {
-		panic(err)
+		logger.Info("Error when connecting Nats object store", "err", err)
+		store, err = js.CreateObjectStore(context.Background(),
+			jetstream.ObjectStoreConfig{
+				Storage: jetstream.FileStorage,
+				Bucket:  "plaintexts"})
+		if err != nil {
+			logger.Error("Error when creating Nats object store", "err", err)
+			os.Exit(1)
+		}
+	} else {
+		logger.Info("Nats object store found")
 	}
 	logger.Info("Nats object store initialized.")
 }
 
 func getMetadataFromCache(url string) map[string]string {
-	info, err := store.GetInfo(url)
-	if err == nats.ErrObjectNotFound {
+	info, err := store.GetInfo(context.Background(), url)
+	if err == jetstream.ErrObjectNotFound {
 		return nil
 	}
 	if err != nil {
-		logger.Error("Could not get metadata from Nats object store", "url", url)
+		logger.Error("Could not get metadata from Nats object store", "url", url, "err", err)
 		return nil
 	}
 	return info.Metadata
 }
 
 func streamPlaintext(url string, w io.Writer) error {
-	info, err := store.Get(url)
+	info, err := store.Get(context.Background(), url)
 	if err != nil {
 		logger.Error("Error", "err", err)
 		return err
@@ -45,14 +56,14 @@ func streamPlaintext(url string, w io.Writer) error {
 }
 
 func saveToCache(doc *ExtractedDocument) error {
-	m := &nats.ObjectMeta{Metadata: *doc.Metadata, Name: *doc.Url}
+	m := jetstream.ObjectMeta{Metadata: *doc.Metadata, Name: *doc.Url}
 
-	info, err := store.PutBytes(*doc.Url, doc.Text.Bytes())
+	info, err := store.PutBytes(context.Background(), *doc.Url, doc.Text.Bytes())
 	if err != nil {
 		logger.Error("Could not save text to object store", "err", err.Error())
 		return err
 	}
-	err = store.UpdateMeta(*doc.Url, m)
+	err = store.UpdateMeta(context.Background(), *doc.Url, m)
 	if err != nil {
 		logger.Error("Could not save metadata to Nats object store", err, err.Error())
 	}
