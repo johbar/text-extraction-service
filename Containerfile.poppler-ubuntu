@@ -2,7 +2,7 @@ FROM docker.io/golang:bookworm AS builder
 
 WORKDIR /usr/src/app
 
-RUN apt-get update && apt-get install libpoppler-glib-dev -y
+RUN apt-get update && apt-get --no-install-recommends install libpoppler-glib-dev -y
 
 ENV HOME=/tmp GOPATH=/tmp
 
@@ -20,14 +20,12 @@ FROM docker.io/ubuntu:jammy
 
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
+RUN apt-get update && \
+    apt-get --no-install-recommends install ca-certificates libpoppler-glib8 wv -y && \
+    rm -rf /var/lib/apt
 
-RUN apt-get update && apt-get install ca-certificates libpoppler-glib8 -y
-
-
-EXPOSE 8080
-
-# Nats:
-EXPOSE 4222
+# Expose the service and Nats (optional)
+EXPOSE 4222 8080
 
 VOLUME /tmp/nats
 

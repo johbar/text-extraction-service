@@ -1,14 +1,15 @@
 # text-extraction-service
 
-A simple Golang service for extracting textual content from PDF and RTF and legacy MS Word (.doc) documents.
+A simple Go service for extracting textual content from PDF, RTF and legacy MS Word (.doc) documents.
 
 ## Status
 
-This is an exercise in using Golang, probably unsuitable for any real-world usage.
+This started as an exercise in using Golang.
+The use case is processing binary documents for search machine indexation.
 
-It embeds [Nats](https://nats.io/) as a key-value-/objectstore that acts as a persistent cache for extracted content.
+It embeds [Nats](https://nats.io/) as a key-value-/object store that acts as a persistent cache for extracted content.
 
-The RegEx-based RTF parser is very inefficient.
+The RegEx-based RTF parser is rather inefficient.
 
 ## Setup
 
@@ -44,20 +45,20 @@ The repo includes two Containerfiles for building minimal Alpine-based images in
 mkdir --mode 777 --parents /tmp/cache
 
 # MuPDF-based:
-podman build --pull . -f Containerfile.mupdf-alpine -t tes-mupdf:alpine-minimal --volume /tmp/cache:/tmp
+podman build --pull . -f Containerfile.mupdf-alpine -t tes-mupdf:alpine --volume /tmp/cache:/tmp
 
 # Poppler-based:
-podman build --pull . -f Containerfile.poppler-alpine -t tes-poppler:alpine-minimal --volume /tmp/cache:/tmp
+podman build --pull . -f Containerfile.poppler-alpine -t tes-poppler:alpine --volume /tmp/cache:/tmp
 ```
 
 ## Run containers
 
 ```sh
 # MuPDF based, using a volume for Nats JetStream storage
-podman run --rm -it -v nats:/tmp/nats -p 8080:8080 -p 4222:4222 tes-mupdf:alpine-minimal
+podman run --rm -it -v nats:/tmp/nats -p 8080:8080 -p 4222:4222 tes-mupdf:alpine
 
 # poppler based, using a volume for Nats JetStream storage
-podman run --rm -it -v nats:/tmp/nats -p 8080:8080 -p 4222:4222 tes-poppler:alpine-minimal
+podman run --rm -it -v nats:/tmp/nats -p 8080:8080 -p 4222:4222 tes-poppler:alpine
 ```
 
 ## Config

@@ -29,10 +29,8 @@ RUN apk update && apk add poppler-glib wv
 
 USER nobody
 
-EXPOSE 8080
-
-# Nats:
-EXPOSE 4222
+# Expose the service and Nats (optional)
+EXPOSE 4222 8080
 
 VOLUME /tmp/nats
 

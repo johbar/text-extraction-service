@@ -10,7 +10,7 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-type PdfMetadata map[string]string
+type DocumentMetadata map[string]string
 
 var validate *validator.Validate
 

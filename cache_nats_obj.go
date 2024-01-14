@@ -28,12 +28,12 @@ func initCache() {
 			os.Exit(1)
 		}
 	} else {
-		logger.Info("Nats object store found")
+		logger.Info("Nats object store found", "bucket", "plaintexts")
 	}
 	logger.Info("Nats object store initialized.")
 }
 
-func getMetadataFromCache(url string) map[string]string {
+func getMetadataFromCache(url string) DocumentMetadata {
 	info, err := store.GetInfo(context.Background(), url)
 	if err == jetstream.ErrObjectNotFound {
 		return nil

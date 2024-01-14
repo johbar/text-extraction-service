@@ -8,6 +8,7 @@ COPY go.mod go.sum ./
 COPY . .
 ENV CGO_ENABLED=1
 RUN go mod download && go mod verify
+
 RUN go build -buildvcs=false -tags extlib,mupdf,nomsgpack -o /go/text-extraction-service
 
 
@@ -18,10 +19,8 @@ RUN apk update && apk add --no-cache mupdf wv
 
 USER nobody
 
-EXPOSE 8080
-
-# Nats:
-EXPOSE 4222
+# Expose the service and Nats (optional)
+EXPOSE 4222 8080
 
 VOLUME /tmp/nats
 
