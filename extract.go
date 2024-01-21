@@ -22,9 +22,11 @@ type ExtractedDocument struct {
 }
 
 type RequestParams struct {
-	Url     string `form:"url" binding:"required" validate:"http_url"`
-	NoCache bool   `form:"noCache"`
-	Silent  bool   `form:"silent"`
+	Url     string `form:"url" binding:"required" json:"url" validate:"http_url"`
+	//Ignore cached record
+	NoCache bool   `form:"noCache" json:"noCache"`
+	//Send Metadata only, ignoring content
+	Silent  bool   `form:"silent" json:"silent"`
 }
 
 func init() {
@@ -57,35 +59,19 @@ func ExtractBody(c *gin.Context) {
 	}
 	defer doc.Close()
 	metadata := doc.MetadataMap()
-	addMetadataAsHeaders(c, &metadata)
+	addMetadataAsHeaders(c.Writer.Header(), &metadata)
 	doc.StreamText(c.Writer)
 }
 
-func ExtractRemote(c *gin.Context) {
-	var params RequestParams
-	bindErr := c.BindQuery(&params)
-	if bindErr != nil {
-		c.AbortWithError(http.StatusBadRequest, bindErr)
-		logger.Warn("Invalid request", "err", c.Errors.JSON())
-		return
-	}
-	valErr := validate.Struct(params)
-	if valErr != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"err": fmt.Sprintf("%s is not a valid HTTP(S) URL", params.Url)})
-		return
-	}
+func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status int, err error) {
 
 	url := params.Url
+	silent := params.Silent
 
 	var (
-		silent   bool
 		noCache  bool
 		metadata map[string]string
 	)
-
-	if params.Silent || c.Request.Method == http.MethodHead {
-		silent = true
-	}
 
 	if params.NoCache || cacheNop {
 		noCache = true
@@ -94,6 +80,7 @@ func ExtractRemote(c *gin.Context) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		logger.Error("Error when constructing GET request", "err", err, "url", url)
+		return http.StatusInternalServerError, err
 	}
 
 	if !noCache {
@@ -111,25 +98,20 @@ func ExtractRemote(c *gin.Context) {
 	response, err := http.DefaultClient.Do(req)
 	if err != nil {
 		logger.Error("Error fetching", "err", err, "url", url)
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err})
-		return
+		return http.StatusNotFound, err
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= 400 {
 		logger.Error("Error fetching", "err", err, "url", url)
-		c.AbortWithStatusJSON(response.StatusCode, gin.H{
-			"code":    response.StatusCode,
-			"message": response.Status})
-		return
+		return response.StatusCode, fmt.Errorf("%s", response.Status)
 	}
 	if response.StatusCode == http.StatusNotModified {
 		logger.Info("URL has not been modified. Text will be served from cache", "url", url, "etag", response.Header.Get("etag"), "last-modified", response.Header.Get("last-modified"))
-		addMetadataAsHeaders(c, &metadata)
+		addMetadataAsHeaders(header, &metadata)
 		if silent {
-			c.Status(http.StatusNotModified)
-			return
+			return http.StatusNotModified, nil
 		}
-		streamPlaintext(url, c.Writer)
+		streamPlaintext(url, w)
 		return
 	}
 	// We have no current version of the document but fetched it
@@ -138,21 +120,20 @@ func ExtractRemote(c *gin.Context) {
 	doc, err := NewDocFromStream(response.Body)
 	if err != nil {
 		logger.Error("Error when parsing", "err", err, "url", url)
-		c.AbortWithError(http.StatusUnprocessableEntity, err)
-		return
+		return http.StatusUnprocessableEntity, err
 	}
-	c.Status(http.StatusCreated)
+	returnStatus := http.StatusCreated
 	metadata = doc.MetadataMap()
 	metadata["etag"] = response.Header.Get("etag")
 	metadata["http-last-modified"] = response.Header.Get("last-modified")
-	addMetadataAsHeaders(c, &metadata)
+	addMetadataAsHeaders(header, &metadata)
 	logger.Debug("Finished parsing", "url", url)
 	var text bytes.Buffer
 	var mWriter io.Writer
 	if silent {
 		mWriter = io.MultiWriter(&text)
 	} else {
-		mWriter = io.MultiWriter(c.Writer, &text)
+		mWriter = io.MultiWriter(w, &text)
 	}
 	doc.StreamText(mWriter)
 	if !silent {
@@ -160,7 +141,7 @@ func ExtractRemote(c *gin.Context) {
 	}
 	closeDocChan <- doc
 	if noCache {
-		return
+		return returnStatus, nil
 	}
 	extracted := &ExtractedDocument{
 		Url:      &url,
@@ -168,10 +149,36 @@ func ExtractRemote(c *gin.Context) {
 		Metadata: &metadata,
 	}
 	saveExtractedDocChan <- extracted
+	return returnStatus, nil
 }
 
-func addMetadataAsHeaders(c *gin.Context, metadata *map[string]string) {
+func ExtractRemote(c *gin.Context) {
+	var params RequestParams
+	bindErr := c.BindQuery(&params)
+	if bindErr != nil {
+		c.AbortWithError(http.StatusBadRequest, bindErr)
+		logger.Warn("Invalid request", "err", c.Errors.JSON())
+		return
+	}
+	valErr := validate.Struct(params)
+	if valErr != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"err": fmt.Sprintf("%s is not a valid HTTP(S) URL", params.Url)})
+		return
+	}
+
+	if c.Request.Method == http.MethodHead {
+		params.Silent = true
+	}
+	status, extractErr := DocFromUrl(params, c.Writer, c.Writer.Header())
+	if extractErr != nil {
+		c.AbortWithStatusJSON(status, gin.H{"code": status, "msg": extractErr.Error()})
+		return
+	}
+	c.Status(status)
+}
+
+func addMetadataAsHeaders(header http.Header, metadata *map[string]string) {
 	for k, v := range *metadata {
-		c.Writer.Header().Add(k, v)
+		header.Add(k, v)
 	}
 }

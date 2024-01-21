@@ -12,7 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
-    "github.com/nats-io/nats.go/jetstream"
+	"github.com/nats-io/nats.go/jetstream"
 	sloggin "github.com/samber/slog-gin"
 	"github.com/spf13/viper"
 )
@@ -37,14 +37,11 @@ const (
 	confNatsDir    = "nats_store_dir"
 	confNatsHost   = "nats_host"
 	confNatsPort   = "nats_port"
+	confNoHttp     = "no_http"
+	confLogLevel   = "debug"
 )
 
 func main() {
-	if os.Getenv("GOMEMLIMIT") != "" {
-		logger.Info("GOMEMLIMIT", "Bytes", debug.SetMemoryLimit(-1), "MBytes", debug.SetMemoryLimit(-1)/1024/1024)
-	}
-	// buildinfo, _ := debug.ReadBuildInfo()
-	// log.Printf("%v", buildinfo)
 	closeDocChan = make(chan Document, 100)
 	saveExtractedDocChan = make(chan *ExtractedDocument, 10)
 	go saveAndCloseExtracedDocs()
@@ -57,14 +54,25 @@ func main() {
 
 	viper.SetEnvPrefix("tes")
 	viper.SetDefault(confHostPort, ":8080")
-	viper.SetDefault(confMaxPayload, 10 * 1024*1024)
+	viper.SetDefault(confMaxPayload, 10*1024*1024)
 	viper.SetDefault(confExposeNats, false)
 	viper.SetDefault(confNatsPort, 4222)
 	viper.SetDefault(confNatsHost, "localhost")
 	viper.SetDefault(confExtNats, false)
+	viper.SetDefault(confNoHttp, false)
+	viper.SetDefault(confLogLevel, false)
+	// viper.SetDefault(nonfCo)
 
 	viper.AutomaticEnv()
+	if viper.GetBool("debug") {
+		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	}
 
+	if os.Getenv("GOMEMLIMIT") != "" {
+		logger.Info("GOMEMLIMIT", "Bytes", debug.SetMemoryLimit(-1), "MBytes", debug.SetMemoryLimit(-1)/1024/1024)
+	}
+	buildinfo, _ := debug.ReadBuildInfo()
+	logger.Debug("Info", "buildinfo", buildinfo)
 	srv.Addr = viper.GetString(confHostPort)
 	srv.Handler = router
 	maxPayload = viper.GetInt32(confMaxPayload)
@@ -126,6 +134,19 @@ func main() {
 		logger.Info("Cache disabled.")
 	}
 
+	if nc != nil {
+		RegisterNatsService()
+	}
+
+	if viper.GetBool(confNoHttp) {
+		if nc == nil {
+			logger.Error("Fatal: Nats not connected and HTTP disabled.")
+			os.Exit(1)
+		}
+		wait := make(chan bool, 1)
+		logger.Info("Service started with no HTTP endpoints. Waiting for interrupt.")
+		<-wait
+	}
 	logger.Info("Service started", "address", srv.Addr)
 
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
