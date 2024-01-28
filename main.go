@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -29,16 +28,28 @@ var (
 )
 
 const (
-	// config items
+	// config item names
+
+	// Name of the object store or key-value bucket to use
+	confBucket = "bucket"
+	// wether to expose embedded Nats server to other clients
 	confExposeNats = "expose_nats"
-	confExtNats    = "external_nats"
-	confHostPort   = "host_port"
-	confMaxPayload = "max_payload"
-	confNatsDir    = "nats_store_dir"
-	confNatsHost   = "nats_host"
-	confNatsPort   = "nats_port"
-	confNoHttp     = "no_http"
+	// HTTP listen address and port
+	confHostPort = "host_port"
+	// increase log level
 	confLogLevel   = "debug"
+	confNatsConfig = "nats_config"
+	// Nats max msg size (embedded server only)
+	confMaxPayload = "max_payload"
+	// embedded Nats server storage location
+	confNatsDir = "nats_store_dir"
+	// embedded Nats server Host and Port, if exposed
+	confNatsHost = "nats_host"
+	confNatsPort = "nats_port"
+	// External Nats URL
+	confNatsUrl = "nats_url"
+	// Disable HTTP Server in favor of Nats Microservice interface
+	confNoHttp = "no_http"
 )
 
 func main() {
@@ -58,9 +69,9 @@ func main() {
 	viper.SetDefault(confExposeNats, false)
 	viper.SetDefault(confNatsPort, 4222)
 	viper.SetDefault(confNatsHost, "localhost")
-	viper.SetDefault(confExtNats, false)
 	viper.SetDefault(confNoHttp, false)
 	viper.SetDefault(confLogLevel, false)
+	viper.SetDefault(confBucket, "TES_PLAINTEXTS")
 	// viper.SetDefault(nonfCo)
 
 	viper.AutomaticEnv()
@@ -79,11 +90,11 @@ func main() {
 	natsHost := viper.GetString(confNatsHost)
 	natsPort := viper.GetInt(confNatsPort)
 
-	useExtNats := viper.GetBool(confExtNats)
+	useExtNats := viper.IsSet(confNatsUrl)
 	var err error
 
 	if useExtNats {
-		connStr := fmt.Sprintf("nats://%s:%d", natsHost, natsPort)
+		connStr := viper.GetString(confNatsUrl)
 		logger.Info("Connecting to Nats", "server", connStr)
 		nc, err = nats.Connect(connStr)
 		if err != nil {
@@ -94,7 +105,6 @@ func main() {
 			&server.Options{
 				JetStream:          true,
 				MaxPayload:         maxPayload,
-				JetStreamMaxMemory: 1024 * 1000,
 				TLS:                false,
 				DontListen:         !viper.GetBool("expose_nats"),
 				Host:               natsHost,
@@ -106,6 +116,7 @@ func main() {
 		}
 		ns.ConfigureLogger()
 		ns.Start()
+		defer ns.Shutdown()
 		if !ns.ReadyForConnections(3 * time.Second) {
 			panic("Nats not ready!")
 		}
@@ -129,7 +140,8 @@ func main() {
 			logger.Error(err.Error())
 		}
 		logger.Info("NATS server connected. JetStream enabled.")
-		initCache()
+		initCache(viper.GetString(confBucket))
+		defer nc.Drain()
 	} else {
 		logger.Info("Cache disabled.")
 	}
@@ -140,7 +152,7 @@ func main() {
 
 	if viper.GetBool(confNoHttp) {
 		if nc == nil {
-			logger.Error("Fatal: Nats not connected and HTTP disabled.")
+			logger.Error("Fatal: NATS not connected and HTTP disabled.")
 			os.Exit(1)
 		}
 		wait := make(chan bool, 1)
@@ -148,12 +160,10 @@ func main() {
 		<-wait
 	}
 	logger.Info("Service started", "address", srv.Addr)
-
+	defer logger.Info("HTTP Server stopped.")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		// Error starting or closing listener:
 		logger.Error("Webserver", "error", err)
 	}
-	logger.Info("Nats server still running...")
-	logger.Info("HTTP Server stopped.")
 
 }

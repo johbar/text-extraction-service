@@ -22,11 +22,11 @@ type ExtractedDocument struct {
 }
 
 type RequestParams struct {
-	Url     string `form:"url" binding:"required" json:"url" validate:"http_url"`
+	Url string `form:"url" binding:"required" json:"url" validate:"http_url"`
 	//Ignore cached record
-	NoCache bool   `form:"noCache" json:"noCache"`
+	NoCache bool `form:"noCache" json:"noCache"`
 	//Send Metadata only, ignoring content
-	Silent  bool   `form:"silent" json:"silent"`
+	Silent bool `form:"silent" json:"silent"`
 }
 
 func init() {
@@ -111,8 +111,9 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		if silent {
 			return http.StatusNotModified, nil
 		}
+
 		streamPlaintext(url, w)
-		return
+		return http.StatusOK, nil
 	}
 	// We have no current version of the document but fetched it
 	// so parse and extract it

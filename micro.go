@@ -36,7 +36,7 @@ func HandleUrl(req micro.Request) {
 	logger.Info("Received Nats request", "params", params)
 	var b bytes.Buffer
 	// var m DocumentMetadata
-	var header http.Header = http.Header{}
+	header := http.Header{}
 	_, err = DocFromUrl(params, &b, header)
 	if err != nil {
 		req.Error("failed", err.Error(), nil)
