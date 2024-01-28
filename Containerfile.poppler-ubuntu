@@ -1,4 +1,7 @@
-FROM docker.io/golang:bookworm AS builder
+ARG BUILD_IMG=docker.io/golang:bookworm
+ARG RUNTIME_IMG=docker.io/ubuntu:jammy
+ARG BUILD_TAGS=nomsgpack
+FROM $BUILD_IMG AS builder
 
 WORKDIR /usr/src/app
 
@@ -14,9 +17,9 @@ COPY . .
 
 ENV CGO_ENABLED=1
 
-RUN go build -tags nomsgpack -v -o /go/text-extraction-service
+RUN go build -tags "$BUILD_TAGS" -v -o /go/text-extraction-service
 ## Runtime Image ##
-FROM docker.io/ubuntu:jammy
+FROM $RUNTIME_IMG
 
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
