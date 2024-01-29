@@ -32,6 +32,8 @@ const (
 
 	// Name of the object store or key-value bucket to use
 	confBucket = "bucket"
+	// How many replicas of the bucket to create
+	confReplicas = "replicas"
 	// wether to expose embedded Nats server to other clients
 	confExposeNats = "expose_nats"
 	// HTTP listen address and port
@@ -72,6 +74,7 @@ func main() {
 	viper.SetDefault(confNoHttp, false)
 	viper.SetDefault(confLogLevel, false)
 	viper.SetDefault(confBucket, "TES_PLAINTEXTS")
+	viper.SetDefault(confReplicas, 1)
 	// viper.SetDefault(nonfCo)
 
 	viper.AutomaticEnv()
@@ -103,13 +106,13 @@ func main() {
 	} else if !cacheNop {
 		ns, err := server.NewServer(
 			&server.Options{
-				JetStream:          true,
-				MaxPayload:         maxPayload,
-				TLS:                false,
-				DontListen:         !viper.GetBool("expose_nats"),
-				Host:               natsHost,
-				Port:               natsPort,
-				StoreDir:           viper.GetString(confNatsDir),
+				JetStream:  true,
+				MaxPayload: maxPayload,
+				TLS:        false,
+				DontListen: !viper.GetBool("expose_nats"),
+				Host:       natsHost,
+				Port:       natsPort,
+				StoreDir:   viper.GetString(confNatsDir),
 			})
 		if err != nil {
 			panic(err)
@@ -140,7 +143,7 @@ func main() {
 			logger.Error(err.Error())
 		}
 		logger.Info("NATS server connected. JetStream enabled.")
-		initCache(viper.GetString(confBucket))
+		initCache(viper.GetString(confBucket), viper.GetInt(confReplicas))
 		defer nc.Drain()
 	} else {
 		logger.Info("Cache disabled.")

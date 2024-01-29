@@ -15,17 +15,20 @@ var (
 	store jetstream.ObjectStore
 )
 
-func initCache(bucket string) {
+func initCache(bucket string, replicas int) {
 	var err error
-	store, err = js.ObjectStore(context.Background(), bucket)
+	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+	defer cancel()
+	store, err = js.ObjectStore(ctx, bucket)
 	if err != nil {
 		logger.Info("Error when connecting NATS object store", "err", err)
 		store, err = js.CreateObjectStore(
-			context.Background(),
+			ctx,
 			jetstream.ObjectStoreConfig{
 				Storage:     jetstream.FileStorage,
 				Bucket:      bucket,
 				Compression: true,
+				Replicas: replicas,
 			})
 		if err != nil {
 			logger.Error("Error when creating NATS object store", "err", err)
@@ -39,7 +42,9 @@ func initCache(bucket string) {
 }
 
 func getMetadataFromCache(url string) DocumentMetadata {
-	info, err := store.GetInfo(context.Background(), url)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	info, err := store.GetInfo(ctx, url)
 	if err == jetstream.ErrObjectNotFound {
 		return nil
 	}
@@ -51,7 +56,9 @@ func getMetadataFromCache(url string) DocumentMetadata {
 }
 
 func streamPlaintext(url string, w io.Writer) error {
-	info, err := store.Get(context.Background(), url)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	info, err := store.Get(ctx, url)
 	if err != nil {
 		logger.Error("Error", "err", err)
 		return err

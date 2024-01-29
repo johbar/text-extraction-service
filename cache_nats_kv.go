@@ -11,7 +11,6 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/chenzhuoyu/base64x"
 	"github.com/nats-io/nats.go/jetstream"
-	// "github.com/nats-io/nats.go"
 )
 
 var (
@@ -19,17 +18,19 @@ var (
 	metadataBucket  jetstream.KeyValue
 )
 
-func initCache() {
+func initCache(bucket string, replicas int) {
 	var err, findErr error
-	plaintextBucket, findErr = js.KeyValue(context.Background(), "plaintexts")
+	plaintextBucket, findErr = js.KeyValue(context.Background(), bucket)
 	if findErr != nil {
 		if findErr == jetstream.ErrBucketNotFound {
-			logger.Info("Nats key value bucket not found. Creating...", "bucket", "plaintexts")
+			logger.Info("Nats key value bucket not found. Creating...", "bucket", bucket)
 			kvPlainTexts := jetstream.KeyValueConfig{
-				Bucket:       "plaintexts",
+				Bucket:       bucket,
 				MaxValueSize: maxPayload,
 				Storage:      jetstream.FileStorage,
-				Compression:  true}
+				Compression:  true,
+				Replicas:     replicas,
+			}
 			plaintextBucket, err = js.CreateKeyValue(context.Background(), kvPlainTexts)
 			if err != nil {
 				logger.Error(err.Error())
@@ -40,14 +41,16 @@ func initCache() {
 			os.Exit(1)
 		}
 	}
-	metadataBucket, findErr = js.KeyValue(context.Background(), "metadata")
+	metadataBucket, findErr = js.KeyValue(context.Background(), bucket+"meta")
 	if findErr != nil {
 		if findErr == jetstream.ErrBucketNotFound {
-			logger.Info("Nats key value bucket not found. Creating...", "bucket", "metadata")
+			logger.Info("Nats key value bucket not found. Creating...", "bucket", bucket+"meta")
 			kvMetaConf := jetstream.KeyValueConfig{
-				Bucket:       "metadata",
+				Bucket:       bucket + "meta",
 				MaxValueSize: maxPayload,
-				Storage:      jetstream.FileStorage}
+				Storage:      jetstream.FileStorage,
+				Replicas:     replicas,
+			}
 
 			metadataBucket, err = js.CreateKeyValue(context.Background(), kvMetaConf)
 			if err != nil {

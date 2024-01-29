@@ -8,7 +8,7 @@ func init() {
 	cacheNop = true
 }
 
-func initCache() {
+func initCache(bucket String, replicas int) {
 }
 
 func getMetadataFromCache(url string) map[string]string {
