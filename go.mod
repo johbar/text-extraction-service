@@ -12,7 +12,7 @@ require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-playground/validator/v10 v10.17.0
 	github.com/johbar/go-poppler v1.0.1-0.20230721224815-a1860a344718
-	github.com/nats-io/nats-server/v2 v2.10.9
+	github.com/nats-io/nats-server/v2 v2.10.10
 	github.com/nats-io/nats.go v1.32.0
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.3
@@ -34,7 +34,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
-	github.com/leodido/go-urn v1.3.0 // indirect
+	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/minio/highwayhash v1.0.2 // indirect
