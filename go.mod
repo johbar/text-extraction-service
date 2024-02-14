@@ -8,17 +8,17 @@ require (
 	github.com/dlclark/regexp2 v1.10.0
 	github.com/gabriel-vasile/mimetype v1.4.3
 	github.com/gen2brain/go-fitz v1.23.7
-	github.com/gin-contrib/expvar v0.0.1
+	github.com/gin-contrib/expvar v1.0.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-playground/validator/v10 v10.18.0
 	github.com/johbar/go-poppler v1.0.1-0.20230721224815-a1860a344718
 	github.com/nats-io/nats-server/v2 v2.10.10
-	github.com/nats-io/nats.go v1.32.0
+	github.com/nats-io/nats.go v1.33.0
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.3
-	github.com/samber/slog-gin v1.10.1
+	github.com/samber/slog-gin v1.10.2
 	github.com/spf13/viper v1.18.2
-	golang.org/x/exp v0.0.0-20240205201215-2c58cdc269a3
+	golang.org/x/exp v0.0.0-20240213143201-ec583247a57a
 	golang.org/x/text v0.14.0
 )
 
@@ -66,5 +66,3 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/nats-io/nats.go v1.32.0 => github.com/johbar/nats.go v0.0.0-20240128001054-5b9aad82c9d7
