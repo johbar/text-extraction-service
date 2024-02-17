@@ -13,7 +13,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	sloggin "github.com/samber/slog-gin"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -21,43 +20,17 @@ var (
 	closeDocChan         chan Document
 	js                   jetstream.JetStream
 	logger               *slog.Logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
-	maxPayload           int32
 	nc                   *nats.Conn
 	saveExtractedDocChan chan *ExtractedDocument
 	srv                  http.Server
 )
 
-const (
-	// config item names
-
-	// Name of the object store or key-value bucket to use
-	confBucket = "bucket"
-	// How many replicas of the bucket to create
-	confReplicas = "replicas"
-	// wether to expose embedded Nats server to other clients
-	confExposeNats = "expose_nats"
-	// HTTP listen address and port
-	confHostPort = "host_port"
-	// increase log level
-	confLogLevel   = "debug"
-	confNatsConfig = "nats_config"
-	// Nats max msg size (embedded server only)
-	confMaxPayload = "max_payload"
-	// embedded Nats server storage location
-	confNatsDir = "nats_store_dir"
-	// embedded Nats server Host and Port, if exposed
-	confNatsHost = "nats_host"
-	confNatsPort = "nats_port"
-	// External Nats URL
-	confNatsUrl = "nats_url"
-	// Disable HTTP Server in favor of Nats Microservice interface
-	confNoHttp = "no_http"
-)
-
 func main() {
+	conf := NewTesConigFromEnv()
 	closeDocChan = make(chan Document, 100)
 	saveExtractedDocChan = make(chan *ExtractedDocument, 10)
 	go saveAndCloseExtracedDocs()
+
 	router := gin.New()
 	router.Use(sloggin.New(logger), gin.Recovery())
 	router.POST("/", ExtractBody)
@@ -65,20 +38,9 @@ func main() {
 	router.HEAD("/", ExtractRemote)
 	router.GET("/debug/vars", expvar.Handler())
 
-	viper.SetEnvPrefix("tes")
-	viper.SetDefault(confHostPort, ":8080")
-	viper.SetDefault(confMaxPayload, 10*1024*1024)
-	viper.SetDefault(confExposeNats, false)
-	viper.SetDefault(confNatsPort, 4222)
-	viper.SetDefault(confNatsHost, "localhost")
-	viper.SetDefault(confNoHttp, false)
-	viper.SetDefault(confLogLevel, false)
-	viper.SetDefault(confBucket, "TES_PLAINTEXTS")
-	viper.SetDefault(confReplicas, 1)
-	// viper.SetDefault(nonfCo)
-
-	viper.AutomaticEnv()
-	if viper.GetBool("debug") {
+	srv.Addr = conf.SrvAddr
+	srv.Handler = router
+	if conf.Debug {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}
 
@@ -87,19 +49,12 @@ func main() {
 	}
 	buildinfo, _ := debug.ReadBuildInfo()
 	logger.Debug("Info", "buildinfo", buildinfo)
-	srv.Addr = viper.GetString(confHostPort)
-	srv.Handler = router
-	maxPayload = viper.GetInt32(confMaxPayload)
-	natsHost := viper.GetString(confNatsHost)
-	natsPort := viper.GetInt(confNatsPort)
 
-	useExtNats := viper.IsSet(confNatsUrl)
 	var err error
 
-	if useExtNats {
-		connStr := viper.GetString(confNatsUrl)
-		logger.Info("Connecting to Nats", "server", connStr)
-		nc, err = nats.Connect(connStr)
+	if conf.NatsUrl != "" {
+		logger.Info("Connecting to NATS", "server", conf.NatsUrl)
+		nc, err = nats.Connect(conf.NatsUrl)
 		if err != nil {
 			panic(err)
 		}
@@ -107,12 +62,12 @@ func main() {
 		ns, err := server.NewServer(
 			&server.Options{
 				JetStream:  true,
-				MaxPayload: maxPayload,
+				MaxPayload: conf.NatsMaxPayload,
 				TLS:        false,
-				DontListen: !viper.GetBool("expose_nats"),
-				Host:       natsHost,
-				Port:       natsPort,
-				StoreDir:   viper.GetString(confNatsDir),
+				DontListen: !conf.ExposeNats,
+				Host:       conf.NatsHost,
+				Port:       conf.NatsPort,
+				StoreDir:   conf.NatsStoreDir,
 			})
 		if err != nil {
 			panic(err)
@@ -143,7 +98,7 @@ func main() {
 			logger.Error(err.Error())
 		}
 		logger.Info("NATS server connected. JetStream enabled.")
-		initCache(viper.GetString(confBucket), viper.GetInt(confReplicas))
+		initCache(conf.Bucket, conf.Replicas)
 		defer nc.Drain()
 	} else {
 		logger.Info("Cache disabled.")
@@ -153,7 +108,7 @@ func main() {
 		RegisterNatsService()
 	}
 
-	if viper.GetBool(confNoHttp) {
+	if conf.NoHttp {
 		if nc == nil {
 			logger.Error("Fatal: NATS not connected and HTTP disabled.")
 			os.Exit(1)
