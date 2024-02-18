@@ -11,37 +11,38 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-var (
-	store jetstream.ObjectStore
-)
-
-func initCache(bucket string, replicas int) {
-	var err error
-	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
-	defer cancel()
-	store, err = js.ObjectStore(ctx, bucket)
-	if err != nil {
-		logger.Info("Error when connecting NATS object store", "err", err)
-		store, err = js.CreateObjectStore(
-			ctx,
-			jetstream.ObjectStoreConfig{
-				Storage:     jetstream.FileStorage,
-				Bucket:      bucket,
-				Compression: true,
-				Replicas: replicas,
-			})
-		if err != nil {
-			logger.Error("Error when creating NATS object store", "err", err)
-			os.Exit(1)
-		}
-	} else {
-		logger.Info("NATS object store found", "bucket", bucket)
-	}
-
-	logger.Info("NATS object store initialized.")
+type Cache interface {
+	// Init(js jetstream.JetStream, bucket string, replicas int) Cache
+	GetMetadata(url string) DocumentMetadata
+	StreamText(url string, w io.Writer) error
+	Save(doc *ExtractedDocument) error
 }
 
-func getMetadataFromCache(url string) DocumentMetadata {
+type ObjectStoreCache struct {
+	jetstream.ObjectStore
+}
+
+
+
+func InitCache(js jetstream.JetStream, bucket string, replicas int) Cache {
+	var err error
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	store, err := js.CreateOrUpdateObjectStore(ctx, jetstream.ObjectStoreConfig{
+		Storage:     jetstream.FileStorage,
+		Bucket:      bucket,
+		Compression: true,
+		Replicas:    replicas,
+	})
+	if err != nil {
+		logger.Error("Error when creating NATS object store", "err", err)
+		os.Exit(1)
+	}
+	logger.Info("NATS object store initialized.")
+	return ObjectStoreCache{store}
+}
+
+func (store ObjectStoreCache) GetMetadata(url string) DocumentMetadata {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	info, err := store.GetInfo(ctx, url)
@@ -49,13 +50,13 @@ func getMetadataFromCache(url string) DocumentMetadata {
 		return nil
 	}
 	if err != nil {
-		logger.Error("Could not get metadata from Nats object store", "url", url, "err", err)
+		logger.Error("Could not get metadata from NATS object store", "url", url, "err", err)
 		return nil
 	}
 	return info.Metadata
 }
 
-func streamPlaintext(url string, w io.Writer) error {
+func (store ObjectStoreCache) StreamText(url string, w io.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	info, err := store.Get(ctx, url)
@@ -67,7 +68,7 @@ func streamPlaintext(url string, w io.Writer) error {
 	return nil
 }
 
-func saveToCache(doc *ExtractedDocument) error {
+func (store ObjectStoreCache) Save(doc *ExtractedDocument) error {
 	m := jetstream.ObjectMeta{Metadata: *doc.Metadata, Name: *doc.Url}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -79,8 +80,8 @@ func saveToCache(doc *ExtractedDocument) error {
 	}
 	err = store.UpdateMeta(context.Background(), *doc.Url, m)
 	if err != nil {
-		logger.Error("Could not save metadata to Nats object store", err, err.Error())
+		logger.Error("Could not save metadata to NATS object store", err, err.Error())
 	}
-	logger.Info("Saved text and metadata in Nats object store bucket", "chunks", info.Chunks, "size", info.Size)
+	logger.Info("Saved text and metadata in NATS object store bucket", "chunks", info.Chunks, "size", info.Size)
 	return err
 }

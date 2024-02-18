@@ -5,10 +5,11 @@ import (
 	"net/http"
 
 	"github.com/bytedance/sonic"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/micro"
 )
 
-func RegisterNatsService() {
+func RegisterNatsService(nc *nats.Conn) {
 	extractService, err := micro.AddService(nc, micro.Config{
 		Name:        "extract-text",
 		Version:     "1.0.0",
@@ -24,7 +25,7 @@ func RegisterNatsService() {
 
 }
 
-//HandleUrl replies to a Nats request 
+// HandleUrl replies to a Nats request
 func HandleUrl(req micro.Request) {
 	d := req.Data()
 	var params RequestParams

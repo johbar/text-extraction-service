@@ -40,7 +40,7 @@ func saveAndCloseExtracedDocs() {
 			doc.Close()
 			logger.Debug("Document closed.")
 		case doc := <-saveExtractedDocChan:
-			err := saveToCache(doc)
+			err := cache.Save(doc)
 			if err == nil {
 				logger.Info("Saved to Cache", "url", *doc.Url)
 			}
@@ -84,7 +84,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	}
 
 	if !noCache {
-		metadata = getMetadataFromCache(url)
+		metadata = cache.GetMetadata(url)
 		if metadata != nil {
 			if etag, ok := metadata["etag"]; ok {
 				req.Header.Add("If-None-Match", etag)
@@ -112,7 +112,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 			return http.StatusNotModified, nil
 		}
 
-		streamPlaintext(url, w)
+		cache.StreamText(url, w)
 		return http.StatusOK, nil
 	}
 	// We have no current version of the document but fetched it
