@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 
 	"github.com/bytedance/sonic"
@@ -22,7 +23,9 @@ func RegisterNatsService(nc *nats.Conn) {
 	extractService.AddEndpoint("extract-remote",
 		micro.HandlerFunc(HandleUrl),
 		micro.WithEndpointQueueGroup("text-extraction-service"))
-
+	extractService.AddEndpoint("update-cache",
+		micro.HandlerFunc(UpdateCache),
+		micro.WithEndpointQueueGroup("text-extraction-service"))
 }
 
 // HandleUrl replies to a Nats request
@@ -36,7 +39,6 @@ func HandleUrl(req micro.Request) {
 	}
 	logger.Info("Received Nats request", "params", params)
 	var b bytes.Buffer
-	// var m DocumentMetadata
 	header := http.Header{}
 	_, err = DocFromUrl(params, &b, header)
 	if err != nil {
@@ -44,4 +46,19 @@ func HandleUrl(req micro.Request) {
 		return
 	}
 	req.Respond(b.Bytes(), micro.WithHeaders(micro.Headers(header)))
+}
+
+// UpdateCache responds with 'done' once a document has been added
+// or refreshed in the cache
+func UpdateCache(req micro.Request) {
+	url := string(req.Data())
+	params := RequestParams{Url: url, Silent: true}
+	logger.Info("Received Nats request", "params", params)
+	header := http.Header{}
+	_, err := DocFromUrl(params, io.Discard, header)
+	if err != nil {
+		req.Error("failed", err.Error(), nil)
+		return
+	}
+	req.Respond([]byte("done"))
 }
