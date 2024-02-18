@@ -77,7 +77,7 @@ func (store ObjectStoreCache) Save(doc *ExtractedDocument) error {
 		logger.Error("Could not save text to object store", "err", err)
 		return err
 	}
-	err = store.UpdateMeta(context.Background(), *doc.Url, m)
+	err = store.UpdateMeta(ctx, *doc.Url, m)
 	if err != nil {
 		logger.Error("Could not save metadata to NATS object store", err, err.Error())
 	}
