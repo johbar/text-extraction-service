@@ -3,8 +3,7 @@ module github.com/johbar/text-extraction-service/v2
 go 1.21
 
 require (
-	github.com/bytedance/sonic v1.10.2
-	github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d
+	github.com/bytedance/sonic v1.11.0
 	github.com/dlclark/regexp2 v1.10.0
 	github.com/gabriel-vasile/mimetype v1.4.3
 	github.com/gen2brain/go-fitz v1.23.7
@@ -23,6 +22,7 @@ require (
 )
 
 require (
+	github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d // indirect
 	github.com/chenzhuoyu/iasm v0.9.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
