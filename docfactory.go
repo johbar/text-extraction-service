@@ -33,5 +33,5 @@ func NewDocFromStream(r io.Reader) (Document, error) {
 	case "text/rtf":
 		return rtfparser.NewFromBytes(data)
 	}
-	return nil, errors.New("new suitable parser available for mimetype" + mtype.String())
+	return nil, errors.New("new suitable parser available for mimetype " + mtype.String())
 }

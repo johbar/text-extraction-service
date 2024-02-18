@@ -12,7 +12,6 @@ import (
 )
 
 type Cache interface {
-	// Init(js jetstream.JetStream, bucket string, replicas int) Cache
 	GetMetadata(url string) DocumentMetadata
 	StreamText(url string, w io.Writer) error
 	Save(doc *ExtractedDocument) error

@@ -1,3 +1,5 @@
+//go:build !cache_nop
+
 package main
 
 import (
@@ -8,6 +10,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// SetupNatsConnection connects the service with NATS.
+// Depending on the config an embedded NATS server is started
 func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 	var js jetstream.JetStream
 	var nc *nats.Conn
@@ -18,7 +22,7 @@ func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 		if err != nil {
 			panic(err)
 		}
-	} else if !cacheNop {
+	} else {
 		ns, err := server.NewServer(
 			&server.Options{
 				JetStream:  true,
@@ -51,14 +55,12 @@ func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 			panic(err)
 		}
 	}
-	if !cacheNop {
-		js, err = jetstream.New(nc)
-		if err != nil {
-			logger.Error(err.Error())
-		}
-		logger.Info("NATS server connected. JetStream enabled.")
-	} else {
-		logger.Info("Cache disabled.")
+
+	js, err = jetstream.New(nc)
+	if err != nil {
+		logger.Error(err.Error())
 	}
+	logger.Info("NATS server connected. JetStream enabled.")
+
 	return nc, js
 }

@@ -47,9 +47,9 @@ func main() {
 
 	nc, js := SetupNatsConnection(conf)
 	if nc != nil {
-		cache = InitCache(js, conf.Bucket, conf.Replicas)
 		RegisterNatsService(nc)
 	}
+	cache = InitCache(js, conf.Bucket, conf.Replicas)
 	defer nc.Drain()
 
 
