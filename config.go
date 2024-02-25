@@ -77,18 +77,19 @@ func NewTesConigFromEnv() TesConfig {
 	viper.SetDefault(confFailWithoutJs, true)
 
 	return TesConfig{
-		Bucket:             viper.GetString(confBucket),
-		ExposeNats:         viper.GetBool(confExposeNats),
-		Debug:              viper.GetBool(confDebug),
-		NatsMaxPayload:     viper.GetInt32(confMaxPayload),
-		NatsStoreDir:       viper.GetString(confNatsDir),
-		NatsHost:           viper.GetString(confNatsHost),
-		NatsPort:           viper.GetInt(confNatsPort),
-		NatsUrl:            viper.GetString(confNatsUrl),
-		NatsTimeout:        viper.GetDuration(confNatsTimeout),
-		NatsConnectRetries: viper.GetInt(confNatsConnRetries),
-		NoHttp:             viper.GetBool(confNoHttp),
-		Replicas:           viper.GetInt(confReplicas),
-		SrvAddr:            viper.GetString(confHostPort),
+		Bucket:               viper.GetString(confBucket),
+		ExposeNats:           viper.GetBool(confExposeNats),
+		Debug:                viper.GetBool(confDebug),
+		FailWithoutJetstream: viper.GetBool(confFailWithoutJs),
+		NatsMaxPayload:       viper.GetInt32(confMaxPayload),
+		NatsStoreDir:         viper.GetString(confNatsDir),
+		NatsHost:             viper.GetString(confNatsHost),
+		NatsPort:             viper.GetInt(confNatsPort),
+		NatsUrl:              viper.GetString(confNatsUrl),
+		NatsTimeout:          viper.GetDuration(confNatsTimeout),
+		NatsConnectRetries:   viper.GetInt(confNatsConnRetries),
+		NoHttp:               viper.GetBool(confNoHttp),
+		Replicas:             viper.GetInt(confReplicas),
+		SrvAddr:              viper.GetString(confHostPort),
 	}
 }
