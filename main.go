@@ -49,9 +49,8 @@ func main() {
 	if nc != nil {
 		RegisterNatsService(nc)
 	}
-	cache = InitCache(js, conf.Bucket, conf.Replicas)
+	cache = InitCache(js, conf)
 	defer nc.Drain()
-
 
 	if conf.NoHttp {
 		if nc == nil {
@@ -66,7 +65,7 @@ func main() {
 	defer logger.Info("HTTP Server stopped.")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		// Error starting or closing listener:
-		logger.Error("Webserver", "error", err)
+		logger.Error("Webserver failed", "err", err)
 	}
 
 }

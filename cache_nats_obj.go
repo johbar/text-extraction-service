@@ -11,29 +11,29 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-type Cache interface {
-	GetMetadata(url string) DocumentMetadata
-	StreamText(url string, w io.Writer) error
-	Save(doc *ExtractedDocument) error
-}
-
 type ObjectStoreCache struct {
 	jetstream.ObjectStore
 }
 
-func InitCache(js jetstream.JetStream, bucket string, replicas int) Cache {
+func InitCache(js jetstream.JetStream, conf TesConfig) Cache {
 	var err error
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	store, err := js.CreateOrUpdateObjectStore(ctx, jetstream.ObjectStoreConfig{
 		Storage:     jetstream.FileStorage,
-		Bucket:      bucket,
+		Bucket:      conf.Bucket,
 		Compression: true,
-		Replicas:    replicas,
+		Replicas:    conf.Replicas,
 	})
 	if err != nil {
 		logger.Error("Error when creating NATS object store", "err", err)
-		os.Exit(1)
+		if conf.FailWithoutJetstream {
+			os.Exit(1)
+		} else {
+			logger.Warn("NATS object store could not be initialized and " + confFailWithoutJs + " is false. Disabling cache.")
+			cacheNop = true
+			return NopCache{}
+		}
 	}
 	logger.Info("NATS object store initialized.")
 	return ObjectStoreCache{store}
@@ -54,7 +54,7 @@ func (store ObjectStoreCache) GetMetadata(url string) DocumentMetadata {
 }
 
 func (store ObjectStoreCache) StreamText(url string, w io.Writer) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	info, err := store.Get(ctx, url)
 	if err != nil {
@@ -67,7 +67,7 @@ func (store ObjectStoreCache) StreamText(url string, w io.Writer) error {
 
 func (store ObjectStoreCache) Save(doc *ExtractedDocument) error {
 	m := jetstream.ObjectMeta{Metadata: *doc.Metadata, Name: *doc.Url}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	info, err := store.PutBytes(ctx, *doc.Url, doc.Text.Bytes())
