@@ -102,11 +102,11 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= 400 {
-		logger.Error("Error fetching", "err", err, "url", url)
+		logger.Warn("Error fetching", "err", err, "url", url)
 		return response.StatusCode, fmt.Errorf("%s", response.Status)
 	}
 	if response.StatusCode == http.StatusNotModified {
-		logger.Info("URL has not been modified. Text will be served from cache", "url", url, "etag", response.Header.Get("etag"), "last-modified", response.Header.Get("last-modified"))
+		logger.Debug("URL has not been modified. Text will be served from cache", "url", url, "etag", response.Header.Get("etag"), "last-modified", response.Header.Get("last-modified"))
 		addMetadataAsHeaders(header, &metadata)
 		if silent {
 			return http.StatusNotModified, nil
@@ -123,10 +123,13 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		logger.Error("Error when parsing", "err", err, "url", url)
 		return http.StatusUnprocessableEntity, err
 	}
-	returnStatus := http.StatusCreated
 	metadata = doc.MetadataMap()
-	metadata["etag"] = response.Header.Get("etag")
-	metadata["http-last-modified"] = response.Header.Get("last-modified")
+	if etag := response.Header.Get("etag"); etag != "" {
+		metadata["etag"] = etag
+	}
+	if lastmod := response.Header.Get("last-modified"); lastmod != ""{
+		metadata["http-last-modified"] = lastmod
+	}
 	addMetadataAsHeaders(header, &metadata)
 	logger.Debug("Finished parsing", "url", url)
 	var text bytes.Buffer
@@ -142,7 +145,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	}
 	closeDocChan <- doc
 	if noCache {
-		return returnStatus, nil
+		return http.StatusOK, nil
 	}
 	extracted := &ExtractedDocument{
 		Url:      &url,
@@ -150,7 +153,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		Metadata: &metadata,
 	}
 	saveExtractedDocChan <- extracted
-	return returnStatus, nil
+	return http.StatusOK, nil
 }
 
 func ExtractRemote(c *gin.Context) {
