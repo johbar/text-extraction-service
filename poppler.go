@@ -77,30 +77,31 @@ func (d *Pdf) StreamText(w io.Writer) {
 // Metadata returns some of the PDF metadata as map with keys compatible to HTTP headers
 func (d *Pdf) MetadataMap() map[string]string {
 	m := make(map[string]string)
-	if d.Info().PdfVersion != "" {
-		m["x-document-version"] = d.Info().PdfVersion
+	info := d.Info()
+	if info.PdfVersion != "" {
+		m["x-document-version"] = info.PdfVersion
 	}
-	if d.Info().Author != "" {
-		m["x-document-author"] = d.Info().Author
+	if info.Author != "" {
+		m["x-document-author"] = info.Author
 	}
-	if d.Info().Title != "" {
-		m["x-document-title"] = d.Info().Title
+	if info.Title != "" {
+		m["x-document-title"] = info.Title
 	}
-	if d.Info().Subject != "" {
-		m["x-document-subject"] = d.Info().Subject
+	if info.Subject != "" {
+		m["x-document-subject"] = info.Subject
 	}
-	if d.Info().KeyWords != "" {
-		m["x-document-keywords"] = d.Info().KeyWords
+	if info.KeyWords != "" {
+		m["x-document-keywords"] = info.KeyWords
 	}
-	if d.Info().Pages != 0 {
-		m["x-document-pages"] = strconv.Itoa(d.Info().Pages)
+	if info.Pages != 0 {
+		m["x-document-pages"] = strconv.Itoa(info.Pages)
 	}
-	if d.Info().CreationDate != 0 {
-		createTime := time.Unix(int64(d.Info().CreationDate), 0)
+	if info.CreationDate != 0 {
+		createTime := time.Unix(int64(info.CreationDate), 0)
 		m["x-document-created"] = createTime.Format(time.RFC3339)
 	}
-	if d.Info().ModificationDate != 0 {
-		modTime := time.Unix(int64(d.Info().ModificationDate), 0)
+	if info.ModificationDate != 0 {
+		modTime := time.Unix(int64(info.ModificationDate), 0)
 		m["x-document-modified"] = modTime.Format(time.RFC3339)
 	}
 	m["x-parsed-by"] = "Poppler"
