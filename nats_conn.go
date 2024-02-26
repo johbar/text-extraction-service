@@ -95,6 +95,7 @@ func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 				}
 			}
 			attempts++
+			time.Sleep(time.Second)
 		} else {
 			break
 		}
