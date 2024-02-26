@@ -54,7 +54,7 @@ func (store ObjectStoreCache) GetMetadata(url string) DocumentMetadata {
 }
 
 func (store ObjectStoreCache) StreamText(url string, w io.Writer) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	info, err := store.Get(ctx, url)
 	if err != nil {
