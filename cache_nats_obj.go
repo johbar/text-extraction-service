@@ -30,7 +30,7 @@ func InitCache(js jetstream.JetStream, conf TesConfig) Cache {
 		if conf.FailWithoutJetstream {
 			os.Exit(1)
 		} else {
-			logger.Warn("NATS object store could not be initialized and " + confFailWithoutJs + " is false. Disabling cache.")
+			logger.Warn("NATS object store could not be initialized and " + confFailWithoutJs + "option is false. Disabling cache.")
 			cacheNop = true
 			return NopCache{}
 		}
@@ -58,7 +58,7 @@ func (store ObjectStoreCache) StreamText(url string, w io.Writer) error {
 	defer cancel()
 	info, err := store.Get(ctx, url)
 	if err != nil {
-		logger.Error("Error", "err", err)
+		logger.Error("Could not receive text from NATS object store", "url", url, "err", err)
 		return err
 	}
 	io.Copy(w, info)
@@ -72,13 +72,14 @@ func (store ObjectStoreCache) Save(doc *ExtractedDocument) error {
 
 	info, err := store.PutBytes(ctx, *doc.Url, doc.Text.Bytes())
 	if err != nil {
-		logger.Error("Could not save text to object store", "err", err)
+		logger.Error("Could not save text to NATS object store", "err", err)
 		return err
 	}
 	err = store.UpdateMeta(ctx, *doc.Url, m)
 	if err != nil {
-		logger.Error("Could not save metadata to NATS object store", err, err.Error())
+		logger.Error("Could not save metadata to NATS object store", "url", *doc.Url, "err", err.Error())
+		return err
 	}
-	logger.Info("Saved text and metadata in NATS object store bucket", "chunks", info.Chunks, "size", info.Size)
+	logger.Info("Saved text and metadata in NATS object store bucket", "url", *doc.Url, "chunks", info.Chunks, "size", info.Size)
 	return err
 }
