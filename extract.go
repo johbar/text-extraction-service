@@ -112,8 +112,11 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 			return http.StatusNotModified, nil
 		}
 
-		cache.StreamText(url, w)
-		return http.StatusOK, nil
+		if err = cache.StreamText(url, w); err == nil {
+			return http.StatusOK, nil
+		}
+		// We could not provide the client with cached text
+		// Resume with parsing the file (again)
 	}
 	// We have no current version of the document but fetched it
 	// so parse and extract it
@@ -127,7 +130,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	if etag := response.Header.Get("etag"); etag != "" {
 		metadata["etag"] = etag
 	}
-	if lastmod := response.Header.Get("last-modified"); lastmod != ""{
+	if lastmod := response.Header.Get("last-modified"); lastmod != "" {
 		metadata["http-last-modified"] = lastmod
 	}
 	addMetadataAsHeaders(header, &metadata)
