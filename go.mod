@@ -3,7 +3,7 @@ module github.com/johbar/text-extraction-service/v2
 go 1.21
 
 require (
-	github.com/bytedance/sonic v1.11.1
+	github.com/bytedance/sonic v1.11.2
 	github.com/dlclark/regexp2 v1.11.0
 	github.com/gabriel-vasile/mimetype v1.4.3
 	github.com/gen2brain/go-fitz v1.23.7
