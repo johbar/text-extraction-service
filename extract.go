@@ -40,10 +40,7 @@ func saveAndCloseExtracedDocs() {
 			doc.Close()
 			logger.Debug("Document closed.")
 		case doc := <-saveExtractedDocChan:
-			err := cache.Save(doc)
-			if err == nil {
-				logger.Info("Saved to Cache", "url", *doc.Url)
-			}
+			cache.Save(doc)
 		}
 	}
 }
