@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Install xmllint
-      run: sudo apt-get install -y --no-install-recommends libpoppler-glib8 wv
+    - name: Install shared libs
+      run: sudo apt-get install -y --no-install-recommends libpoppler-glib-dev wv
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
