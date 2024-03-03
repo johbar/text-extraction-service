@@ -22,7 +22,7 @@ func NewDocFromStream(r io.Reader) (Document, error) {
 		return nil, err
 	}
 	mtype := mimetype.Detect(data)
-	logger.Info("Detected", "mimetype", mtype.String())
+	logger.Debug("Detected", "mimetype", mtype.String())
 	switch mtype.String() {
 	case "application/pdf":
 		return NewFromBytes(data)
