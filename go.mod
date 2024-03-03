@@ -9,7 +9,7 @@ require (
 	github.com/gen2brain/go-fitz v1.23.7
 	github.com/gin-contrib/expvar v1.0.0
 	github.com/gin-gonic/gin v1.9.1
-	github.com/go-playground/validator/v10 v10.18.0
+	github.com/go-playground/validator/v10 v10.19.0
 	github.com/johbar/go-poppler v1.0.1-0.20230721224815-a1860a344718
 	github.com/nats-io/nats-server/v2 v2.10.11
 	github.com/nats-io/nats.go v1.33.1
