@@ -23,7 +23,7 @@ var (
 func main() {
 	conf := NewTesConigFromEnv()
 	closeDocChan = make(chan Document, 100)
-	saveExtractedDocChan = make(chan *ExtractedDocument, 10)
+	saveExtractedDocChan = make(chan *ExtractedDocument, 100)
 	go saveAndCloseExtracedDocs()
 
 	router := gin.New()

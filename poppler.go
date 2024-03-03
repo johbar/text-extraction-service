@@ -26,7 +26,7 @@ func init() {
 func NewFromStream(stream io.ReadCloser) (doc *Pdf, err error) {
 	data, err := io.ReadAll(stream)
 	if err != nil {
-		logger.Error("NewFromStream: ", "error", err)
+		logger.Error("Could not fully read stream when constructing Poppler document", "err", err)
 	}
 	stream.Close()
 	return NewFromBytes(data)
@@ -38,7 +38,7 @@ func NewFromBytes(data []byte) (doc *Pdf, err error) {
 	}
 	pDoc, err := poppler.Load(data)
 	if err != nil {
-		logger.Error("Could not load PDF", "error", err)
+		logger.Error("Poppler could not load PDF", "err", err)
 	}
 	doc = &Pdf{pDoc}
 	return

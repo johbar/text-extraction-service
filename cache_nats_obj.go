@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -69,15 +70,10 @@ func (store ObjectStoreCache) Save(doc *ExtractedDocument) error {
 	m := jetstream.ObjectMeta{Metadata: *doc.Metadata, Name: *doc.Url}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-
-	info, err := store.PutBytes(ctx, *doc.Url, doc.Text.Bytes())
+	r := bytes.NewReader(doc.Text)
+	info, err := store.ObjectStore.Put(ctx, m, r)
 	if err != nil {
-		logger.Error("Could not save text to NATS object store", "err", err)
-		return err
-	}
-	err = store.UpdateMeta(ctx, *doc.Url, m)
-	if err != nil {
-		logger.Error("Could not save metadata to NATS object store", "url", *doc.Url, "err", err.Error())
+		logger.Error("Could not save text and metadat to NATS object store", "err", err)
 		return err
 	}
 	logger.Info("Saved text and metadata in NATS object store bucket", "url", *doc.Url, "chunks", info.Chunks, "size", info.Size)

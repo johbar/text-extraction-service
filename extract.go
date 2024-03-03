@@ -18,7 +18,7 @@ var validate *validator.Validate
 type ExtractedDocument struct {
 	Url      *string
 	Metadata *map[string]string
-	Text     *bytes.Buffer
+	Text     []byte
 }
 
 type RequestParams struct {
@@ -40,7 +40,13 @@ func saveAndCloseExtracedDocs() {
 			doc.Close()
 			logger.Debug("Document closed.")
 		case doc := <-saveExtractedDocChan:
-			cache.Save(doc)
+			for i := 0; i < 5; i++ {
+				err := cache.Save(doc)
+				if err == nil {
+					break
+				}
+				logger.Warn("Could not save text to cache", "retries", i, "url", doc.Url)
+			}
 		}
 	}
 }
@@ -99,7 +105,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= 400 {
-		logger.Warn("Error fetching", "err", err, "url", url)
+		logger.Warn("Error fetching", "status", response.Status, "url", url)
 		return response.StatusCode, fmt.Errorf("%s", response.Status)
 	}
 	if response.StatusCode == http.StatusNotModified {
@@ -149,7 +155,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	}
 	extracted := &ExtractedDocument{
 		Url:      &url,
-		Text:     &text,
+		Text:     text.Bytes(),
 		Metadata: &metadata,
 	}
 	saveExtractedDocChan <- extracted

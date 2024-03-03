@@ -13,8 +13,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// SetupNatsConnection connects the service with NATS.
-// Depending on the config an embedded NATS server is started
+// SetupNatsConnection connects the service to NATS.
+// Depending on the config an embedded NATS server is started.
 func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 	var js jetstream.JetStream
 	var nc *nats.Conn
