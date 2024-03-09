@@ -64,7 +64,7 @@ func NewTesConigFromEnv() TesConfig {
 	viper.SetEnvPrefix("tes")
 	viper.AutomaticEnv()
 	viper.SetDefault(confHostPort, ":8080")
-	viper.SetDefault(confMaxPayload, 10*1024*1024)
+	viper.SetDefault(confMaxPayload, 8*1024*1024)
 	viper.SetDefault(confExposeNats, false)
 	viper.SetDefault(confNatsPort, 4222)
 	viper.SetDefault(confNatsHost, "localhost")
