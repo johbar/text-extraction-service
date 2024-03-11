@@ -33,5 +33,6 @@ func NewDocFromStream(r io.Reader) (Document, error) {
 	case "text/rtf":
 		return rtfparser.NewFromBytes(data)
 	}
-	return nil, errors.New("new suitable parser available for mimetype " + mtype.String())
+	// returning a part of the content helps with debugging webservers that return 2xx with an error message in the body
+	return nil, errors.New("no suitable parser available for mimetype " + mtype.String() + ". content started with: " + string(data[:100]))
 }

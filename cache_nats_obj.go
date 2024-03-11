@@ -73,7 +73,7 @@ func (store ObjectStoreCache) Save(doc *ExtractedDocument) error {
 	r := bytes.NewReader(doc.Text)
 	info, err := store.ObjectStore.Put(ctx, m, r)
 	if err != nil {
-		logger.Error("Could not save text and metadat to NATS object store", "err", err)
+		logger.Error("Could not save text and metadata to NATS object store", "err", err)
 		return err
 	}
 	logger.Info("Saved text and metadata in NATS object store bucket", "url", *doc.Url, "chunks", info.Chunks, "size", info.Size)
