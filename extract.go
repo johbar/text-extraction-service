@@ -136,6 +136,9 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	if lastmod := response.Header.Get("last-modified"); lastmod != "" {
 		metadata["http-last-modified"] = lastmod
 	}
+	if contentLength := response.ContentLength; contentLength > 0 {
+		metadata["http-content-length"] = fmt.Sprintf("%d", contentLength)
+	}
 	addMetadataAsHeaders(header, &metadata)
 	logger.Debug("Finished parsing", "url", url)
 	var text bytes.Buffer
