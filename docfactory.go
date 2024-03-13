@@ -21,6 +21,9 @@ func NewDocFromStream(r io.Reader) (Document, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(data) == 0 {
+		return nil, errors.New("zero-length data can not be parsed")
+	}
 	mtype := mimetype.Detect(data)
 	logger.Debug("Detected", "mimetype", mtype.String())
 	switch mtype.String() {
@@ -34,5 +37,5 @@ func NewDocFromStream(r io.Reader) (Document, error) {
 		return rtfparser.NewFromBytes(data)
 	}
 	// returning a part of the content helps with debugging webservers that return 2xx with an error message in the body
-	return nil, errors.New("no suitable parser available for mimetype " + mtype.String() + ". content started with: " + string(data[:100]))
+	return nil, errors.New("no suitable parser available for mimetype " + mtype.String() + ". content started with: " + string(data[:70]))
 }
