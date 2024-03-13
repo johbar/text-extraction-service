@@ -126,7 +126,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	logger.Debug("Start parsing", "url", url, "content-length", response.ContentLength)
 	doc, err := NewDocFromStream(response.Body)
 	if err != nil {
-		logger.Error("Error when parsing", "err", err, "url", url)
+		logger.Error("Error when parsing", "err", err, "url", url, "headers", response.Header)
 		return http.StatusUnprocessableEntity, err
 	}
 	metadata = doc.MetadataMap()
