@@ -15,9 +15,9 @@ require (
 	github.com/nats-io/nats.go v1.33.1
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.3
-	github.com/samber/slog-gin v1.10.2
+	github.com/samber/slog-gin v1.10.3
 	github.com/spf13/viper v1.18.2
-	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
+	golang.org/x/exp v0.0.0-20240314144324-c7f7c6466f7f
 	golang.org/x/text v0.14.0
 )
 
