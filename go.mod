@@ -7,12 +7,12 @@ require (
 	github.com/dlclark/regexp2 v1.11.0
 	github.com/gabriel-vasile/mimetype v1.4.3
 	github.com/gen2brain/go-fitz v1.23.7
-	github.com/gin-contrib/expvar v1.0.0
+	github.com/gin-contrib/expvar v1.0.1
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-playground/validator/v10 v10.19.0
 	github.com/johbar/go-poppler v1.0.1-0.20230721224815-a1860a344718
 	github.com/nats-io/nats-server/v2 v2.10.12
-	github.com/nats-io/nats.go v1.33.1
+	github.com/nats-io/nats.go v1.34.0
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.3
 	github.com/samber/slog-gin v1.11.0
