@@ -31,7 +31,7 @@ func InitCache(js jetstream.JetStream, conf TesConfig) Cache {
 		if conf.FailWithoutJetstream {
 			os.Exit(1)
 		} else {
-			logger.Warn("NATS object store could not be initialized and " + confFailWithoutJs + "option is false. Disabling cache.")
+			logger.Warn("NATS object store could not be initialized and `TES_FAIL_WITHOUT_JS option is false. Disabling cache.")
 			cacheNop = true
 			return NopCache{}
 		}
