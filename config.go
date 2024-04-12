@@ -36,7 +36,7 @@ type TesConfig struct {
 	// How many replicas of the bucket to create. Default: 1
 	Replicas int `env:"TES_REPLICAS" default:"1"`
 	// HTTP listen address and/or port. Default: ':8080'
-	SrvAddr string `host_port:"TES_HOST_PORT" default:":8080"`
+	SrvAddr string `env:"TES_HOST_PORT" default:":8080"`
 }
 
 // NewTesConigFromEnv returns a service config object
