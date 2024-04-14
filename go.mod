@@ -15,7 +15,7 @@ require (
 	github.com/nats-io/nats.go v1.34.1
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.3
-	github.com/samber/slog-gin v1.11.0
+	github.com/samber/slog-gin v1.11.1
 	go-simpler.org/env v0.11.0
 	golang.org/x/exp v0.0.0-20240409090435-93d18d7e34b8
 	golang.org/x/text v0.14.0
