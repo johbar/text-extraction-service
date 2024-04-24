@@ -24,7 +24,7 @@ func NewFromBytes(data []byte) (*Pdf, error) {
 	if err != nil {
 		logger.Error(err.Error())
 	}
-	logger.Info("Opened doc", "pages", fdoc.NumPage())
+	logger.Debug("Opened doc", "pages", fdoc.NumPage())
 	return &Pdf{fdoc}, err
 }
 

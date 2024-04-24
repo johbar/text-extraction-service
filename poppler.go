@@ -57,7 +57,7 @@ func (d *Pdf) Text() string {
 
 // StreamText writes the document's plain text content to an io.Writer
 func (d *Pdf) StreamText(w io.Writer) {
-	logger.Info("Extracting", "pages", d.GetNPages())
+	logger.Debug("Extracting", "pages", d.GetNPages())
 	finished := make(chan bool)
 	pr, pw := io.Pipe()
 	go func() {
