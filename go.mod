@@ -11,11 +11,11 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-playground/validator/v10 v10.20.0
 	github.com/johbar/go-poppler v1.0.1-0.20230721224815-a1860a344718
-	github.com/nats-io/nats-server/v2 v2.10.14
-	github.com/nats-io/nats.go v1.34.1
+	github.com/nats-io/nats-server/v2 v2.10.15
+	github.com/nats-io/nats.go v1.35.0
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.3
-	github.com/samber/slog-gin v1.12.1
+	github.com/samber/slog-gin v1.13.0
 	go-simpler.org/env v0.12.0
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
 	golang.org/x/text v0.15.0
