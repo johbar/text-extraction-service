@@ -19,6 +19,8 @@ import (
 	"unicode"
 )
 
+const softHyphen = "\u00ad"
+
 // Dehyphanate removes newlines and hyphens at the end of lines and
 // writes all remaining text back to out. Hyphens are preserved if appropriate.
 func Dehyphenate(in io.Reader, out bufio.Writer) error {
@@ -27,7 +29,7 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 	defer out.Flush()
 	for s.Scan() {
 		currentLine := s.Text()
-		if trimmed := strings.TrimSpace(currentLine); trimmed == "" || trimmed == "-" {
+		if trimmed := strings.TrimSpace(currentLine); trimmed == "" || isHyphen(trimmed) {
 			// Skip empty and hyphen-only lines
 			continue
 		}
@@ -39,7 +41,7 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 		}
 		// reset last line status
 		lastLineEndedWithHyphen = false
-		if !strings.HasSuffix(currentLine, "-") {
+		if !endsWithHyphen(currentLine) {
 			_, err := out.WriteString(currentLine)
 			if err != nil {
 				return err
@@ -78,6 +80,14 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 		out.Flush()
 	}
 	return nil
+}
+
+func endsWithHyphen(line string) bool {
+	return strings.HasSuffix(line, "-") || strings.HasSuffix(line, softHyphen)
+}
+
+func isHyphen(text string) bool {
+	return text == "-" || text == softHyphen
 }
 
 //DehyphenateReaderToWriter reads text from in and writes it back to out,
