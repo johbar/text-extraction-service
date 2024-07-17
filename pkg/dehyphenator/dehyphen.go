@@ -19,8 +19,6 @@ import (
 	"unicode"
 )
 
-const softHyphen = "\u00ad"
-
 // Dehyphanate removes newlines and hyphens at the end of lines and
 // writes all remaining text back to out. Hyphens are preserved if appropriate.
 func Dehyphenate(in io.Reader, out bufio.Writer) error {
@@ -29,7 +27,7 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 	defer out.Flush()
 	for s.Scan() {
 		currentLine := s.Text()
-		if trimmed := strings.TrimSpace(currentLine); trimmed == "" || isHyphen(trimmed) {
+		if trimmed := []rune(strings.TrimSpace(currentLine)); len(trimmed) == 0 || (len(trimmed) >= 1 && isHyphen(trimmed[0])) {
 			// Skip empty and hyphen-only lines
 			continue
 		}
@@ -49,7 +47,7 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 			if !strings.HasSuffix(currentLine, " ") {
 				// The line did not end with a whitespace,
 				// so we print it here as a separator.
-				_, err := out.WriteString(" ")
+				_, err := out.WriteRune(' ')
 				if err != nil {
 					return err
 				}
@@ -69,8 +67,6 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 				// remove the hyphen and memoize that
 				// so we can reattach it in the next iteration if necessary
 				lastLineEndedWithHyphen = true
-
-				currentRunes := []rune(currentLine)
 				_, err := out.WriteString(string(currentRunes[0 : len(currentRunes)-1]))
 				if err != nil {
 					return err
@@ -83,15 +79,20 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 }
 
 func endsWithHyphen(line string) bool {
-	return strings.HasSuffix(line, "-") || strings.HasSuffix(line, softHyphen)
+	r := []rune(line)
+	if len(r) < 1 {
+		return false
+	}
+	lastRune := r[len(r)-1]
+	return isHyphen(lastRune)
 }
 
-func isHyphen(text string) bool {
-	return text == "-" || text == softHyphen
+func isHyphen(char rune) bool {
+	return unicode.Is(unicode.Hyphen, char)
 }
 
-//DehyphenateReaderToWriter reads text from in and writes it back to out,
-//removing all newlines and hyphens at the end of each line when appropriate.
+// DehyphenateReaderToWriter reads text from in and writes it back to out,
+// removing all newlines and hyphens at the end of each line when appropriate.
 func DehyphenateReaderToWriter(in io.Reader, out io.Writer) {
 	w := bufio.NewWriter(out)
 	Dehyphenate(in, *w)
