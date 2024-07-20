@@ -1,4 +1,4 @@
-//go:build !mupdf
+//go:build !mupdf && !pdfium && poppler
 
 package main
 
@@ -77,7 +77,13 @@ func (d *Pdf) StreamText(w io.Writer) {
 // Metadata returns some of the PDF metadata as map with keys compatible to HTTP headers
 func (d *Pdf) MetadataMap() map[string]string {
 	m := make(map[string]string)
+	m["x-parsed-by"] = "Poppler"
+	m["x-doctype"] = "pdf"
+
 	info := d.Info()
+	if info.Pages != 0 {
+		m["x-document-pages"] = strconv.Itoa(info.Pages)
+	}
 	if info.PdfVersion != "" {
 		m["x-document-version"] = info.PdfVersion
 	}
@@ -93,9 +99,6 @@ func (d *Pdf) MetadataMap() map[string]string {
 	if info.KeyWords != "" {
 		m["x-document-keywords"] = info.KeyWords
 	}
-	if info.Pages != 0 {
-		m["x-document-pages"] = strconv.Itoa(info.Pages)
-	}
 	if info.CreationDate != 0 {
 		createTime := time.Unix(int64(info.CreationDate), 0)
 		m["x-document-created"] = createTime.Format(time.RFC3339)
@@ -104,8 +107,6 @@ func (d *Pdf) MetadataMap() map[string]string {
 		modTime := time.Unix(int64(info.ModificationDate), 0)
 		m["x-document-modified"] = modTime.Format(time.RFC3339)
 	}
-	m["x-parsed-by"] = "Poppler"
-	m["x-doctype"] = "pdf"
 	return m
 }
 

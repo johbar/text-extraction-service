@@ -1,13 +1,15 @@
-//go:build mupdf
+//go:build !pdfium && !poppler && mupdf
 
 package main
 
 import (
 	"io"
 	"strconv"
+	"strings"
 
 	"github.com/gen2brain/go-fitz"
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
+	"github.com/johbar/text-extraction-service/v2/pkg/pdfdateparser"
 	"golang.org/x/exp/slog"
 )
 
@@ -76,40 +78,46 @@ func (d *Pdf) GetNPages() int {
 func (d *Pdf) MetadataMap() map[string]string {
 	m := d.Document.Metadata()
 	r := make(map[string]string)
-	if m["format"] != "" {
-		r["x-document-version"] = m["format"]
-	}
-	if m["author"] != "" {
-		r["x-document-author"] = m["author"]
-	}
-	if m["title"] != "" {
-		r["x-document-title"] = m["title"]
-	}
-	if m["subject"] != "" {
-		r["x-document-subject"] = m["subject"]
-	}
-	if m["keywords"] != "" {
-		r["x-document-keywords"] = m["keywords"]
-	}
 
+	if val := stripNulls(m["format"]); val != "" {
+		r["x-document-version"] = val
+	}
+	if val := stripNulls(m["author"]); val != "" {
+		r["x-document-author"] = val
+	}
+	if val := stripNulls(m["title"]); val != "" {
+		r["x-document-title"] = val
+	}
+	if val := stripNulls(m["subject"]); val != "" {
+		r["x-document-subject"] = val
+	}
+	if val := stripNulls(m["keywords"]); val != "" {
+		r["x-document-keywords"] = val
+	}
 	r["x-document-pages"] = strconv.Itoa(d.NumPage())
 
-	// dates are in strange format
-	// FIXME: parse dates
-	if m["creationDate"] != "" {
-		r["x-document-created"] = m["creationDate"]
+	if d, err := pdfdateparser.PdfDateToIso(stripNulls(m["creationDate"])); err == nil {
+		r["x-document-created"] = d
+	} else {
+		logger.Warn("invalid creationDate", "err", err)
 	}
-	if m["modDate"] != "" {
-		r["x-document-modified"] = m["modDate"]
+	if d, err := pdfdateparser.PdfDateToIso(stripNulls(m["modDate"])); err == nil {
+		r["x-document-modified"] = d
+	} else {
+		logger.Warn("invalid modDate", "err", err, "val", stripNulls(m["modDate"]))
 	}
-	if m["producer"] != "" {
-		r["x-document-producer"] = m["producer"]
+	if val := stripNulls(m["producer"]); val != "" {
+		r["x-document-producer"] = val
 	}
-	if m["creator"] != "" {
-		r["x-document-creator"] = m["creator"]
+	if val := stripNulls(m["creator"]); val != "" {
+		r["x-document-creator"] = val
 	}
 	r["x-parsed-by"] = "MuPDF"
 	return r
+}
+
+func stripNulls(val string) string {
+	return strings.ReplaceAll(val, "\u0000", "")
 }
 
 func (d Pdf) Close() {
