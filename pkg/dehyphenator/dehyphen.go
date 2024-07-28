@@ -26,7 +26,7 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 	s := bufio.NewScanner(in)
 	defer out.Flush()
 	for s.Scan() {
-		currentLine := s.Text()
+		currentLine := strings.ReplaceAll(s.Text(), "\uFFFE", "")
 		if trimmed := []rune(strings.TrimSpace(currentLine)); len(trimmed) == 0 || (len(trimmed) >= 1 && isHyphen(trimmed[0])) {
 			// Skip empty and hyphen-only lines
 			continue
