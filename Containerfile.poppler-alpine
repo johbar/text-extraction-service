@@ -18,7 +18,7 @@ COPY . .
 
 ENV CGO_ENABLED=1
 
-RUN go build -tags nomsgpack -v -o /go/text-extraction-service
+RUN go build -tags nomsgpack,poppler -v -o /go/text-extraction-service
 ## Runtime Image ##
 FROM docker.io/alpine:latest
 
@@ -36,4 +36,4 @@ VOLUME /tmp/nats
 
 ENV GIN_MODE=release
 
-CMD text-extraction-service
+CMD ["text-extraction-service"]

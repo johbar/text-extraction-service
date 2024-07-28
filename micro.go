@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/bytedance/sonic"
+	"github.com/goccy/go-json"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/micro"
 )
@@ -32,7 +32,7 @@ func RegisterNatsService(nc *nats.Conn) {
 func HandleUrl(req micro.Request) {
 	d := req.Data()
 	var params RequestParams
-	err := sonic.Unmarshal(d, &params)
+	err := json.Unmarshal(d, &params)
 	if err != nil {
 		req.Error("invalid_params", err.Error(), nil)
 		return

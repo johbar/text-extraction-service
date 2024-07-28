@@ -1,4 +1,4 @@
-//go:build pdfium
+//go:build pdfium_wasm
 
 package main
 
@@ -17,24 +17,27 @@ import (
 	"github.com/klippa-app/go-pdfium"
 	"github.com/klippa-app/go-pdfium/requests"
 	"github.com/klippa-app/go-pdfium/responses"
-	"github.com/klippa-app/go-pdfium/single_threaded"
+	"github.com/klippa-app/go-pdfium/webassembly"
 )
 
 type Pdf struct {
-	*responses.OpenDocument
+	Document *responses.OpenDocument
+	instance pdfium.Pdfium
 }
 
 var pool pdfium.Pool
-var instance pdfium.Pdfium
 
 func init() {
-	slog.Info("Using PDFium")
-	pool = single_threaded.Init(single_threaded.Config{})
+	slog.Info("Using PDFium WASM")
 	var err error
-	instance, err = pool.GetInstance(time.Second * 3)
+	pool, err = webassembly.Init(webassembly.Config{MinIdle: 1, MaxTotal: 8, ReuseWorkers: true})
+	if err != nil {
+		logger.Error("Error initializing WASM", "err", err)
+	}
 	if err != nil {
 		slog.Error("Could not start PDFium worker", "err", err)
 	}
+	logger.Info("PDFium WASM initialized.")
 }
 
 func NewFromStream(stream io.ReadCloser) (doc *Pdf, err error) {
@@ -48,26 +51,31 @@ func NewFromStream(stream io.ReadCloser) (doc *Pdf, err error) {
 
 func NewFromBytes(data []byte) (doc *Pdf, err error) {
 	if mimetype.Detect(data).Extension() != ".pdf" {
-		return &Pdf{nil}, errors.New("not a PDF")
+		return &Pdf{nil, nil}, errors.New("not a PDF")
+	}
+	instance, err := pool.GetInstance(30 * time.Second)
+	if err != nil {
+		return nil, errors.New("Could not obtain a PDFium worker")
 	}
 	pDoc, err := instance.OpenDocument(&requests.OpenDocument{File: &data})
 	if err != nil {
 		logger.Error("PDFium could not load PDF", "err", err)
 	}
-	doc = &Pdf{pDoc}
+	doc = &Pdf{Document: pDoc, instance: instance}
 	return
 }
 
 // Text returns the plain text content of the document
 func (d *Pdf) Text() string {
 	var buf strings.Builder
-	pageCount, err := instance.FPDF_GetPageCount(&requests.FPDF_GetPageCount{Document: d.Document})
+	instance := d.instance
+	pageCount, err := instance.FPDF_GetPageCount(&requests.FPDF_GetPageCount{Document: d.Document.Document})
 	if err != nil {
 		logger.Error("Could not get PDF page count", "err", err)
 	}
 
 	for n := 0; n < pageCount.PageCount; n++ {
-		pIndex := &requests.PageByIndex{Document: d.Document, Index: n}
+		pIndex := &requests.PageByIndex{Document: d.Document.Document, Index: n}
 		tResp, err := instance.GetPageText(&requests.GetPageText{Page: requests.Page{ByIndex: pIndex}})
 		if err != nil {
 			logger.Error("Could not get page text", "page", n, "err", err)
@@ -81,7 +89,9 @@ func (d *Pdf) Text() string {
 func (d *Pdf) StreamText(w io.Writer) {
 	finished := make(chan bool)
 	pr, pw := io.Pipe()
-	pageCount, err := instance.FPDF_GetPageCount(&requests.FPDF_GetPageCount{Document: d.Document})
+	instance := d.instance
+
+	pageCount, err := instance.FPDF_GetPageCount(&requests.FPDF_GetPageCount{Document: d.Document.Document})
 	if err != nil {
 		logger.Error("Could not get page count", "err", err)
 	}
@@ -92,7 +102,7 @@ func (d *Pdf) StreamText(w io.Writer) {
 		finished <- true
 	}()
 	for n := 0; n < pageCount.PageCount; n++ {
-		pIndex := &requests.PageByIndex{Document: d.Document, Index: n}
+		pIndex := &requests.PageByIndex{Document: d.Document.Document, Index: n}
 		tResp, err := instance.GetPageText(&requests.GetPageText{Page: requests.Page{ByIndex: pIndex}})
 		if err != nil {
 			logger.Error("Could not get page text", "err", err)
@@ -108,11 +118,12 @@ func (d *Pdf) MetadataMap() map[string]string {
 	m := make(map[string]string)
 	m["x-parsed-by"] = "PDFium"
 	m["x-doctype"] = "pdf"
+	instance := d.instance
 
-	if pc, err := instance.FPDF_GetPageCount(&requests.FPDF_GetPageCount{Document: d.Document}); err == nil {
+	if pc, err := instance.FPDF_GetPageCount(&requests.FPDF_GetPageCount{Document: d.Document.Document}); err == nil {
 		m["x-document-pages"] = strconv.Itoa(pc.PageCount)
 	}
-	if versionResp, err := instance.FPDF_GetFileVersion(&requests.FPDF_GetFileVersion{Document: d.Document}); err == nil && versionResp != nil && versionResp.FileVersion != 0 {
+	if versionResp, err := instance.FPDF_GetFileVersion(&requests.FPDF_GetFileVersion{Document: d.Document.Document}); err == nil && versionResp != nil && versionResp.FileVersion != 0 {
 		m["x-document-version"] = fmt.Sprintf("PDF-%0.1f", float32(versionResp.FileVersion)/10.0)
 	}
 	if val := d.getStringField("Author"); len(val) > 0 {
@@ -137,7 +148,8 @@ func (d *Pdf) MetadataMap() map[string]string {
 }
 
 func (d *Pdf) getStringField(tag string) string {
-	resp, err := instance.FPDF_GetMetaText(&requests.FPDF_GetMetaText{Document: d.Document, Tag: tag})
+	instance := d.instance
+	resp, err := instance.FPDF_GetMetaText(&requests.FPDF_GetMetaText{Document: d.Document.Document, Tag: tag})
 	if err == nil && resp != nil && len(resp.Value) > 0 {
 		return resp.Value
 	}
@@ -146,7 +158,8 @@ func (d *Pdf) getStringField(tag string) string {
 }
 
 func (d *Pdf) getDateField(tag string) string {
-	resp, err := instance.FPDF_GetMetaText(&requests.FPDF_GetMetaText{Document: d.Document, Tag: tag})
+	instance := d.instance
+	resp, err := instance.FPDF_GetMetaText(&requests.FPDF_GetMetaText{Document: d.Document.Document, Tag: tag})
 	if err != nil || resp.Value == "" {
 		logger.Error("Retrieving PDF date failed", "tag", tag, "err", err)
 		return ""
@@ -159,5 +172,6 @@ func (d *Pdf) getDateField(tag string) string {
 }
 
 func (d *Pdf) Close() {
-	instance.FPDF_CloseDocument(&requests.FPDF_CloseDocument{Document: d.Document})
+	d.instance.FPDF_CloseDocument(&requests.FPDF_CloseDocument{Document: d.Document.Document})
+	d.instance.Close()
 }

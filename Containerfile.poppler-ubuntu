@@ -1,11 +1,11 @@
 ARG BUILD_IMG=docker.io/golang:bookworm
 ARG RUNTIME_IMG=docker.io/ubuntu:jammy
-ARG BUILD_TAGS=nomsgpack
 FROM $BUILD_IMG AS builder
+ARG BUILD_TAGS=nomsgpack,poppler
 
 WORKDIR /usr/src/app
 
-RUN apt-get update && apt-get --no-install-recommends install libpoppler-glib-dev -y
+RUN apt-get update && apt-get --no-install-suggests --no-install-recommends install libpoppler-glib-dev -y
 
 ENV HOME=/tmp GOPATH=/tmp
 
@@ -17,14 +17,14 @@ COPY . .
 
 ENV CGO_ENABLED=1
 
-RUN go build -tags "$BUILD_TAGS" -v -o /go/text-extraction-service
+RUN go build -tags "${BUILD_TAGS}" -v -o /go/text-extraction-service
 ## Runtime Image ##
 FROM $RUNTIME_IMG
 
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
 RUN apt-get update && \
-    apt-get --no-install-recommends install ca-certificates libpoppler-glib8 wv -y && \
+    apt-get --no-install-recommends --no-install-suggests install ca-certificates libpoppler-glib8 wv -y && \
     rm -rf /var/lib/apt
 
 # Expose the service and Nats (optional)
@@ -34,4 +34,4 @@ VOLUME /tmp/nats
 
 ENV GIN_MODE=release
 
-CMD text-extraction-service
+CMD ["text-extraction-service"]

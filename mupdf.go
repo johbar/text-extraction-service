@@ -1,4 +1,4 @@
-//go:build !pdfium && !poppler && mupdf
+//go:build mupdf
 
 package main
 
