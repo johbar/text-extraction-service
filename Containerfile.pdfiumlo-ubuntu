@@ -45,6 +45,8 @@ RUN apt-get update && \
 RUN ln -s /usr/lib/libreoffice/program/libpdfiumlo.so /usr/lib/libpdfium.so \
     && ldd /usr/lib/libpdfium.so
 
+ENV GIN_MODE=release
+
 # Expose the service and Nats (optional)
 EXPOSE 4222 8080
 
