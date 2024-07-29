@@ -8,8 +8,16 @@ import (
 
 // PdfDateToTime parses the a date/time string from PDF metadata and returns a time.Time object.
 func PdfDateToTime(pdfdate string) (time.Time, error) {
+	patterns := []string{"20060102150405Z07", "20060102150405Z07'00'", "20060102150405"}
 	pdfdate, _ = strings.CutPrefix(pdfdate, "D:")
-	result, err := time.Parse("20060102150405Z07'00'", pdfdate)
+	var result time.Time
+	var err error
+	for _, pattern := range patterns {
+		result, err = time.Parse(pattern, pdfdate)
+		if err == nil {
+			return result, err
+		}
+	}
 	return result, err
 }
 
