@@ -84,6 +84,7 @@ func (d *Pdf) StreamText(w io.Writer) {
 	pageCount, err := instance.FPDF_GetPageCount(&requests.FPDF_GetPageCount{Document: d.Document})
 	if err != nil {
 		logger.Error("Could not get page count", "err", err)
+		return
 	}
 	logger.Debug("Extracting", "pages", pageCount.PageCount)
 	go func() {
@@ -96,6 +97,7 @@ func (d *Pdf) StreamText(w io.Writer) {
 		tResp, err := instance.GetPageText(&requests.GetPageText{Page: requests.Page{ByIndex: pIndex}})
 		if err != nil {
 			logger.Error("Could not get page text", "err", err)
+			continue
 		}
 		pw.Write([]byte(tResp.Text))
 	}
@@ -141,19 +143,18 @@ func (d *Pdf) getStringField(tag string) string {
 	if err == nil && resp != nil && len(resp.Value) > 0 {
 		return resp.Value
 	}
-	// logger.Warn("metadata empty", "tag", tag, "err", err, "resp", resp)
 	return ""
 }
 
 func (d *Pdf) getDateField(tag string) string {
 	resp, err := instance.FPDF_GetMetaText(&requests.FPDF_GetMetaText{Document: d.Document, Tag: tag})
 	if err != nil || resp.Value == "" {
-		logger.Error("Retrieving PDF date failed", "tag", tag, "err", err)
+		logger.Warn("Retrieving PDF date failed", "tag", tag, "err", err)
 		return ""
 	}
 	mDate, err := pdfdateparser.PdfDateToTime(resp.Value)
 	if err != nil {
-		logger.Error("Parsing date failed", "tag", tag, "err", err)
+		logger.Warn("Parsing date failed", "tag", tag, "err", err)
 	}
 	return mDate.Format(time.RFC3339)
 }
