@@ -12,15 +12,8 @@ RUN curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/la
 WORKDIR /opt/pdfium
 RUN tar -xf /tmp/pdfium.tgz
 
-RUN mkdir --parents /usr/local/lib/pkgconfig && cat > /usr/local/lib/pkgconfig/pdfium.pc <<EOF
-Name: PDFium
-Description: PDFium
-Version: 6392
-Requires:
+RUN mkdir --parents /usr/local/lib/pkgconfig && echo "Name: PDFium\nDescription: PDFium\nVersion: 6392\nRequires:\n\nLibs: -L/opt/pdfium/lib -lpdfium\nCflags: -I/opt/pdfium/include\n" > /usr/local/lib/pkgconfig/pdfium.pc
 
-Libs: -L/opt/pdfium/lib -lpdfium
-Cflags: -I/opt/pdfium/include
-EOF
 
 WORKDIR /usr/src/app
 

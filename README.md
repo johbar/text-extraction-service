@@ -123,7 +123,7 @@ Ubuntu refers to Ubuntu 22.04 (*Jammy*).
 # Use a volume to speed up subsequent builds—remove the need to re-download and re-compile all dependencies
 mkdir --mode 777 --parents /tmp/cache
 
-# MuPDF + Alpeine:
+# MuPDF + Alpine:
 podman build --pull . -f Containerfile.mupdf-alpine -t tes:mupdf-alpine --volume /tmp/cache:/tmp
 
 # Poppler + Alpine:
