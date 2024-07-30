@@ -21,7 +21,7 @@ func TestPdfDateToTime(t *testing.T) {
 		want    time.Time
 		wantErr bool
 	}{
-		{name: "fq_tz",
+		{name: "fq_offset_tz",
 			args: args{pdfdate: "D:20240419110302+02'00'"},
 			//				  D:2024 04 19 11 03 02 +02'00'"
 			//				  2024-04-19T11:03:02+02:00
@@ -37,6 +37,13 @@ func TestPdfDateToTime(t *testing.T) {
 		},
 		{name: "no_tz",
 			args: args{pdfdate: "D:20240419110302"},
+			//				  D:2024 04 19 11 03 02 +02'00'"
+			//				  2024-04-19T11:03:02+02:00
+			want:    time.Date(2024, 4, 19, 11, 3, 2, 0, time.UTC),
+			wantErr: false,
+		},
+		{name: "z_plus_offset",
+			args: args{pdfdate: "D:20240419110302Z00'00'"},
 			//				  D:2024 04 19 11 03 02 +02'00'"
 			//				  2024-04-19T11:03:02+02:00
 			want:    time.Date(2024, 4, 19, 11, 3, 2, 0, time.UTC),
