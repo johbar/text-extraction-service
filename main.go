@@ -18,10 +18,17 @@ var (
 	logger               *slog.Logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
 	saveExtractedDocChan chan *ExtractedDocument
 	srv                  http.Server
+	tesConfig            TesConfig
 )
 
 func main() {
-	conf := NewTesConigFromEnv()
+	args := os.Args
+	// one shot mode: don't start a server, just process a single file provided on the command line
+	if len(args) > 1 {
+		PrintMetadataAndTextToStdout(args[1])
+		return
+	}
+	tesConfig = NewTesConigFromEnv()
 	closeDocChan = make(chan Document, 100)
 	saveExtractedDocChan = make(chan *ExtractedDocument, 100)
 	go saveAndCloseExtracedDocs()
@@ -33,9 +40,9 @@ func main() {
 	router.HEAD("/", ExtractRemote)
 	router.GET("/debug/vars", expvar.Handler())
 
-	srv.Addr = conf.SrvAddr
+	srv.Addr = tesConfig.SrvAddr
 	srv.Handler = router
-	if conf.Debug {
+	if tesConfig.Debug {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}
 
@@ -45,14 +52,14 @@ func main() {
 	buildinfo, _ := debug.ReadBuildInfo()
 	logger.Debug("Info", "buildinfo", buildinfo)
 
-	nc, js := SetupNatsConnection(conf)
+	nc, js := SetupNatsConnection(tesConfig)
 	if nc != nil {
 		RegisterNatsService(nc)
 	}
-	cache = InitCache(js, conf)
+	cache = InitCache(js, tesConfig)
 	defer nc.Drain()
 
-	if conf.NoHttp {
+	if tesConfig.NoHttp {
 		if nc == nil {
 			logger.Error("Fatal: NATS not connected and HTTP disabled.")
 			os.Exit(1)

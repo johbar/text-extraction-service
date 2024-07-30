@@ -17,6 +17,9 @@ type TesConfig struct {
 	Debug bool `env:"TES_DEBUG" default:"false"`
 	// If true the service will exit with an error if NATS or JetStream can't be connected
 	FailWithoutJetstream bool `env:"TES_FAIL_WITHOUT_JS" default:"true"`
+	// Maximum content length (size in bytes)of a file that is being converted in-process
+	// rather by a subprocess in fork-exec style. Default: 2 MiB
+	ForkThreshold int64 `env:"TES_FORK_THRESHOLD" default:"2097152"`
 	// NATS max msg size (embedded server only)
 	NatsMaxPayload int32 `env:"TES_MAX_PAYLOAD" default:"8388608"`
 	// embedded NATS server storage location. Default: /tmp/nats

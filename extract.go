@@ -1,10 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -67,14 +73,11 @@ func ExtractBody(c *gin.Context) {
 }
 
 func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status int, err error) {
-
 	url := params.Url
 	silent := params.Silent
 
-	var (
-		noCache  bool
-		metadata map[string]string
-	)
+	var noCache bool
+	var metadata map[string]string
 
 	if params.NoCache || cacheNop {
 		noCache = true
@@ -124,7 +127,14 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	// We have no current version of the document but fetched it
 	// so parse and extract it
 	logger.Debug("Start parsing", "url", url, "content-length", response.ContentLength)
-	doc, err := NewDocFromStream(response.Body)
+	var doc Document
+	if response.ContentLength > tesConfig.ForkThreshold {
+		// file size above threshold - fork a subprocess
+		doc, err = NewDocFromForkedProcess(response.Body)
+	} else {
+		doc, err = NewDocFromStream(response.Body)
+
+	}
 	if err != nil {
 		logger.Error("Error when parsing", "err", err, "url", url, "headers", response.Header)
 		return http.StatusUnprocessableEntity, err
@@ -140,7 +150,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		metadata["http-content-length"] = fmt.Sprintf("%d", contentLength)
 	}
 	addMetadataAsHeaders(header, &metadata)
-	logger.Debug("Finished parsing", "url", url)
+	logger.Debug("Parsing finished", "url", url)
 	var text bytes.Buffer
 	var mWriter io.Writer
 	if silent {
@@ -194,4 +204,62 @@ func addMetadataAsHeaders(header http.Header, metadata *map[string]string) {
 	for k, v := range *metadata {
 		header.Add(k, v)
 	}
+}
+
+// ForkedDoc represents a Document processed by forked subprocess of this service
+type ForkedDoc struct {
+	cmd        *exec.Cmd
+	metadata   map[string]string
+	textStream io.ReadCloser
+}
+
+// NewDocFromForkedProcess creates a Document which content and metadata is being extracted by a forked subprocess
+func NewDocFromForkedProcess(r io.ReadCloser) (*ForkedDoc, error) {
+	me, err := os.Executable()
+	if err != nil {
+		logger.Error("Could not find out who I am", "err", err)
+		return nil, err
+	}
+	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(2*time.Minute))
+	cmd := exec.CommandContext(ctx, me, "-")
+	cmd.Stdin = r
+	cmd.Stderr = os.Stderr
+	stdout, err := cmd.StdoutPipe()
+	scanner := bufio.NewScanner(stdout)
+	logger.Info("Starting subprocess")
+	cmd.WaitDelay = time.Minute
+	cmd.Start()
+	logger.Debug("Subprocess started", "pid", cmd.Process.Pid)
+	doc := &ForkedDoc{cmd: cmd, textStream: stdout}
+	// Read one line to get the metadata
+	if scanner.Scan() {
+		metadataJson := scanner.Text()
+		metadata := make(map[string]string)
+		json.Unmarshal([]byte(metadataJson), &metadata)
+		doc.metadata = metadata
+	}
+	logger.Info("Finished reading metadata from subprocess")
+	return doc, err
+}
+
+// StreamText may only be invoked once!
+func (d *ForkedDoc) StreamText(w io.Writer) {
+	written, err := io.Copy(w, d.textStream)
+	logger.Info("Read from subprocess", "bytes", written, "err", err)
+	err = d.cmd.Wait()
+	if err != nil {
+		logger.Error("Error waiting for subprocess to finish", "err", err)
+	}
+	logger.Info("Subprocess finished", "state", d.cmd.ProcessState.String())
+
+}
+
+func (d *ForkedDoc) MetadataMap() map[string]string {
+	return d.metadata
+}
+
+func (d *ForkedDoc) Close() {
+	// the subprocesses stdout should already be closed...
+	d.textStream.Close()
+	d.cmd.Cancel()
 }
