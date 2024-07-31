@@ -19,6 +19,9 @@ import (
 	"unicode"
 )
 
+// Wether to remove all newlines and to replace them with whitespace
+var RemoveNewlines bool = false
+
 // Dehyphanate removes newlines and hyphens at the end of lines and
 // writes all remaining text back to out. Hyphens are preserved if appropriate.
 func Dehyphenate(in io.Reader, out bufio.Writer) error {
@@ -27,9 +30,16 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 	defer out.Flush()
 	for s.Scan() {
 		currentLine := strings.ReplaceAll(s.Text(), "\uFFFE", "")
-		if trimmed := []rune(strings.TrimSpace(currentLine)); len(trimmed) == 0 || (len(trimmed) >= 1 && isHyphen(trimmed[0])) {
+		trimmed := []rune(strings.TrimSpace(currentLine))
+		if len(trimmed) == 0 || isHyphen(trimmed[0]) {
 			// Skip empty and hyphen-only lines
+			if !RemoveNewlines {
+				out.WriteRune('\n')
+			}
 			continue
+		} else {
+			// We trim all leading and trailing whitespace
+			currentLine = string(trimmed)
 		}
 		if lastLineEndedWithHyphen && unicode.IsUpper([]rune(currentLine)[0]) {
 			// The last line ended with a hyphen that we removed.
@@ -44,13 +54,10 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 			if err != nil {
 				return err
 			}
-			if !strings.HasSuffix(currentLine, " ") {
-				// The line did not end with a whitespace,
-				// so we print it here as a separator.
-				_, err := out.WriteRune(' ')
-				if err != nil {
-					return err
-				}
+			if !RemoveNewlines {
+				out.WriteRune('\n')
+			} else {
+				out.WriteRune(' ')
 			}
 		} else {
 			// possible dehyphenation candidate
