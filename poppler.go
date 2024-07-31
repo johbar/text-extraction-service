@@ -5,7 +5,6 @@ package main
 import (
 	"errors"
 	"io"
-	"log/slog"
 	"strconv"
 	"strings"
 	"time"

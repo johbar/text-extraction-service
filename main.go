@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-contrib/expvar"
 	"github.com/gin-gonic/gin"
+	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
 	sloggin "github.com/samber/slog-gin"
 )
@@ -24,13 +25,14 @@ var (
 )
 
 func main() {
+	tesConfig = NewTesConfigFromEnv()
+	dehyphenator.RemoveNewlines = tesConfig.RemoveNewlines
 	args := os.Args
 	// one shot mode: don't start a server, just process a single file provided on the command line
 	if len(args) > 1 {
 		PrintMetadataAndTextToStdout(args[1])
 		return
 	}
-	tesConfig = NewTesConigFromEnv()
 	closeDocChan = make(chan Document, 100)
 	saveExtractedDocChan = make(chan *ExtractedDocument, 100)
 	go saveAndCloseExtracedDocs()
@@ -70,7 +72,7 @@ func main() {
 		logger.Info("Service started with no HTTP endpoints. Waiting for interrupt.")
 		<-wait
 	}
-	logger.Info("Using PDF implementation", "lib", pdfImplementation)
+	logger.Info("PDF implementation", "lib", pdfImplementation)
 	if !docparser.Initialized {
 		logger.Warn("wvWare is not in PATH! We will not be able to extract legacy MS Word documents.")
 	}

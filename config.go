@@ -36,15 +36,17 @@ type TesConfig struct {
 	NatsConnectRetries int `env:"TES_NATS_CONNECT_RETRIES" default:"10"`
 	// if true, disable HTTP Server in favor of NATS Microservice interface
 	NoHttp bool `env:"TES_NO_HTTP" default:"false"`
+	// if true, extracted text will be compacted by replacing newlines with whitespace
+	RemoveNewlines bool `env:"TES_REMOVE_NEWLINES" default:"true"`
 	// How many replicas of the bucket to create. Default: 1
 	Replicas int `env:"TES_REPLICAS" default:"1"`
 	// HTTP listen address and/or port. Default: ':8080'
 	SrvAddr string `env:"TES_HOST_PORT" default:":8080"`
 }
 
-// NewTesConigFromEnv returns a service config object
+// NewTesConfigFromEnv returns a service config object
 // populated with defaults and values from environment vars
-func NewTesConigFromEnv() TesConfig {
+func NewTesConfigFromEnv() TesConfig {
 	var cfg TesConfig
 	if err := env.Load(&cfg, nil); err != nil {
 		logger.Error("Loading config failed", "err", err)
