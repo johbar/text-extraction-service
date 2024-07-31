@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -28,14 +27,14 @@ type Pdf struct {
 var pool pdfium.Pool
 
 func init() {
-	slog.Info("Using PDFium WASM")
+	pdfImplementation = "PDFium WASM"
 	var err error
 	pool, err = webassembly.Init(webassembly.Config{MinIdle: 1, MaxTotal: 8, ReuseWorkers: true})
 	if err != nil {
 		logger.Error("Error initializing WASM", "err", err)
 	}
 	if err != nil {
-		slog.Error("Could not start PDFium worker", "err", err)
+		logger.Error("Could not start PDFium worker", "err", err)
 	}
 	logger.Info("PDFium WASM initialized.")
 }

@@ -32,7 +32,9 @@ func NewDocFromStream(r io.Reader) (Document, error) {
 	case "application/msword":
 		fallthrough
 	case "application/x-ole-storage":
-		return docparser.NewFromBytes(data)
+		if docparser.Initialized {
+			return docparser.NewFromBytes(data)
+		}
 	case "text/rtf":
 		return rtfparser.NewFromBytes(data)
 	}

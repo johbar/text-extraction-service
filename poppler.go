@@ -20,7 +20,7 @@ type Pdf struct {
 }
 
 func init() {
-	slog.Info("Using Poppler (GLib) library", "version", poppler.Version())
+	pdfImplementation = "Poppler (GLib) version " + poppler.Version()
 }
 
 func NewFromStream(stream io.ReadCloser) (doc *Pdf, err error) {

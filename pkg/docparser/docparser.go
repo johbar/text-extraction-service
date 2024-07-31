@@ -25,6 +25,9 @@ import (
 // and duplicate whitespace
 var reCleaner = regexp.MustCompile(`\s*?\pC\pS*?|\s{2,}`)
 
+// Initialized indicates if the package is usable (depending on the presence of the WV tool)
+var Initialized bool
+
 type DocMetadata struct {
 	Author   string `json:"author,omitempty"`
 	Category string `json:"category,omitempty"`
@@ -49,12 +52,12 @@ type WordDoc struct {
 }
 
 func init(){
-	wv, err := exec.LookPath("wvWare")
+	_, err := exec.LookPath("wvWare")
 	if err != nil {
-		slog.Error("wvWare is not in PATH! We will not be able to extract legacy MS Word documents.", "err", err)
+		Initialized = false
 		return
 	}
-	slog.Info("wvWare found", "path", wv)
+	Initialized = true
 }
 
 func NewFromBytes(data []byte) (doc *WordDoc, err error) {

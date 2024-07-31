@@ -10,7 +10,6 @@ import (
 	"github.com/gen2brain/go-fitz"
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v2/pkg/pdfdateparser"
-	"golang.org/x/exp/slog"
 )
 
 type Pdf struct {
@@ -18,7 +17,7 @@ type Pdf struct {
 }
 
 func init() {
-	slog.Info("Using MuPDF (go-fitz) library.")
+	pdfImplementation = "MuPDF (go-fitz)"
 }
 
 func NewFromBytes(data []byte) (*Pdf, error) {

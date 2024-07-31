@@ -6,8 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
-	"strconv"
+		"strconv"
 	"strings"
 	"time"
 
@@ -28,12 +27,12 @@ var pool pdfium.Pool
 var instance pdfium.Pdfium
 
 func init() {
-	slog.Info("Using PDFium")
+	pdfImplementation = "PDFium"
 	pool = single_threaded.Init(single_threaded.Config{})
 	var err error
 	instance, err = pool.GetInstance(time.Second * 3)
 	if err != nil {
-		slog.Error("Could not start PDFium worker", "err", err)
+		logger.Error("Could not start PDFium worker", "err", err)
 	}
 }
 

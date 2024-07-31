@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-contrib/expvar"
 	"github.com/gin-gonic/gin"
+	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
 	sloggin "github.com/samber/slog-gin"
 )
 
@@ -15,6 +16,7 @@ var (
 	cache                Cache
 	cacheNop             bool
 	closeDocChan         chan Document
+	pdfImplementation    string       // Which lib is being used for PDFs?
 	logger               *slog.Logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
 	saveExtractedDocChan chan *ExtractedDocument
 	srv                  http.Server
@@ -68,11 +70,14 @@ func main() {
 		logger.Info("Service started with no HTTP endpoints. Waiting for interrupt.")
 		<-wait
 	}
+	logger.Info("Using PDF implementation", "lib", pdfImplementation)
+	if !docparser.Initialized {
+		logger.Warn("wvWare is not in PATH! We will not be able to extract legacy MS Word documents.")
+	}
 	logger.Info("Service started", "address", srv.Addr)
 	defer logger.Info("HTTP Server stopped.")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		// Error starting or closing listener:
 		logger.Error("Webserver failed", "err", err)
 	}
-
 }
