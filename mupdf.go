@@ -95,15 +95,11 @@ func (d *Pdf) MetadataMap() map[string]string {
 	}
 	r["x-document-pages"] = strconv.Itoa(d.NumPage())
 
-	if d, err := pdfdateparser.PdfDateToIso(stripNulls(m["creationDate"])); err == nil {
+	if d, _ := pdfdateparser.PdfDateToIso(stripNulls(m["creationDate"])); len(d) > 0 {
 		r["x-document-created"] = d
-	} else {
-		logger.Warn("invalid creationDate", "err", err)
 	}
-	if d, err := pdfdateparser.PdfDateToIso(stripNulls(m["modDate"])); err == nil {
+	if d, _ := pdfdateparser.PdfDateToIso(stripNulls(m["modDate"])); len(d) > 0 {
 		r["x-document-modified"] = d
-	} else {
-		logger.Warn("invalid modDate", "err", err, "val", stripNulls(m["modDate"]))
 	}
 	if val := stripNulls(m["producer"]); val != "" {
 		r["x-document-producer"] = val
@@ -115,6 +111,7 @@ func (d *Pdf) MetadataMap() map[string]string {
 	return r
 }
 
+// go-fitz seems to return Strings of 256 length with zero byte padding
 func stripNulls(val string) string {
 	return strings.ReplaceAll(val, "\u0000", "")
 }

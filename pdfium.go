@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-		"strconv"
+	"strconv"
 	"strings"
 	"time"
 
@@ -139,16 +139,15 @@ func (d *Pdf) MetadataMap() map[string]string {
 
 func (d *Pdf) getStringField(tag string) string {
 	resp, err := instance.FPDF_GetMetaText(&requests.FPDF_GetMetaText{Document: d.Document, Tag: tag})
-	if err == nil && resp != nil && len(resp.Value) > 0 {
-		return resp.Value
+	if err != nil || resp == nil || len(resp.Value) == 0 {
+		return ""
 	}
-	return ""
+	return resp.Value
 }
 
 func (d *Pdf) getDateField(tag string) string {
 	resp, err := instance.FPDF_GetMetaText(&requests.FPDF_GetMetaText{Document: d.Document, Tag: tag})
 	if err != nil || resp.Value == "" {
-		logger.Warn("Retrieving PDF date failed", "tag", tag, "err", err)
 		return ""
 	}
 	mDate, err := pdfdateparser.PdfDateToTime(resp.Value)

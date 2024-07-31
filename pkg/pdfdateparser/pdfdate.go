@@ -27,6 +27,9 @@ func PdfDateToTime(pdfdate string) (time.Time, error) {
 
 // PdfDateToIso returns the PDF date/time as RFC3339 String
 func PdfDateToIso(pdfdate string) (string, error) {
+	if pdfdate == "" {
+		return "", nil
+	}
 	t, err := PdfDateToTime(pdfdate)
 	if err != nil {
 		return "", err
