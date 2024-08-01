@@ -175,7 +175,20 @@ Configuration happens through environment variables only.
 | `TES_NATS_CONNECT_RETRIES` | Number of times a connection to an external NATS server/cluster and to JetStream is being tried. Default: `10`                |
 | `TES_HOST_PORT`            | Listen adress of HTTP server. Default: `:8080` (same as `0.0.0.0:8080`)                                                       |
 | `TES_NO_HTTP`              | If `true` and `TES_EXPOSE_NATS` is `true`, too, no HTTP server is started                                                     |
+| `TES_REMOVE_NEWLINES`      | If true, extracted text will be compacted by replacing newlines with whitespace (Default: `true`).                            |
+| `TES_FORK_THRESHOLD`       | Maximum content length (size in bytes) of a file that is being converted in-process rather by a subprocess in fork-exec style. Default: 2 MiB |
 
 ## Usage
+
+### CLI/One-shot usage
+
+```shell
+./tes /tmp/my-example.pdf
+./tes https://example.com/my.pdf
+```
+
+This will output one line with JSON encoded metadata, followed by text.
+
+### Running as service
 
 TBD
