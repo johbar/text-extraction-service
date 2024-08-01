@@ -67,6 +67,8 @@ func (d *Pdf) StreamText(w io.Writer) {
 	for n := 0; n < d.GetNPages(); n++ {
 		page := d.GetPage(n)
 		pw.Write([]byte(page.Text()))
+		// ensure there is a newline at the end of every page
+		pw.Write([]byte{'\n'})
 		page.Close()
 	}
 	pw.Close()
