@@ -27,7 +27,7 @@ COPY . .
 
 ENV CGO_ENABLED=1 GIN_MODE=release DEBIAN_FRONTEND=noninteractive
 
-RUN go build -tags "${BUILD_TAGS}" -v -o /go/text-extraction-service
+RUN go build -ldflags="-s -w" -tags "${BUILD_TAGS}" -v -o /go/text-extraction-service
 ## Runtime Image ##
 FROM $RUNTIME_IMG
 
