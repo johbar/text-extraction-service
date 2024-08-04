@@ -30,9 +30,9 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 
 This service inherits the Open Source license of the PDF lib used to built it:
 
-- PDFium/go-pdfium: MIT
+- PDFium/go-pdfium: [Apache-2](https://pdfium.googlesource.com/pdfium/+/master/LICENSE), [MIT](https://github.com/klippa-app/go-pdfium/blob/main/LICENSE)
 - Poppler/go-poppler: GPL-2.0
-- MuPDF/go-fitz: AGPL-3.0, commercial license available
+- MuPDF/go-fitz: AGPL-3.0 (commercial license available)
 
 That's the reason why there is no default implementation any more.
 You always need to supply a build tag.
@@ -82,11 +82,12 @@ go build -tags nomsgpack,poppler -o tes-poppler
 go build -tags nomsgpack,mupdf -o tes-mupdf
 ```
 
-If you don't need the NATS based cache supply the built tag `cache_nop`
+If you don't need the NATS based cache supply the built tag `cache_nop`.
 
 ##  PDFium, MuPDF or Poppler?
 
 Concerning the quality of text extracted by theses libs in my experience *Poppler* and *PDFium* are better than *MuPDF*.
+But complicated as the Portable Document Format is there are a lot of edge cases one lib handles better than the other–and some where neither can do right.
 
 Regarding speed with ordinary (rather small) files *PDFium* and *MuPDF* are mostly astride.
 
@@ -99,7 +100,7 @@ Some other aspects:
 | Performance with large files | ✅ good                   | 🚀 best            | ❌ bad                   |
 | Memory consumption           | ❌ high with large files¹ | ✅ consistently low | ❌ high with large files |
 | Available from Linux sources (deb, rpm, apk) | ❌ no¹ | ✅ headers & lib | ✅ headers & static lib
-| Multi-threaded               | ❌ no²       | ✅ yes        | ✅ yes        |
+| Multi-threaded               | ❌ no²                     | ✅ yes        | ✅ yes        |
 
 ¹ At runtime you can use the LibreOffice build of *PDFium*, `libpdfiumlo.so` from the Debian package `libreoffice-core-nogui`.
 Using this lib instead of [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) performance drops a bit (maybe 10%), but in turn memory consumption with large files decreases a lot.
@@ -176,7 +177,7 @@ Configuration happens through environment variables only.
 | `TES_HOST_PORT`            | Listen adress of HTTP server. Default: `:8080` (same as `0.0.0.0:8080`)                                                       |
 | `TES_NO_HTTP`              | If `true` and `TES_EXPOSE_NATS` is `true`, too, no HTTP server is started                                                     |
 | `TES_REMOVE_NEWLINES`      | If true, extracted text will be compacted by replacing newlines with whitespace (Default: `true`).                            |
-| `TES_FORK_THRESHOLD`       | Maximum content length (size in bytes) of a file that is being converted in-process rather by a subprocess in fork-exec style. Default: 2 MiB |
+| `TES_FORK_THRESHOLD`       | Maximum content length (size in bytes) of a file that is being converted in-process rather than by a subprocess in fork-exec style. Default: 2 MiB |
 
 ## Usage
 
@@ -188,6 +189,7 @@ Configuration happens through environment variables only.
 ```
 
 This will output one line with JSON encoded metadata, followed by text.
+At the moment there is no elaborated command line interface supporting more customization.
 
 ### Running as service
 
