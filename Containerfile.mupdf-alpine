@@ -6,10 +6,10 @@ ENV HOME=/tmp GOPATH=/tmp
 
 COPY go.mod go.sum ./
 COPY . .
-ENV CGO_ENABLED=1
+ARG CGO_ENABLED=1
 RUN go mod download && go mod verify
 
-RUN go build -buildvcs=false -tags extlib,mupdf,nomsgpack -o /go/text-extraction-service
+RUN go build -ldflags="-s -w" -buildvcs=false -tags extlib,mupdf,nomsgpack -o /go/text-extraction-service
 
 
 FROM docker.io/alpine:latest

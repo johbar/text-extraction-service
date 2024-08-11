@@ -6,8 +6,6 @@ Package dehyphenator implements a simple algorithm for de-hyphenating German tex
 	This package aims to preserve hyphens when they are part of a compound and to remove
 	them at the end of lines whenever they are not.
 	Not sure if it is of any use when working with other languages.
-	Note: Text returned by this package has no newlines anymore. It's main use
-	is preparing texts for search machine indexing.
 */
 package dehyphenator
 

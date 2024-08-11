@@ -74,6 +74,7 @@ To build the service just run `go build` with one of these `tags`:
 - `mupdf`
 
 I recommend supplying the tag `nomsgpack` as well, shrinking the build.
+See [Gin docs](https://github.com/gin-gonic/gin/blob/master/docs/doc.md#build-without-msgpack-rendering-feature).
 
 ```sh
 # Omit a large, yet unused dependency of Gin
@@ -154,7 +155,6 @@ podman run -p 8080:8080 -it --rm tes:pdfium-ubuntu
 
 # PDFfim based (LibreOffice supplied lib) without persistency
 podman run -p 8080:8080 -it --rm tes:pdfiumlo-ubuntu
-
 ```
 
 ## Config
@@ -183,6 +183,8 @@ Configuration happens through environment variables only.
 
 ### CLI/One-shot usage
 
+You can supply a local file or one served via HTTP(s)
+
 ```shell
 ./tes /tmp/my-example.pdf
 ./tes https://example.com/my.pdf
@@ -191,6 +193,46 @@ Configuration happens through environment variables only.
 This will output one line with JSON encoded metadata, followed by text.
 At the moment there is no elaborated command line interface supporting more customization.
 
-### Running as service
+### Run as a service
 
-TBD
+Build and run the service, e.g. `go run -tags pdfium,nomsgpack`.
+Use it as follows:
+
+```shell
+# POST a local file the service: 
+$ curl -sSi --data-binary @some-file.pdf localhost:8080
+HTTP/1.1 200 OK
+X-Doctype: pdf
+X-Document-Author: John Doe
+X-Document-Created: 2013-09-01T12:55:56+02:00
+X-Document-Modified: 2013-09-01T12:55:56+02:00
+X-Document-Pages: 1
+X-Document-Title: Some Title
+X-Document-Version: PDF-1.5
+X-Parsed-By: PDFium
+X-Request-Id: 3a6442af-e8bc-40b2-b0ce-84fa2b41f920
+Date: Sun, 11 Aug 2024 17:43:51 GMT
+Content-Length: 649
+Content-Type: text/plain; charset=utf-8
+
+Some text from some PDF file...
+
+# Request some external web-hosted file
+$ curl -Ssi 'localhost:8080?url=https://assets.avm.de/files/docs/fritzbox/FRITZ!Box%207690/FRITZ!Box%207690_qig_de_DE.pdf'
+HTTP/1.1 200 OK
+Etag: "60c3ea-61b15cff07c5e"
+Http-Content-Length: 6341610
+Http-Last-Modified: Mon, 17 Jun 2024 13:19:17 GMT
+X-Doctype: pdf
+X-Document-Created: 2024-04-11T15:06:17+02:00
+X-Document-Modified: 2024-04-11T15:06:45+02:00
+X-Document-Pages: 14
+X-Document-Version: PDF-1.7
+X-Parsed-By: PDFium
+X-Request-Id: a4c2a1a1-d85e-4dfc-b122-eb6fdaafc3a3
+Date: Sun, 11 Aug 2024 18:39:27 GMT
+Content-Type: text/plain; charset=utf-8
+Transfer-Encoding: chunked
+
+Kurzanleitung Lieferumfang Abbildung Anzahl und Bezeichnung FON 1 Info Connect/WPS FonWLAN /DECT Power/DSL 1 FRITZ!Box 7690 1 Netzteil 1 DSL-Kabel 1 LAN-Kabel 1 TAE-Adapter ohne Abbildung 1 FRITZ! Notiz ohne Abbildung 1...
+```
