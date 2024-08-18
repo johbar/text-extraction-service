@@ -23,6 +23,7 @@ func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 	if conf.NatsUrl != "" {
 		logger.Info("Try connecting to NATS", "url", conf.NatsUrl, "timeoutSecs", conf.NatsTimeout.Seconds(), "count", attempts)
 		for nc == nil {
+			attempts++
 			nc, err = nats.Connect(conf.NatsUrl, nats.Name("TES"), nats.Timeout(conf.NatsTimeout))
 			if err != nil {
 				logger.Error("Connecting to NATS failed",
@@ -31,15 +32,20 @@ func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 					"err", err,
 					"count", attempts,
 					"maxRetries", conf.NatsConnectRetries)
-				if attempts > conf.NatsConnectRetries && conf.FailWithoutJetstream {
-					logger.Error("FATAL: Retry count exceeded", "err", err, "maxRetries", conf.NatsConnectRetries)
-					os.Exit(2)
+				if attempts > conf.NatsConnectRetries {
+					logger.Error("Connecting to NATS failed. Retry count exceeded", "err", err, "maxRetries", conf.NatsConnectRetries)
+					if conf.FailWithoutJetstream {
+						logger.Error("FATAL: terminating")
+						os.Exit(2)
+					} else {
+						logger.Warn("Resuming initialization without NATS. Cache disabled.")
+						return nil, nil
+					}
 				}
 				time.Sleep(time.Second)
 			} else {
 				logger.Info("NATS connected")
 			}
-			attempts++
 		}
 	} else {
 		ns, err := server.NewServer(
@@ -58,7 +64,7 @@ func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 		ns.ConfigureLogger()
 		ns.Start()
 		if !ns.ReadyForConnections(5 * time.Second) {
-			panic("Nats not ready!")
+			panic("NATS not ready!")
 		}
 
 		nc, err = nats.Connect(ns.ClientURL(), nats.InProcessServer(ns))
@@ -69,7 +75,7 @@ func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 
 	js, err = jetstream.New(nc)
 	if err != nil {
-		logger.Error("Error when inititializing NATS JetStream", "err", err.Error())
+		logger.Error("FATAL: Error when initializing NATS JetStream", "err", err.Error())
 		os.Exit(1)
 	}
 	// test if JetStream is available

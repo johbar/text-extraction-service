@@ -21,12 +21,12 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
     - Free Desktops [Poppler lib](https://poppler.freedesktop.org/) via [go-poppler](https://github.com/johbar/go-poppler/)
     - Artifex' [MuPDF](https://mupdf.com/) via [go-fitz](https://github.com/gen2brain/go-fitz)
 - Dehyphenation of extracted text, specifically for German
-- Store extracted text and metadata in NATS
+- Extraction of document metadata (title, author, creation date etc)
+- Store extracted text and metadata in NATS for faster retrieval
 - NATS can be embedded or run externally (e.g. as a cluster)
-- NATS microservice interface supported
+- Support for NATS microservice interface
 
-
-## Licensing
+## License
 
 This service inherits the Open Source license of the PDF lib used to built it:
 
@@ -34,21 +34,21 @@ This service inherits the Open Source license of the PDF lib used to built it:
 - Poppler/go-poppler: GPL-2.0
 - MuPDF/go-fitz: AGPL-3.0 (commercial license available)
 
-That's the reason why there is no default implementation any more.
+That's the reason why there is no default implementation anymore.
 You always need to supply a build tag.
 
 ## Dev Setup - Building TES
 
-Depending on the PDF engine you choose (see below for comparison) you need dependencies being installed.
+Depending on the PDF engine you choose (see below for comparison) you need dependencies being installed in dev/build environment.
 
-In any case you need a recent Go SDK (v1.22+) and (with the exception of PDFium-WASM) a C compiler toolchain.
+In any case you need a recent Go SDK (v1.21+) and (with the exception of PDFium-WASM) a C compiler toolchain.
 
 ### PDFium
 
 Follow the instructions in [go-pdfium](https://github.com/klippa-app/go-pdfium):
 
 - Download the PDFium binaries and header files or compile the lib yourself.
-- Create a PKG config file (I recommend `/usr/local/lib/pkgconfig/pdfium.pc`).
+- Create a PKG config file (preferably in `/usr/local/lib/pkgconfig/pdfium.pc`).
 - Set `LD_LIBRARY_PATH` and `PKG_CONFIG_PATH` if needed.
 
 ### PDFium Webassembly
@@ -76,14 +76,16 @@ To build the service just run `go build` with one of these `tags`:
 I recommend supplying the tag `nomsgpack` as well, shrinking the build.
 See [Gin docs](https://github.com/gin-gonic/gin/blob/master/docs/doc.md#build-without-msgpack-rendering-feature).
 
+
+Examples:
+
 ```sh
-# Omit a large, yet unused dependency of Gin
 go build -tags nomsgpack,pdfium -o tes-pdfium
 go build -tags nomsgpack,poppler -o tes-poppler
 go build -tags nomsgpack,mupdf -o tes-mupdf
 ```
 
-If you don't need the NATS based cache supply the built tag `cache_nop`.
+If you don't need the NATS based cache supply additionally the built tag `cache_nop`.
 
 ##  PDFium, MuPDF or Poppler?
 
@@ -96,19 +98,19 @@ Some other aspects:
 
 |                              | PDFium                   | Poppler            | MuPDF                   |
 |------------------------------|--------------------------|--------------------|-------------------------|
-| License                      | ✅ permissive             | ⚠️ Copyleft        | ⚠️ Copyleft             |
-| Performance with small files | ✅ good                   | ❌ bad              | ✅ good                  |
-| Performance with large files | ✅ good                   | 🚀 best            | ❌ bad                   |
+| License                      | ✅ permissive             | ⚠️ Copyleft        | ⚠️ Copyleft              |
+| Performance with small files | ✅ good                   | ❌ bad            | ✅ good                 |
+| Performance with large files | ✅ good                   | 🚀 best           | ❌ bad                  |
 | Memory consumption           | ❌ high with large files¹ | ✅ consistently low | ❌ high with large files |
 | Available from Linux sources (deb, rpm, apk) | ❌ no¹ | ✅ headers & lib | ✅ headers & static lib
 | Multi-threaded               | ❌ no²                     | ✅ yes        | ✅ yes        |
 
 ¹ At runtime you can use the LibreOffice build of *PDFium*, `libpdfiumlo.so` from the Debian package `libreoffice-core-nogui`.
 Using this lib instead of [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) performance drops a bit (maybe 10%), but in turn memory consumption with large files decreases a lot.
-See Containerfiles on how to use this shared lib.
+See [Containerfile](Containerfile.pdfiumlo-ubuntu) on how to use this shared lib.
 
 ² *PDFium* is not thread safe.
-For that reason in single-threaded mode `go-pdfium` uses a lock protecting the lib instance against concurrent access.
+For that reason in single-threaded mode `go-pdfium` uses a lock to protect the lib instance against concurrent access.
 TES sticks to that mode instead of the alternatives (Webassembly or multiprocessing via gRPC)
 because they are bad for performance.
 In my tests with `curl --parallel` and ~100 Files it was still faster than the multi-threaded WASM version.
@@ -141,13 +143,15 @@ podman build --pull . -f Containerfile.pdfium-ubuntu -t tes:pdfium-ubuntu --volu
 podman build --pull . -f Containerfile.pdfiumlo-ubuntu -t tes:pdfiumlo-ubuntu --volume /tmp/cache:/tmp
 ```
 
-## Run container
+## Run TES in a container
+
+Examples
 
 ```sh
-# MuPDF based, using a volume for Nats JetStream storage
+# MuPDF based, using a volume for NATS JetStream storage
 podman run --rm -it -v nats:/tmp/nats -p 8080:8080 -p 4222:4222 tes:mupdf-alpine
 
-# Poppler based, using a volume for Nats JetStream storage
+# Poppler based, using a volume for NATS JetStream storage
 podman run --rm -it -v nats:/tmp/nats -p 8080:8080 -p 4222:4222 tes:poppler-alpine
 
 # PDFium based (external lib) without persistency
@@ -161,9 +165,10 @@ podman run -p 8080:8080 -it --rm tes:pdfiumlo-ubuntu
 
 Configuration happens through environment variables only.
 
+
 | Environment Variable       | Description                                                                                                                   |
 |----------------------------|-------------------------------------------------------------------------------------------------------------------------------|
-| `TES_BUCKET`               | Name of the object store bucket in NATS to use for caching. Default: `TES_PLAINTEXTS`                                         |
+| `TES_BUCKET`               | Name of the object store bucket in NATS to use for caching. It is being created when it doesn't exist. Default: `TES_PLAINTEXTS`|
 | `TES_REPLICAS`             | Replication factor for object store bucket in external NATS cluster                                                           |
 | `TES_EXPOSE_NATS`          | Wether to allow connections to the embedded NATS server (bool)                                                                |
 | `TES_NATS_HOST`            | Listen host/IP of embedded NATS server when `TES_EXPOSE_NATS`is `true`. Default: `localhost`                                  |
@@ -177,13 +182,13 @@ Configuration happens through environment variables only.
 | `TES_HOST_PORT`            | Listen adress of HTTP server. Default: `:8080` (same as `0.0.0.0:8080`)                                                       |
 | `TES_NO_HTTP`              | If `true` and `TES_EXPOSE_NATS` is `true`, too, no HTTP server is started                                                     |
 | `TES_REMOVE_NEWLINES`      | If true, extracted text will be compacted by replacing newlines with whitespace (Default: `true`).                            |
-| `TES_FORK_THRESHOLD`       | Maximum content length (size in bytes) of a file that is being converted in-process rather than by a subprocess in fork-exec style. Default: 2 MiB |
+| `TES_FORK_THRESHOLD`       | Maximum content length (size in bytes) of a file that is being converted in-process rather than by a subprocess in fork-exec style. Choose a negative value to disable forking. Default: 2 MiB |
 
 ## Usage
 
 ### CLI/One-shot usage
 
-You can supply a local file or one served via HTTP(s)
+You can supply a local file or one served via HTTP(s).
 
 ```shell
 ./tes /tmp/my-example.pdf
@@ -191,7 +196,10 @@ You can supply a local file or one served via HTTP(s)
 ```
 
 This will output one line with JSON encoded metadata, followed by text.
+
 At the moment there is no elaborated command line interface supporting more customization.
+
+ℹ️ No cache is used (queried or updated) in this mode.
 
 ### Run as a service
 
@@ -199,7 +207,7 @@ Build and run the service, e.g. `go run -tags pdfium,nomsgpack`.
 Use it as follows:
 
 ```shell
-# POST a local file the service: 
+$ # POST a local file to the service
 $ curl -sSi --data-binary @some-file.pdf localhost:8080
 HTTP/1.1 200 OK
 X-Doctype: pdf
@@ -217,7 +225,7 @@ Content-Type: text/plain; charset=utf-8
 
 Some text from some PDF file...
 
-# Request some external web-hosted file
+$ # Request some external web-hosted file
 $ curl -Ssi 'localhost:8080?url=https://assets.avm.de/files/docs/fritzbox/FRITZ!Box%207690/FRITZ!Box%207690_qig_de_DE.pdf'
 HTTP/1.1 200 OK
 Etag: "60c3ea-61b15cff07c5e"

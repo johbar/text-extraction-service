@@ -18,7 +18,7 @@ var (
 	cacheNop             bool
 	closeDocChan         chan Document
 	pdfImplementation    string       // Which lib is being used for PDFs?
-	logger               *slog.Logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
+	logger               *slog.Logger 
 	saveExtractedDocChan chan *ExtractedDocument
 	srv                  http.Server
 	tesConfig            TesConfig
@@ -30,9 +30,11 @@ func main() {
 	args := os.Args
 	// one shot mode: don't start a server, just process a single file provided on the command line
 	if len(args) > 1 {
+		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 		PrintMetadataAndTextToStdout(args[1])
 		return
 	}
+	logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
 	closeDocChan = make(chan Document, 100)
 	saveExtractedDocChan = make(chan *ExtractedDocument, 100)
 	go saveAndCloseExtracedDocs()
@@ -57,11 +59,13 @@ func main() {
 	logger.Debug("Info", "buildinfo", buildinfo)
 
 	nc, js := SetupNatsConnection(tesConfig)
-	if nc != nil {
+	if nc == nil {
+		cacheNop = true
+	} else {
 		RegisterNatsService(nc)
+		defer nc.Drain()
+		cache = InitCache(js, tesConfig)
 	}
-	cache = InitCache(js, tesConfig)
-	defer nc.Drain()
 
 	if tesConfig.NoHttp {
 		if nc == nil {
@@ -74,7 +78,7 @@ func main() {
 	}
 	logger.Info("PDF implementation", "lib", pdfImplementation)
 	if !docparser.Initialized {
-		logger.Warn("wvWare is not in PATH! We will not be able to extract legacy MS Word documents.")
+		logger.Warn("wvWare is not available in PATH. We will not be able to extract legacy MS Word documents.")
 	}
 	logger.Info("Service started", "address", srv.Addr)
 	defer logger.Info("HTTP Server stopped.")

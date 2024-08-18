@@ -13,10 +13,10 @@ require (
 	github.com/johbar/go-poppler v1.0.1-0.20230721224815-a1860a344718
 	github.com/klippa-app/go-pdfium v1.12.2
 	github.com/nats-io/nats-server/v2 v2.10.18
-	github.com/nats-io/nats.go v1.36.0
+	github.com/nats-io/nats.go v1.37.0
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.3
-	github.com/samber/slog-gin v1.13.3
+	github.com/samber/slog-gin v1.13.4
 	go-simpler.org/env v0.12.0
 	golang.org/x/text v0.17.0
 )
@@ -63,7 +63,7 @@ require (
 	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.23.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240808171019-573a1156607a // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
 	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

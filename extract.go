@@ -128,7 +128,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	// so parse and extract it
 	logger.Debug("Start parsing", "url", url, "content-length", response.ContentLength)
 	var doc Document
-	if response.ContentLength > tesConfig.ForkThreshold {
+	if tesConfig.ForkThreshold > -1 && response.ContentLength > tesConfig.ForkThreshold {
 		// file size above threshold - fork a subprocess
 		doc, err = NewDocFromForkedProcess(response.Body)
 	} else {
@@ -213,7 +213,7 @@ type ForkedDoc struct {
 	textStream io.ReadCloser
 }
 
-// NewDocFromForkedProcess creates a Document which content and metadata is being extracted by a forked subprocess
+// NewDocFromForkedProcess creates a Document whose content and metadata is being extracted by a forked subprocess
 func NewDocFromForkedProcess(r io.ReadCloser) (*ForkedDoc, error) {
 	me, err := os.Executable()
 	if err != nil {

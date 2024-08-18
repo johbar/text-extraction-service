@@ -29,14 +29,13 @@ var pool pdfium.Pool
 func init() {
 	pdfImplementation = "PDFium WASM"
 	var err error
-	pool, err = webassembly.Init(webassembly.Config{MinIdle: 1, MaxTotal: 8, ReuseWorkers: true})
+	pool, err = webassembly.Init(webassembly.Config{MinIdle: 2, MaxTotal: 8, ReuseWorkers: true})
 	if err != nil {
 		logger.Error("Error initializing WASM", "err", err)
 	}
 	if err != nil {
 		logger.Error("Could not start PDFium worker", "err", err)
 	}
-	logger.Info("PDFium WASM initialized.")
 }
 
 func NewFromStream(stream io.ReadCloser) (doc *Pdf, err error) {
@@ -54,7 +53,7 @@ func NewFromBytes(data []byte) (doc *Pdf, err error) {
 	}
 	instance, err := pool.GetInstance(30 * time.Second)
 	if err != nil {
-		return nil, errors.New("Could not obtain a PDFium worker")
+		return nil, errors.New("could not obtain a PDFium worker")
 	}
 	pDoc, err := instance.OpenDocument(&requests.OpenDocument{File: &data})
 	if err != nil {
@@ -107,6 +106,8 @@ func (d *Pdf) StreamText(w io.Writer) {
 			logger.Error("Could not get page text", "err", err)
 		}
 		pw.Write([]byte(tResp.Text))
+		// ensure there is a newline at the end of every page
+		pw.Write([]byte{'\n'})
 	}
 	pw.Close()
 	<-finished
