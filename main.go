@@ -17,11 +17,12 @@ var (
 	cache                Cache
 	cacheNop             bool
 	closeDocChan         chan Document
-	pdfImplementation    string       // Which lib is being used for PDFs?
-	logger               *slog.Logger 
+	pdfImplementation    string // Which lib is being used for PDFs?
+	logger               *slog.Logger
 	saveExtractedDocChan chan *ExtractedDocument
 	srv                  http.Server
 	tesConfig            TesConfig
+	httpClient           *http.Client
 )
 
 func main() {
@@ -79,6 +80,9 @@ func main() {
 	logger.Info("PDF implementation", "lib", pdfImplementation)
 	if !docparser.Initialized {
 		logger.Warn("wvWare is not available in PATH. We will not be able to extract legacy MS Word documents.")
+	}
+	httpClient = &http.Client{
+		Transport: &http.Transport{DisableCompression:  tesConfig.HttpClientDisableCompression},
 	}
 	logger.Info("Service started", "address", srv.Addr)
 	defer logger.Info("HTTP Server stopped.")

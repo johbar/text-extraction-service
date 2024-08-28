@@ -20,6 +20,8 @@ type TesConfig struct {
 	// Maximum content length (size in bytes) of a file that is being converted in-process
 	// rather by a subprocess in fork-exec style. Default: 2 MiB
 	ForkThreshold int64 `env:"TES_FORK_THRESHOLD" default:"2097152"`
+	// Disable Accept-Encoding=gzip header in outgoing HTTP Requests
+	HttpClientDisableCompression bool `env:"TES_HTTP_CLIENT_DISABLE_COMPRESSION" default:"false"`
 	// NATS max msg size (embedded server only)
 	NatsMaxPayload int32 `env:"TES_MAX_PAYLOAD" default:"8388608"`
 	// embedded NATS server storage location. Default: /tmp/nats

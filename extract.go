@@ -18,7 +18,9 @@ import (
 
 type DocumentMetadata map[string]string
 
-var validate *validator.Validate
+var (
+	validate *validator.Validate
+)
 
 // ExtractedDocument contains pointers to metadata, textual content and URL of origin
 type ExtractedDocument struct {
@@ -101,7 +103,8 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		}
 	}
 	logger.Debug("Issuing conditional GET request", "url", url, "headers", req.Header)
-	response, err := http.DefaultClient.Do(req)
+
+	response, err := httpClient.Do(req)
 	if err != nil {
 		logger.Error("Error fetching", "err", err, "url", url)
 		return http.StatusNotFound, err

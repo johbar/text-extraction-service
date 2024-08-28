@@ -183,6 +183,7 @@ Configuration happens through environment variables only.
 | `TES_NO_HTTP`              | If `true` and `TES_EXPOSE_NATS` is `true`, too, no HTTP server is started                                                     |
 | `TES_REMOVE_NEWLINES`      | If true, extracted text will be compacted by replacing newlines with whitespace (Default: `true`).                            |
 | `TES_FORK_THRESHOLD`       | Maximum content length (size in bytes) of a file that is being converted in-process rather than by a subprocess in fork-exec style. Choose a negative value to disable forking. Default: 2 MiB |
+| `TES_HTTP_CLIENT_DISABLE_COMPRESSION` | Disable `Accept-Encoding: gzip` header in outgoing HTTP Requests. Default: false |
 
 ## Usage
 
