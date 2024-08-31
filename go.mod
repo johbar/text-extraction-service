@@ -14,7 +14,7 @@ require (
 	github.com/goccy/go-json v0.10.3
 	github.com/johbar/go-poppler v1.0.1-0.20230721224815-a1860a344718
 	github.com/klippa-app/go-pdfium v1.12.2
-	github.com/nats-io/nats-server/v2 v2.10.19
+	github.com/nats-io/nats-server/v2 v2.10.20
 	github.com/nats-io/nats.go v1.37.0
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.3

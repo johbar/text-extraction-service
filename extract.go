@@ -136,7 +136,6 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		doc, err = NewDocFromForkedProcess(response.Body)
 	} else {
 		doc, err = NewDocFromStream(response.Body)
-
 	}
 	if err != nil {
 		logger.Error("Error when parsing", "err", err, "url", url, "headers", response.Header)
