@@ -43,7 +43,8 @@ func PrintMetadataAndTextToStdout(url string) {
 		os.Exit(2)
 	}
 	meta, _ := json.Marshal(doc.MetadataMap())
-	fmt.Println(string(meta))
+	os.Stdout.Write(meta)
+	fmt.Println()
 	doc.StreamText(os.Stdout)
 	fmt.Println()
 }
