@@ -13,6 +13,7 @@ import (
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v2/pkg/pdfdateparser"
+	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 	"github.com/klippa-app/go-pdfium"
 	"github.com/klippa-app/go-pdfium/requests"
 	"github.com/klippa-app/go-pdfium/responses"
@@ -99,11 +100,44 @@ func (d *Pdf) StreamText(w io.Writer) {
 			continue
 		}
 		pw.Write([]byte(tResp.Text))
+		if len(tResp.Text) == 0 && tesswrap.Initialized {
+			logger.Info("No Text found. Starting tesseract OCR", "page", n)
+			img := d.renderPage(n)
+			// os.WriteFile(fmt.Sprintf("/tmp/pdf/page-%d", n), img, 0x777)
+			logger.Info("Page rendered", "index", n)
+			ocrText, err := tesswrap.ImageToText(img)
+			if err != nil {
+				logger.Error("OCR failed", "page", n, "imageIndex", n)
+				continue
+			}
+			pw.Write([]byte(ocrText))
+		}
 		// ensure there is a newline at the end of every page
 		pw.Write([]byte{'\n'})
 	}
 	pw.Close()
 	<-finished
+}
+
+func (d *Pdf) renderPage(n int) []byte {
+	resp, err := instance.RenderToFile(&requests.RenderToFile{
+		RenderPageInDPI: &requests.RenderPageInDPI{
+			Page: requests.Page{
+				ByIndex: &requests.PageByIndex{
+					Document: d.Document,
+					Index:    n}},
+			DPI: 200,
+		},
+		OutputFormat:  requests.RenderToFileOutputFormatJPG,
+		OutputTarget:  requests.RenderToFileOutputTargetBytes,
+		OutputQuality: 100,
+	})
+	if err != nil {
+		logger.Error("Could not render", "page", n)
+	}
+	img := resp.ImageBytes
+
+	return *img
 }
 
 // MetadataMap returns some of the PDF metadata as map with keys compatible to HTTP headers
