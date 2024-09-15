@@ -2,11 +2,14 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"strings"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/rtfparser"
+	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 )
 
 // Document represents any kind of document this service can convert to plain text
@@ -38,6 +41,9 @@ func NewDocFromStream(r io.Reader) (Document, error) {
 	case "text/rtf":
 		return rtfparser.NewFromBytes(data)
 	}
+	if tesswrap.Initialized && strings.HasPrefix(mtype.String(), "image/" ){
+		return NewDocFromImage(data, mtype.String()), nil
+	}
 	// returning a part of the content helps with debugging webservers that return 2xx with an error message in the body
-	return nil, errors.New("no suitable parser available for mimetype " + mtype.String() + ". content started with: " + string(data[:70]))
+	return nil, fmt.Errorf("no suitable parser available for mimetype %s. content started with: %s", mtype.String(), string(data[:70]))
 }

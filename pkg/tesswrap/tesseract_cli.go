@@ -1,9 +1,13 @@
+// go:build cli
 //go:build !gosseract && !tesseract_wasm && !tesseract_lib
+
 // This is the default implementation
 package tesswrap
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"os/exec"
 )
 
@@ -14,9 +18,17 @@ func init() {
 	}
 }
 
-func ImageToText(imgBytes []byte) (string, error) {
+func ImageBytesToText(imgBytes []byte) (string, error) {
+	r := bytes.NewReader(imgBytes)
+	return ImageReaderToText(r)
+}
+
+func ImageReaderToText(r io.Reader) (string, error) {
+	if r == nil {
+		return "", errors.New("reader is nil")
+	}
 	cmd := exec.Command("tesseract", "-l", Languages, "-", "-")
-	cmd.Stdin = bytes.NewReader(imgBytes)
+	cmd.Stdin = r
 	result, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -25,4 +37,14 @@ func ImageToText(imgBytes []byte) (string, error) {
 		return "", err
 	}
 	return string(result), nil
+}
+
+func ImageReaderToTextWriter(r io.Reader, w io.Writer) error {
+	if r == nil {
+		return errors.New("reader is nil")
+	}
+	cmd := exec.Command("tesseract", "-l", Languages, "-", "-")
+	cmd.Stdin = r
+	cmd.Stdout = w
+	return cmd.Run()
 }

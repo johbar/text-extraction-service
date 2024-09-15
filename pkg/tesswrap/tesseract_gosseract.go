@@ -3,6 +3,8 @@
 package tesswrap
 
 import (
+	"io"
+
 	"github.com/otiai10/gosseract/v2"
 )
 
@@ -15,16 +17,23 @@ func init() {
 	Initialized = true
 }
 
-func ImageToText(imgBytes []byte) (string, error) {
-	goss := gosseract.NewClient()
+func ImageReaderToText(r io.Reader) (string, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return "", err
+	}
+	return ImageBytesToText(data)
+}
 
+func ImageBytesToText(imgBytes []byte) (string, error) {
+	goss := gosseract.NewClient()
+	goss.Trim = true
 	defer goss.Close()
 	// This option doesn't seem to work
 	goss.SetPageSegMode(gosseract.PSM_AUTO_OSD)
 	goss.DisableOutput()
 	goss.SetLanguage(Languages)
 	goss.SetImageFromBytes(imgBytes)
-	goss.Trim = true
 	txt, err := goss.Text()
 	return txt, err
 }

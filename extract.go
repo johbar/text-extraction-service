@@ -160,7 +160,10 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	} else {
 		mWriter = io.MultiWriter(w, &text)
 	}
-	doc.StreamText(mWriter)
+	done, pw := RunDehyphenator(mWriter)
+	doc.StreamText(pw)
+	pw.Close()
+	<-done
 	if !silent {
 		logger.Debug("Streaming response done", "url", url)
 	}

@@ -4,12 +4,13 @@ package tesswrap
 
 import (
 	"errors"
+	"io"
 
 	"github.com/raff/go-tesseract"
 )
 
 var (
-	Version     string
+	Version string
 )
 
 func init() {
@@ -17,11 +18,19 @@ func init() {
 	Initialized = true
 }
 
-func ImageToText(imgBytes []byte) (string, error) {
+func ImageReaderToText(r io.Reader) (string, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return "", err
+	}
+	return ImageBytesToText(data)
+}
+
+func ImageBytesToText(imgBytes []byte) (string, error) {
 	tess := tesseract.BaseAPICreate()
 	defer func() {
 		tess.Clear()
-		// tess.End()
+		tess.End()
 	}()
 
 	if ret := tess.Init3("", Languages); ret != 0 {
@@ -29,7 +38,11 @@ func ImageToText(imgBytes []byte) (string, error) {
 	}
 	tess.SetDebugVariable("debug_file", "/dev/null")
 	tess.SetPageSegMode(tesseract.PSM_AUTO_OSD)
-	tess.SetImageBytes(imgBytes)
+	pbytes := tess.SetImageBytes(imgBytes)
+	if pbytes == nil {
+		return "", errors.New("image could not be processed by Tesseract")
+	}
+	defer tesseract.FreeImageBytes(pbytes)
 	txt := tess.GetUTF8Text()
 	return txt, nil
 }

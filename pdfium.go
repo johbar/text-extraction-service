@@ -3,17 +3,12 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/gabriel-vasile/mimetype"
-	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
-	"github.com/johbar/text-extraction-service/v2/pkg/pdfdateparser"
-	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
+	"github.com/johbar/text-extraction-service/v2/internal/pdfdateparser"
 	"github.com/klippa-app/go-pdfium"
 	"github.com/klippa-app/go-pdfium/requests"
 	"github.com/klippa-app/go-pdfium/responses"
@@ -22,6 +17,7 @@ import (
 
 type Pdf struct {
 	*responses.OpenDocument
+	data *[]byte
 }
 
 var pool pdfium.Pool
@@ -37,86 +33,42 @@ func init() {
 	}
 }
 
-func NewFromStream(stream io.ReadCloser) (doc *Pdf, err error) {
-	data, err := io.ReadAll(stream)
-	if err != nil {
-		logger.Error("Could not fully read stream when constructing PDFium document", "err", err)
-	}
-	stream.Close()
-	return NewFromBytes(data)
-}
-
 func NewFromBytes(data []byte) (doc *Pdf, err error) {
-	if mimetype.Detect(data).Extension() != ".pdf" {
-		return &Pdf{nil}, errors.New("not a PDF")
-	}
 	pDoc, err := instance.OpenDocument(&requests.OpenDocument{File: &data})
 	if err != nil {
 		logger.Error("PDFium could not load PDF", "err", err)
 	}
-	doc = &Pdf{pDoc}
+	doc = &Pdf{pDoc, &data}
 	return
 }
 
-// Text returns the plain text content of the document
-func (d *Pdf) Text() string {
-	var buf strings.Builder
+func (d *Pdf) PageCount() int {
 	pageCount, err := instance.FPDF_GetPageCount(&requests.FPDF_GetPageCount{Document: d.Document})
 	if err != nil {
 		logger.Error("Could not get PDF page count", "err", err)
 	}
+	return pageCount.PageCount
+}
 
-	for n := 0; n < pageCount.PageCount; n++ {
-		pIndex := &requests.PageByIndex{Document: d.Document, Index: n}
-		tResp, err := instance.GetPageText(&requests.GetPageText{Page: requests.Page{ByIndex: pIndex}})
-		if err != nil {
-			logger.Error("Could not get page text", "page", n, "err", err)
-		}
-		buf.WriteString(tResp.Text)
+// Text returns the plain text content of the document
+func (d *Pdf) PageText(pagenum int) string {
+	pIndex := &requests.PageByIndex{Document: d.Document, Index: pagenum}
+	tResp, err := instance.GetPageText(&requests.GetPageText{Page: requests.Page{ByIndex: pIndex}})
+	if err != nil {
+		logger.Error("Could not get page text", "page", pagenum, "err", err)
+		return ""
 	}
-	return buf.String()
+	return tResp.Text
 }
 
 // StreamText writes the document's plain text content to an io.Writer
 func (d *Pdf) StreamText(w io.Writer) {
-	finished := make(chan bool)
-	pr, pw := io.Pipe()
-	pageCount, err := instance.FPDF_GetPageCount(&requests.FPDF_GetPageCount{Document: d.Document})
-	if err != nil {
-		logger.Error("Could not get page count", "err", err)
-		return
+	pageCount := d.PageCount()
+	logger.Debug("Extracting", "pages", pageCount)
+	for n := 0; n < pageCount; n++ {
+		pageText := d.PageText(n)
+		WriteTextOrRunOcrOnPage(pageText, n, w, d.data)
 	}
-	logger.Debug("Extracting", "pages", pageCount.PageCount)
-	go func() {
-		dehyphenator.DehyphenateReaderToWriter(pr, w)
-		pr.Close()
-		finished <- true
-	}()
-	for n := 0; n < pageCount.PageCount; n++ {
-		pIndex := &requests.PageByIndex{Document: d.Document, Index: n}
-		tResp, err := instance.GetPageText(&requests.GetPageText{Page: requests.Page{ByIndex: pIndex}})
-		if err != nil {
-			logger.Error("Could not get page text", "err", err)
-			continue
-		}
-		pw.Write([]byte(tResp.Text))
-		if len(tResp.Text) == 0 && tesswrap.Initialized {
-			logger.Info("No Text found. Starting tesseract OCR", "page", n)
-			img := d.renderPage(n)
-			// os.WriteFile(fmt.Sprintf("/tmp/pdf/page-%d", n), img, 0x777)
-			logger.Info("Page rendered", "index", n)
-			ocrText, err := tesswrap.ImageToText(img)
-			if err != nil {
-				logger.Error("OCR failed", "page", n, "imageIndex", n)
-				continue
-			}
-			pw.Write([]byte(ocrText))
-		}
-		// ensure there is a newline at the end of every page
-		pw.Write([]byte{'\n'})
-	}
-	pw.Close()
-	<-finished
 }
 
 func (d *Pdf) renderPage(n int) []byte {
@@ -195,4 +147,5 @@ func (d *Pdf) getDateField(tag string) string {
 
 func (d *Pdf) Close() {
 	instance.FPDF_CloseDocument(&requests.FPDF_CloseDocument{Document: d.Document})
+	d.data = nil
 }

@@ -10,9 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gabriel-vasile/mimetype"
-	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
-	"github.com/johbar/text-extraction-service/v2/pkg/pdfdateparser"
+	"github.com/johbar/text-extraction-service/v2/internal/pdfdateparser"
 	"github.com/klippa-app/go-pdfium"
 	"github.com/klippa-app/go-pdfium/requests"
 	"github.com/klippa-app/go-pdfium/responses"
@@ -22,6 +20,7 @@ import (
 type Pdf struct {
 	Document *responses.OpenDocument
 	instance pdfium.Pdfium
+	data     *[]byte
 }
 
 var pool pdfium.Pool
@@ -38,19 +37,7 @@ func init() {
 	}
 }
 
-func NewFromStream(stream io.ReadCloser) (doc *Pdf, err error) {
-	data, err := io.ReadAll(stream)
-	if err != nil {
-		logger.Error("Could not fully read stream when constructing PDFium document", "err", err)
-	}
-	stream.Close()
-	return NewFromBytes(data)
-}
-
 func NewFromBytes(data []byte) (doc *Pdf, err error) {
-	if mimetype.Detect(data).Extension() != ".pdf" {
-		return &Pdf{nil, nil}, errors.New("not a PDF")
-	}
 	instance, err := pool.GetInstance(30 * time.Second)
 	if err != nil {
 		return nil, errors.New("could not obtain a PDFium worker")
@@ -59,7 +46,7 @@ func NewFromBytes(data []byte) (doc *Pdf, err error) {
 	if err != nil {
 		logger.Error("PDFium could not load PDF", "err", err)
 	}
-	doc = &Pdf{Document: pDoc, instance: instance}
+	doc = &Pdf{Document: pDoc, instance: instance, data: &data}
 	return
 }
 
@@ -85,32 +72,24 @@ func (d *Pdf) Text() string {
 
 // StreamText writes the document's plain text content to an io.Writer
 func (d *Pdf) StreamText(w io.Writer) {
-	finished := make(chan bool)
-	pr, pw := io.Pipe()
 	instance := d.instance
 
 	pageCount, err := instance.FPDF_GetPageCount(&requests.FPDF_GetPageCount{Document: d.Document.Document})
 	if err != nil {
 		logger.Error("Could not get page count", "err", err)
 	}
-	logger.Debug("Extracting", "pages", pageCount.PageCount)
-	go func() {
-		dehyphenator.DehyphenateReaderToWriter(pr, w)
-		pr.Close()
-		finished <- true
-	}()
+	logger.Debug("Pdfium WASM: extracting", "pages", pageCount.PageCount)
+
 	for n := 0; n < pageCount.PageCount; n++ {
 		pIndex := &requests.PageByIndex{Document: d.Document.Document, Index: n}
 		tResp, err := instance.GetPageText(&requests.GetPageText{Page: requests.Page{ByIndex: pIndex}})
 		if err != nil {
 			logger.Error("Could not get page text", "err", err)
 		}
-		pw.Write([]byte(tResp.Text))
-		// ensure there is a newline at the end of every page
-		pw.Write([]byte{'\n'})
+		WriteTextOrRunOcrOnPage(tResp.Text, n, w, d.data)
+
 	}
-	pw.Close()
-	<-finished
+
 }
 
 // MetadataMap returns some of the PDF metadata as map with keys compatible to HTTP headers
@@ -174,4 +153,5 @@ func (d *Pdf) getDateField(tag string) string {
 func (d *Pdf) Close() {
 	d.instance.FPDF_CloseDocument(&requests.FPDF_CloseDocument{Document: d.Document.Document})
 	d.instance.Close()
+	d.data = nil
 }

@@ -11,35 +11,26 @@ import (
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/johbar/go-poppler"
-	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 )
 
 type Pdf struct {
 	*poppler.Document
+	data *[]byte
 }
 
 func init() {
 	pdfImplementation = "Poppler (GLib) version " + poppler.Version()
 }
 
-func NewFromStream(stream io.ReadCloser) (doc *Pdf, err error) {
-	data, err := io.ReadAll(stream)
-	if err != nil {
-		logger.Error("Could not fully read stream when constructing Poppler document", "err", err)
-	}
-	stream.Close()
-	return NewFromBytes(data)
-}
-
 func NewFromBytes(data []byte) (doc *Pdf, err error) {
 	if mimetype.Detect(data).Extension() != ".pdf" {
-		return &Pdf{nil}, errors.New("not a PDF")
+		return &Pdf{nil, nil}, errors.New("not a PDF")
 	}
 	pDoc, err := poppler.Load(data)
 	if err != nil {
 		logger.Error("Poppler could not load PDF", "err", err)
 	}
-	doc = &Pdf{pDoc}
+	doc = &Pdf{pDoc, &data}
 	return
 }
 
@@ -57,22 +48,11 @@ func (d *Pdf) Text() string {
 // StreamText writes the document's plain text content to an io.Writer
 func (d *Pdf) StreamText(w io.Writer) {
 	logger.Debug("Extracting", "pages", d.GetNPages())
-	finished := make(chan bool)
-	pr, pw := io.Pipe()
-	go func() {
-		dehyphenator.DehyphenateReaderToWriter(pr, w)
-		pr.Close()
-		finished <- true
-	}()
 	for n := 0; n < d.GetNPages(); n++ {
 		page := d.GetPage(n)
-		pw.Write([]byte(page.Text()))
-		// ensure there is a newline at the end of every page
-		pw.Write([]byte{'\n'})
+		WriteTextOrRunOcrOnPage(page.Text(), n, w, d.data)
 		page.Close()
 	}
-	pw.Close()
-	<-finished
 }
 
 // Metadata returns some of the PDF metadata as map with keys compatible to HTTP headers
