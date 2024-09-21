@@ -1,5 +1,5 @@
 //go:build tesseract_wasm
-
+// NOTE: Gogoesseract only supports one training data file (language)
 package tesswrap
 
 import (

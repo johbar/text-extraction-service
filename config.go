@@ -44,6 +44,9 @@ type TesConfig struct {
 	Replicas int `env:"TES_REPLICAS" default:"1"`
 	// HTTP listen address and/or port. Default: ':8080'
 	SrvAddr string `env:"TES_HOST_PORT" default:":8080"`
+	// List of 3-letter language codes, separated by `+` to be passed to Tesseract
+	// when doing OCR. Default: eng. NOTE: The languages need to be installed
+	TesseractLangs string `env:"TES_TESSERACT_LANGS" default:"eng"`
 }
 
 // NewTesConfigFromEnv returns a service config object
@@ -53,6 +56,5 @@ func NewTesConfigFromEnv() TesConfig {
 	if err := env.Load(&cfg, nil); err != nil {
 		logger.Error("Loading config failed", "err", err)
 	}
-
 	return cfg
 }

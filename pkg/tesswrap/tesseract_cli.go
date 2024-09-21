@@ -1,4 +1,3 @@
-// go:build cli
 //go:build !gosseract && !tesseract_wasm && !tesseract_lib
 
 // This is the default implementation
@@ -7,15 +6,51 @@ package tesswrap
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
+	"slices"
+	"strings"
 )
+
+var LangsAvailable []string
 
 func init() {
 	_, err := exec.LookPath("tesseract")
 	if err != nil {
 		Initialized = false
+	} else {
+		LangsAvailable = listLangs()
 	}
+}
+
+func listLangs() []string {
+	cmd := exec.Command("tesseract", "--list-langs")
+
+	output, err := cmd.Output()
+	if err != nil {
+		return []string{}
+	}
+	outputLines := strings.Split(string(output), "\n")
+	outputLen := len(output) - 1
+	if outputLen > 1 {
+		return outputLines[1:]
+	} else {
+		return []string{}
+	}
+}
+
+// IsTesseractConfigOk returns true and an empty string, if Tessearct is installed in PATH
+// and the configured languages have trained data models.
+// If not, false and are reason phrase reporting the first missing language file are returned.
+func IsTesseractConfigOk() (ok bool, reason string) {
+	LangSlice := strings.Split(Languages, "+")
+	for _, elem := range LangSlice {
+		if !slices.Contains(LangsAvailable, elem) {
+			return false, fmt.Sprintf("'%s' is not among the installed languages (%s)", elem, strings.Join(LangsAvailable, ", "))
+		}
+	}
+	return Initialized, ""
 }
 
 func ImageBytesToText(imgBytes []byte) (string, error) {

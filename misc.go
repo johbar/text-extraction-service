@@ -120,3 +120,12 @@ func PrintMetadataAndTextToStdout(url string) {
 	doc.StreamText(os.Stdout)
 	fmt.Println()
 }
+
+// FailOnInvalidConfig will os.Exit() with non-zero return code when TES config is invalid or inconsistent.
+func FailOnInvalidConfig () {
+	tessOk, whyNot := tesswrap.IsTesseractConfigOk()
+	if !tessOk {
+		logger.Error("Fatal: Tesseract language config invalid", "reason", whyNot)
+		os.Exit(2)
+	}
+}

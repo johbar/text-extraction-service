@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
+	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 	sloggin "github.com/samber/slog-gin"
 )
 
@@ -27,15 +28,19 @@ var (
 
 func main() {
 	tesConfig = NewTesConfigFromEnv()
+	// set static/global config of submodules
+	tesswrap.Languages = tesConfig.TesseractLangs
 	dehyphenator.RemoveNewlines = tesConfig.RemoveNewlines
-	args := os.Args
+
 	// one shot mode: don't start a server, just process a single file provided on the command line
-	if len(args) > 1 {
+	if len(os.Args) > 1 {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
-		PrintMetadataAndTextToStdout(args[1])
+		FailOnInvalidConfig()
+		PrintMetadataAndTextToStdout(os.Args[1])
 		return
 	}
 	logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
+	FailOnInvalidConfig()
 	closeDocChan = make(chan Document, 100)
 	saveExtractedDocChan = make(chan *ExtractedDocument, 100)
 	go saveAndCloseExtracedDocs()
@@ -82,7 +87,7 @@ func main() {
 		logger.Warn("wvWare is not available in PATH. We will not be able to extract legacy MS Word documents.")
 	}
 	httpClient = &http.Client{
-		Transport: &http.Transport{DisableCompression:  tesConfig.HttpClientDisableCompression},
+		Transport: &http.Transport{DisableCompression: tesConfig.HttpClientDisableCompression},
 	}
 	logger.Info("Service started", "address", srv.Addr)
 	defer logger.Info("HTTP Server stopped.")
