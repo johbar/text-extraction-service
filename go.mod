@@ -22,7 +22,7 @@ require (
 	github.com/raff/go-tesseract v0.0.0-20240215175329-7e0ac140e234
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.4
-	github.com/samber/slog-gin v1.13.4
+	github.com/samber/slog-gin v1.13.5
 	go-simpler.org/env v0.12.0
 	golang.org/x/text v0.18.0
 )

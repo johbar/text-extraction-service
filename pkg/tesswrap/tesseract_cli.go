@@ -26,15 +26,16 @@ func init() {
 
 func listLangs() []string {
 	cmd := exec.Command("tesseract", "--list-langs")
-
 	output, err := cmd.Output()
 	if err != nil {
 		return []string{}
 	}
 	outputLines := strings.Split(string(output), "\n")
-	outputLen := len(output) - 1
+	outputLen := len(outputLines) - 1
 	if outputLen > 1 {
-		return outputLines[1:]
+		// first line is a heading
+		// last element is empty due to trailing newline
+		return outputLines[1 : outputLen-1]
 	} else {
 		return []string{}
 	}
@@ -47,7 +48,7 @@ func IsTesseractConfigOk() (ok bool, reason string) {
 	LangSlice := strings.Split(Languages, "+")
 	for _, elem := range LangSlice {
 		if !slices.Contains(LangsAvailable, elem) {
-			return false, fmt.Sprintf("'%s' is not among the installed languages (%s)", elem, strings.Join(LangsAvailable, ", "))
+			return false, fmt.Sprintf("'%s' is not among the installed languages %v", elem, LangsAvailable)
 		}
 	}
 	return Initialized, ""

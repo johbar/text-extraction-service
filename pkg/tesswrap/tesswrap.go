@@ -11,5 +11,5 @@ var (
 // Initialized indicates if this package is usable
 	Initialized bool   = true
 	// Languages tesseract shall take into consideration when performing OCR
-	Languages   string = "eng+deu+osd"
+	Languages   string = "Latin+osd"
 )

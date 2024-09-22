@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"time"
 
 	"go-simpler.org/env"
@@ -46,7 +47,7 @@ type TesConfig struct {
 	SrvAddr string `env:"TES_HOST_PORT" default:":8080"`
 	// List of 3-letter language codes, separated by `+` to be passed to Tesseract
 	// when doing OCR. Default: eng. NOTE: The languages need to be installed
-	TesseractLangs string `env:"TES_TESSERACT_LANGS" default:"eng"`
+	TesseractLangs string `env:"TES_TESSERACT_LANGS" default:"Latin"`
 }
 
 // NewTesConfigFromEnv returns a service config object
@@ -55,6 +56,7 @@ func NewTesConfigFromEnv() TesConfig {
 	var cfg TesConfig
 	if err := env.Load(&cfg, nil); err != nil {
 		logger.Error("Loading config failed", "err", err)
+		os.Exit(1)
 	}
 	return cfg
 }

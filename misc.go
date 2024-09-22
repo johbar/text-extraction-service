@@ -7,10 +7,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/johbar/text-extraction-service/v2/internal/pdfproc"
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
+	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
@@ -121,11 +123,23 @@ func PrintMetadataAndTextToStdout(url string) {
 	fmt.Println()
 }
 
-// FailOnInvalidConfig will os.Exit() with non-zero return code when TES config is invalid or inconsistent.
-func FailOnInvalidConfig () {
-	tessOk, whyNot := tesswrap.IsTesseractConfigOk()
-	if !tessOk {
-		logger.Error("Fatal: Tesseract language config invalid", "reason", whyNot)
-		os.Exit(2)
+// LogAndFixConfigIssues logs warnings regarding configuration and fixes any issues of this kind
+func LogAndFixConfigIssues() {
+	buildinfo, _ := debug.ReadBuildInfo()
+
+	logger.Debug("Info", "buildinfo", buildinfo)
+	if os.Getenv("GOMEMLIMIT") != "" {
+		logger.Info("GOMEMLIMIT", "Bytes", debug.SetMemoryLimit(-1), "MBytes", debug.SetMemoryLimit(-1)/1024/1024)
 	}
+
+	if tessOk, whyNot := tesswrap.IsTesseractConfigOk(); !tessOk {
+		logger.Warn("Tesseract will be disabled. Language config is invalid", "reason", whyNot)
+		tesswrap.Initialized = false
+	}
+
+	if !docparser.Initialized {
+		logger.Warn("wvWare is not available in PATH. We will not be able to extract legacy MS Word documents.")
+	}
+
+	logger.Info("PDF implementation", "lib", pdfImplementation)
 }
