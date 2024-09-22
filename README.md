@@ -28,7 +28,7 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 
 ## Unsupported
 
-- Processing local files with the `file:` transport ()
+- Processing local files with the `file:` transport
 - Processing password protected files
 - Processing files from web servers that require authentication of any kind (cookie, header, referral, user agent etc)
 - A lot of common document formats, including odt, docx, html, xml
