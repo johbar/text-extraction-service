@@ -59,7 +59,7 @@ func WriteTextOrRunOcrOnPage(pageText string, pageNum int, w io.Writer, pdfData 
 	} else if tesswrap.Initialized {
 		logger.Info("No Text found. Looking for images for OCR", "page", pageNum)
 		rs := bytes.NewReader(*pdfData)
-		pdfproc.ExtractImages(rs, pageNum, func(img model.Image) {
+		pdfproc.ProcessImages(rs, pageNum, func(img model.Image) {
 			logger.Info("Image found. Starting OCR.", "page", pageNum, "name", img.Name, "type", img.FileType)
 			err := tesswrap.ImageReaderToTextWriter(img, w)
 			if err != nil {
@@ -71,7 +71,8 @@ func WriteTextOrRunOcrOnPage(pageText string, pageNum int, w io.Writer, pdfData 
 	w.Write([]byte{'\n'})
 }
 
-// RunDehyphenator starts the dehyphenator process on another Go routine and returns
+// RunDehyphenator starts the dehyphenator process on another Go routine.
+// It returns a channel that spawns a bool value, when all reading is done, and a pipewriter to write the input to
 func RunDehyphenator(w io.Writer) (done chan bool, pw *io.PipeWriter) {
 	finished := make(chan bool)
 	pr, pw := io.Pipe()
@@ -79,6 +80,7 @@ func RunDehyphenator(w io.Writer) (done chan bool, pw *io.PipeWriter) {
 		dehyphenator.DehyphenateReaderToWriter(pr, w)
 		pr.Close()
 		finished <- true
+		close(finished)
 	}()
 	return finished, pw
 }
@@ -133,7 +135,7 @@ func LogAndFixConfigIssues() {
 	}
 
 	if tessOk, whyNot := tesswrap.IsTesseractConfigOk(); !tessOk {
-		logger.Warn("Tesseract will be disabled. Language config is invalid", "reason", whyNot)
+		logger.Warn("Language config is invalid. Tesseract will be disabled.", "reason", whyNot)
 		tesswrap.Initialized = false
 	}
 

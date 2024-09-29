@@ -1,9 +1,9 @@
 //go:build tesseract_wasm
+
 // NOTE: Gogoesseract only supports one training data file (language)
 package tesswrap
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"os"
@@ -17,7 +17,7 @@ var (
 
 func init() {
 	// TODO handle training data better
-	trainingDataFile, _ := os.Open("/usr/share/tesseract-ocr/5/tessdata/deu.traineddata")
+	trainingDataFile, _ := os.Open("/usr/share/tesseract-ocr/5/tessdata/Latin.traineddata")
 	defer trainingDataFile.Close()
 	cfg := gogosseract.Config{
 		Language:     Languages,
@@ -35,19 +35,30 @@ func init() {
 	}
 }
 
-func ImageToText(imgBytes []byte) (string, error) {
+func ImageReaderToText(r io.Reader) (string, error) {
 	// Load the image, without parsing it.
-	imageFile := bytes.NewBuffer(imgBytes)
 	ctx := context.Background()
-	err := tess.LoadImage(ctx, imageFile, gogosseract.LoadImageOptions{})
+	err := tess.LoadImage(ctx, r, gogosseract.LoadImageOptions{})
 	handleErr(err)
 	text, err := tess.GetText(ctx, func(progress int32) {})
 	handleErr(err)
 	return text, err
 }
 
+func ImageReaderToTextWriter(r io.Reader, w io.Writer) error {
+	txt, err := ImageReaderToText(r)
+	if err == nil {
+		w.Write([]byte(txt))
+	}
+	return err
+}
+
 func handleErr(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func IsTesseractConfigOk() (bool, string) {
+	return true, ""
 }
