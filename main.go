@@ -4,12 +4,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"runtime/debug"
 
 	"github.com/gin-contrib/expvar"
 	"github.com/gin-gonic/gin"
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
-	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
+	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 	sloggin "github.com/samber/slog-gin"
 )
 
@@ -18,7 +17,7 @@ var (
 	cacheNop             bool
 	closeDocChan         chan Document
 	pdfImplementation    string // Which lib is being used for PDFs?
-	logger               *slog.Logger
+	logger               *slog.Logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
 	saveExtractedDocChan chan *ExtractedDocument
 	srv                  http.Server
 	tesConfig            TesConfig
@@ -27,15 +26,23 @@ var (
 
 func main() {
 	tesConfig = NewTesConfigFromEnv()
+	// set static/global config of submodules
+	tesswrap.Languages = tesConfig.TesseractLangs
 	dehyphenator.RemoveNewlines = tesConfig.RemoveNewlines
-	args := os.Args
+
 	// one shot mode: don't start a server, just process a single file provided on the command line
-	if len(args) > 1 {
+	if len(os.Args) > 1 {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
-		PrintMetadataAndTextToStdout(args[1])
+		LogAndFixConfigIssues()
+		PrintMetadataAndTextToStdout(os.Args[1])
 		return
 	}
-	logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
+	if tesConfig.Debug {
+		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		// this might expose passwords in the log...
+		logger.Debug("starting with config", "conf", tesConfig)
+	}
+	LogAndFixConfigIssues()
 	closeDocChan = make(chan Document, 100)
 	saveExtractedDocChan = make(chan *ExtractedDocument, 100)
 	go saveAndCloseExtracedDocs()
@@ -49,15 +56,6 @@ func main() {
 
 	srv.Addr = tesConfig.SrvAddr
 	srv.Handler = router
-	if tesConfig.Debug {
-		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	}
-
-	if os.Getenv("GOMEMLIMIT") != "" {
-		logger.Info("GOMEMLIMIT", "Bytes", debug.SetMemoryLimit(-1), "MBytes", debug.SetMemoryLimit(-1)/1024/1024)
-	}
-	buildinfo, _ := debug.ReadBuildInfo()
-	logger.Debug("Info", "buildinfo", buildinfo)
 
 	nc, js := SetupNatsConnection(tesConfig)
 	if nc == nil {
@@ -77,12 +75,9 @@ func main() {
 		logger.Info("Service started with no HTTP endpoints. Waiting for interrupt.")
 		<-wait
 	}
-	logger.Info("PDF implementation", "lib", pdfImplementation)
-	if !docparser.Initialized {
-		logger.Warn("wvWare is not available in PATH. We will not be able to extract legacy MS Word documents.")
-	}
+
 	httpClient = &http.Client{
-		Transport: &http.Transport{DisableCompression:  tesConfig.HttpClientDisableCompression},
+		Transport: &http.Transport{DisableCompression: tesConfig.HttpClientDisableCompression},
 	}
 	logger.Info("Service started", "address", srv.Addr)
 	defer logger.Info("HTTP Server stopped.")

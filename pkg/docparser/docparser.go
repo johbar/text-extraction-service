@@ -199,9 +199,7 @@ func (d *WordDoc) StreamText(w io.Writer) {
 	if d.text != "" {
 		w.Write([]byte(d.text))
 	} else {
-
 		cmd := exec.Command("wvWare", "-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8", "/dev/stdin")
-
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			slog.Error("docparser: could not connect stdout", "err", err)
@@ -235,7 +233,6 @@ func (d *WordDoc) StreamText(w io.Writer) {
 }
 
 func doc2text(r io.Reader) string {
-	// cmd := exec.Command("antiword", "-w0", "-i1", "-")
 	cmd := exec.Command("wvWare", "-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8", "/dev/stdin")
 	cmd.Stdin = r
 	out, err := cmd.Output()

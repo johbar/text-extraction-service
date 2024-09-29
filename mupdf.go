@@ -8,12 +8,12 @@ import (
 	"strings"
 
 	"github.com/gen2brain/go-fitz"
-	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
-	"github.com/johbar/text-extraction-service/v2/pkg/pdfdateparser"
+	"github.com/johbar/text-extraction-service/v2/internal/pdfdateparser"
 )
 
 type Pdf struct {
 	*fitz.Document
+	data *[]byte
 }
 
 func init() {
@@ -24,18 +24,10 @@ func NewFromBytes(data []byte) (*Pdf, error) {
 	fdoc, err := fitz.NewFromMemory(data)
 	if err != nil {
 		logger.Error(err.Error())
+		return &Pdf{nil, &data}, err
 	}
 	logger.Debug("Opened doc", "pages", fdoc.NumPage())
-	return &Pdf{fdoc}, err
-}
-
-func NewFromStream(stream io.Reader) (Pdf, error) {
-	fdoc, err := fitz.NewFromReader(stream)
-	if err != nil {
-		logger.Error(err.Error())
-	}
-	logger.Debug("Opened Doc", "Pages", fdoc.NumPage())
-	return Pdf{fdoc}, err
+	return &Pdf{fdoc, &data}, err
 }
 
 func (d *Pdf) Text() string {
@@ -51,25 +43,14 @@ func (d *Pdf) Text() string {
 }
 
 func (d *Pdf) StreamText(w io.Writer) {
-	pr, pw := io.Pipe()
-	finished := make(chan bool)
-	go func() {
-		dehyphenator.DehyphenateReaderToWriter(pr, w)
-		pr.Close()
-		finished <- true
-	}()
-	for i := 0; i < d.NumPage(); i++ {
-		pText, err := d.Document.Text(i)
+	for n := 0; n < d.NumPage(); n++ {
+		pageText, err := d.Document.Text(n)
 		if err != nil {
-			logger.Error(err.Error())
+			logger.Error("MuPDF failed when extracting text", "page", n, "err", err)
 			continue
 		}
-		pw.Write([]byte(pText))
-		// ensure there is a newline at the end of every page
-		pw.Write([]byte{'\n'})
+		WriteTextOrRunOcrOnPage(pageText, n, w, d.data)
 	}
-	pw.Close()
-	<-finished
 }
 
 func (d *Pdf) GetNPages() int {
@@ -120,4 +101,5 @@ func stripNulls(val string) string {
 
 func (d Pdf) Close() {
 	d.Document.Close()
+	d.data = nil
 }
