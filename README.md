@@ -193,6 +193,9 @@ podman run -p 8080:8080 -it --rm tes:pdfium-ubuntu
 
 # PDFfim based (LibreOffice supplied lib) without persistency
 podman run -p 8080:8080 -it --rm tes:pdfiumlo-ubuntu
+
+# PDFium based with Tesseract installed
+podman run --rm -it -v nats:/tmp/nats -p 8080:8080 -p 4222:4222 tes:pdfiumlo-ocr-ubuntu
 ```
 
 ## Config
@@ -214,10 +217,10 @@ Configuration happens through environment variables only.
 | `TES_NATS_CONNECT_RETRIES`            | Number of times a connection to an external NATS server/cluster and to JetStream is being tried. Default: `10`                                                                                 |
 | `TES_HOST_PORT`                       | Listen address of HTTP server. Default: `:8080` (same as `0.0.0.0:8080`)                                                                                                                       |
 | `TES_NO_HTTP`                         | If `true` and `TES_EXPOSE_NATS` is `true`, too, no HTTP server is started                                                                                                                      |
-| `TES_REMOVE_NEWLINES`                 | If true, extracted text will be compacted by replacing newlines with whitespace (Default: `true`).                                                                                             |
+| `TES_REMOVE_NEWLINES`                 | If true, extracted text will be compacted by replacing newlines with whitespace. Default: `true`                                                                                               |
 | `TES_FORK_THRESHOLD`                  | Maximum content length (size in bytes) of a file that is being converted in-process rather than by a subprocess in fork-exec style. Choose a negative value to disable forking. Default: 2 MiB |
-| `TES_HTTP_CLIENT_DISABLE_COMPRESSION` | Disable `Accept-Encoding: gzip` header in outgoing HTTP Requests (Default: `false`)                                                                                                            |
-| `TES_TESSERACT_LANGS`                 | Set languages for Tesseract OCR as a list of 3-letter-codes, separated by `+` (Default: `eng+osd` = English + script and orientation detection)                                                |
+| `TES_HTTP_CLIENT_DISABLE_COMPRESSION` | Disable `Accept-Encoding: gzip` header in outgoing HTTP Requests. Default: `false`                                                                                                             |
+| `TES_TESSERACT_LANGS`                 | Set languages for Tesseract OCR as a list of 3-letter-codes, separated by `+`. Default: `Latin` = all languages with latin script                                                              |
 
 ## Security considerations
 
@@ -250,7 +253,7 @@ Build and run the service, e.g. `go run -tags pdfium,nomsgpack`.
 Use it as follows:
 
 ```shell
-$ # POST a local file to the service
+$ # POST a local file to TES
 $ curl -sSi --data-binary @some-file.pdf localhost:8080
 HTTP/1.1 200 OK
 X-Doctype: pdf
@@ -301,7 +304,6 @@ Content-Type: text/plain; charset=utf-8
 
 Programming With bo (GOlang) And It's Benefits
 ```
-
 
 There are a few request options you can add as query params (behind `?`/`&` in the URL):
 

@@ -39,6 +39,8 @@ func main() {
 	}
 	if tesConfig.Debug {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		// this might expose passwords in the log...
+		logger.Debug("starting with config", "conf", tesConfig)
 	}
 	LogAndFixConfigIssues()
 	closeDocChan = make(chan Document, 100)
