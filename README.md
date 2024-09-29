@@ -110,7 +110,7 @@ All you need to do is:
 If there is no text found on a PDF page and Tesseract is available TES will look for images on that page.
 It will then extract these images in-memory and pipe them to the Tesseract CLI.
 The output is then streamed back to TES or rather the client (after dehyphenation and compaction).
-This means: If there a mixture of text and image, no OCR is performed.
+This means: If there is a mixture of text and images on a page, no OCR at all is being performed.
 
 NOTE: OCR is an expensive process and can take a lot of time and resources.
 It is not fully accurate.
@@ -128,7 +128,7 @@ Some other aspects:
 
 |                              | PDFium                   | Poppler            | MuPDF                   |
 |------------------------------|--------------------------|--------------------|-------------------------|
-| License                      | ✅ permissive             | ⚠️ Copyleft        | ⚠️ Copyleft              |
+| License                      | ✅ permissive             | ⚠️ Copyleft        | ⚠️ Copyleft or commercial |
 | Performance with small files | ✅ good                   | ❌ bad              | ✅ good                  |
 | Performance with large files | ✅ good                   | 🚀 best            | ❌ bad                   |
 | Memory consumption           | ❌ high with large files¹ | ✅ consistently low | ❌ high with large files |
@@ -223,9 +223,9 @@ Configuration happens through environment variables only.
 
 TES is not intended to be exposed to the internet.
 There is no TLS support and no authentication whatsoever.
-There is also no safeguard against malicious clients doing denial of service attacks by sending large files etc.
+There is also no safeguard against malicious clients doing denial of service attacks by sending large or prepared files etc.
 
-⚠️ TL;DR: Only expose this service to trusted clients in a secure environment. ⚠️
+⚠️ TL;DR: Only expose this service to trusted clients and documents in a secure environment. ⚠️
 
 ## Usage
 
