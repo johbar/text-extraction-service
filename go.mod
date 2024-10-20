@@ -7,7 +7,7 @@ toolchain go1.23.0
 require (
 	github.com/danlock/gogosseract v0.0.11-0ad3421
 	github.com/dlclark/regexp2 v1.11.4
-	github.com/gabriel-vasile/mimetype v1.4.5
+	github.com/gabriel-vasile/mimetype v1.4.6
 	github.com/gen2brain/go-fitz v1.24.14
 	github.com/gin-contrib/expvar v1.0.1
 	github.com/gin-gonic/gin v1.10.0
@@ -15,7 +15,7 @@ require (
 	github.com/goccy/go-json v0.10.3
 	github.com/johbar/go-poppler v1.0.1-0.20230721224815-a1860a344718
 	github.com/klippa-app/go-pdfium v1.12.3
-	github.com/nats-io/nats-server/v2 v2.10.21
+	github.com/nats-io/nats-server/v2 v2.10.22
 	github.com/nats-io/nats.go v1.37.0
 	github.com/otiai10/gosseract/v2 v2.4.1
 	github.com/pdfcpu/pdfcpu v0.8.1
@@ -79,7 +79,7 @@ require (
 	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241007155032-5fefd90f89a9 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241015192408-796eee8c2d53 // indirect
 	google.golang.org/grpc v1.67.1 // indirect
 	google.golang.org/protobuf v1.35.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
