@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/gabriel-vasile/mimetype"
-	"github.com/johbar/go-poppler"
+	poppler "github.com/johbar/text-extraction-service/v2/pkg/poppler"
 )
 
 type Pdf struct {

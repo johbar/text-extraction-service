@@ -36,7 +36,9 @@ RUN apt-get update && \
 
 COPY --from=builder /opt/pdfium/lib/libpdfium.so /usr/lib/libpdfium.so
 
-ENV GIN_MODE=release
+USER nobody
+
+ENV GIN_MODE=release HOME=/tmp
 
 # Expose the service and Nats (optional)
 EXPOSE 4222 8080

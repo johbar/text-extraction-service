@@ -24,6 +24,6 @@ EXPOSE 4222 8080
 
 VOLUME /tmp/nats
 
-ENV GIN_MODE=release
+ENV GIN_MODE=release HOME=/tmp
 
 CMD ["text-extraction-service"]
