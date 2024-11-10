@@ -5,8 +5,6 @@ ARG BUILD_TAGS=nomsgpack,poppler
 
 WORKDIR /usr/src/app
 
-RUN apt-get update && apt-get --no-install-suggests --no-install-recommends install libpoppler-glib-dev -y
-
 ENV HOME=/tmp GOPATH=/tmp
 
 # pre-copy/cache go.mod for pre-downloading dependencies and only redownloading them in subsequent builds if they change
@@ -18,13 +16,15 @@ COPY . .
 ENV CGO_ENABLED=1
 
 RUN go build -ldflags="-s -w" -tags "${BUILD_TAGS}" -v -o /go/text-extraction-service
+
 ## Runtime Image ##
+
 FROM $RUNTIME_IMG
 
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
 RUN apt-get update && \
-    apt-get --no-install-recommends --no-install-suggests install ca-certificates libpoppler-glib8 wv -y && \
+    apt-get --no-install-recommends --no-install-suggests -y install ca-certificates libpoppler-glib8 wv && \
     rm -rf /var/lib/apt
 
 # Expose the service and Nats (optional)
@@ -32,6 +32,9 @@ EXPOSE 4222 8080
 
 VOLUME /tmp/nats
 
-ENV GIN_MODE=release
+# Set HOME to temp dir, which is writable
+ENV GIN_MODE=release HOME=/tmp
+
+USER nobody
 
 CMD ["text-extraction-service"]
