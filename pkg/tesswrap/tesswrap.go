@@ -8,8 +8,9 @@ This is work in progress.
 package tesswrap
 
 var (
-// Initialized indicates if this package is usable
-	Initialized bool   = true
+	// Initialized indicates if this package is usable
+	Initialized bool = true
 	// Languages tesseract shall take into consideration when performing OCR
-	Languages   string = "Latin+osd"
+	Languages string = "Latin+osd"
+	Version   string
 )

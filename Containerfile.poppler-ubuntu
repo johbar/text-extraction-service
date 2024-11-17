@@ -13,8 +13,6 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-ENV CGO_ENABLED=1
-
 RUN go build -ldflags="-s -w" -tags "${BUILD_TAGS}" -v -o /go/text-extraction-service
 
 ## Runtime Image ##

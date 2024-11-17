@@ -9,9 +9,7 @@ import (
 	"github.com/raff/go-tesseract"
 )
 
-var (
-	Version string
-)
+
 
 func init() {
 	Version = tesseract.Version()
@@ -45,4 +43,8 @@ func ImageBytesToText(imgBytes []byte) (string, error) {
 	defer tesseract.FreeImageBytes(pbytes)
 	txt := tess.GetUTF8Text()
 	return txt, nil
+}
+
+func IsTesseractConfigOk() (ok bool, reason string) {
+	return true, ""
 }

@@ -20,7 +20,7 @@ var (
 	g_object_unref func(uintptr)
 
 	poppler_get_version             func() string
-	poppler_document_new_from_bytes func(gbytes uintptr, password uintptr, error unsafe.Pointer) uintptr
+	poppler_document_new_from_bytes func(gbytes uintptr, password uintptr, err unsafe.Pointer) uintptr
 
 	poppler_document_get_n_pages func(uintptr) int
 	poppler_document_get_page    func(uintptr, int) uintptr

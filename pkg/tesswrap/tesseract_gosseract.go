@@ -8,10 +8,6 @@ import (
 	"github.com/otiai10/gosseract/v2"
 )
 
-var (
-	Version string
-)
-
 func init() {
 	Version = gosseract.Version()
 	Initialized = true
