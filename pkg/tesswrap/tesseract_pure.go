@@ -87,7 +87,7 @@ func ImageBytesToText(data []byte) (string, error) {
 	lock.Lock()
 	defer lock.Unlock()
 	if handle == 0 {
-		// first time we need tesseract get it started
+		// start the tesseract lib if it hasn't been already
 		initLib()
 	}
 	if !Initialized {
