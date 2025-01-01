@@ -51,7 +51,7 @@ type WordDoc struct {
 	text     string
 }
 
-func init(){
+func init() {
 	_, err := exec.LookPath("wvWare")
 	if err != nil {
 		Initialized = false
@@ -64,9 +64,7 @@ func NewFromBytes(data []byte) (doc *WordDoc, err error) {
 	doc = &WordDoc{data: &data}
 	buf := bytes.NewReader(data)
 	doc.metadata, err = readMetadata(buf)
-	if err != nil {
-		slog.Error("docparser: Metadata extraction failed",  "err", err)
-	}
+
 	return
 }
 
@@ -193,6 +191,10 @@ func (d *WordDoc) Text() string {
 		d.text = doc2text(buf)
 	}
 	return d.text
+}
+
+func (d *WordDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
+	process(d.Text(), 0, w, nil)
 }
 
 func (d *WordDoc) StreamText(w io.Writer) {

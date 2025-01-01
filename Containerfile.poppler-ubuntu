@@ -1,7 +1,7 @@
 ARG BUILD_IMG=docker.io/golang:bookworm
 ARG RUNTIME_IMG=docker.io/ubuntu:jammy
 FROM $BUILD_IMG AS builder
-ARG BUILD_TAGS=nomsgpack,poppler
+ARG BUILD_TAGS=
 
 WORKDIR /usr/src/app
 
@@ -13,11 +13,13 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-RUN go build -ldflags="-s -w" -tags "${BUILD_TAGS}" -v -o /go/text-extraction-service
+RUN go build -ldflags="-s -w" -tags "nomsgpack ${BUILD_TAGS}" -v -o /go/text-extraction-service
 
 ## Runtime Image ##
 
 FROM $RUNTIME_IMG
+
+ARG DEBIAN_FRONTEND=noninteractive
 
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
@@ -31,7 +33,7 @@ EXPOSE 4222 8080
 VOLUME /tmp/nats
 
 # Set HOME to temp dir, which is writable
-ENV GIN_MODE=release HOME=/tmp
+ENV GIN_MODE=release HOME=/tmp TES_PDF_LIB_NAME=poppler
 
 USER nobody
 

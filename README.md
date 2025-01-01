@@ -15,10 +15,10 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 ## Features
 
 - Support for PDFs, RTFs and legacy MS Word (.doc) files
-- Three C/C++ PDF engine implementations available via build tags
-    - Google Chromium's [PDFium](https://pdfium.googlesource.com/pdfium/) via [go-pdfium](https://github.com/klippa-app/go-pdfium)
-    - Free Desktops [Poppler lib](https://poppler.freedesktop.org/) via [go-poppler](https://github.com/johbar/go-poppler)
-    - Artifex' [MuPDF](https://mupdf.com/) via [go-fitz](https://github.com/gen2brain/go-fitz)
+- Three pluggable C/C++ PDF engine implementations
+    - Google Chromium's [PDFium](https://pdfium.googlesource.com/pdfium/)
+    - Free Desktops [Poppler lib](https://poppler.freedesktop.org/)
+    - Artifex' [MuPDF](https://mupdf.com/)
 - Optional Dehyphenation of extracted text, specifically for German
 - Extraction of document metadata (title, author, creation date etc)
 - Store extracted text and metadata in NATS for faster retrieval
@@ -37,60 +37,85 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 
 This service inherits the Open Source license of the PDF lib used to built it:
 
-- PDFium/go-pdfium: [Apache-2](https://pdfium.googlesource.com/pdfium/+/master/LICENSE), [MIT](https://github.com/klippa-app/go-pdfium/blob/main/LICENSE)
-- Poppler/go-poppler: GPL-2.0
-- MuPDF/go-fitz: AGPL-3.0 (commercial license available)
+- PDFium: [Apache-2](https://pdfium.googlesource.com/pdfium/+/master/LICENSE)
+- Poppler: GPL-2.0
+- MuPDF: AGPL-3.0 (commercial license available)
 
-That's the reason why there is no default implementation anymore.
-You always need to supply a build tag.
+## Design Goals (and some words on the development of TES)
+
+Coming from a Java stack I wanted to build a solution for PDF to text conversion that offered better quality and performance than Apache PDFBox and Tika.
+Poppler and MuPDF were well-established PDF libs with a C interface I examined and included in this service first.
+Later I discovered PDFium as an additional FOSS solution.
+
+Initially I used `cgo` to integrate these libs with Go (using open source wrappers like [go-pdfium](https://github.com/klippa-app/go-pdfium) and [go-fitz](https://github.com/gen2brain/go-fitz) or even writing my own for Poppler).
+Build tags were used to decide which lib to link against.
+Later I facilitated (purego)[https://github.com/ebitengine/purego] to get rid of it all.
+No more `cgo`, C header files, `pkg-config` or build tags!
+There are still a lot of runtime dependencies, but the build system can be as simple as `go build`, including cross compiling.
+But user
+
+Using C/C++ PDF libs to do the heavy lifting of text extraction is one part of the solution.
+The other is the integration of an optional cache and the algorithm used when serving extraction requests:
+
+1. Ask the cache for metadata about the requested document.
+2. If metadata is available, do an "optional" HTTP request using `If-Non-Match` and/or `If-Modified-Since` headers with entity tags/timestamps. If not, just fetch the doc.
+3. If the webserver sends the document (instead of status `304 Not Modified`) do text-extraction. Otherwise read the text from cache.
+4. Send the metadata as HTTP headers and the text as plain UTF-8 body. No JSON serialization needed.
+5. If indicated, do the cache update after serving the request, so the client can proceed with what ever they wanted to do with the text.
+
+Additional design considerations and assumptions:
+
+- Do everything in-memory and in-process, whenever you can. No disk I/O, no invocation of external programs (except for `wvWare`).
+- The web service client does not care that much about, say, the PDF itself, but rather the textual content and some metadata.
+  They know the URL, so that's all TES needs to do the job.
+- The client does not care that much about the PDFs layout as they do about its textual content.
+  So text returned by TES should only be semantically correct concerning the order of words on pages etc. but not accurate in presentation.
+  Join words split up by hyphens on line endings, remove newlines in order to save bandwidth etc.
 
 ## Dev Setup - Building TES
 
-Depending on the PDF engine you choose (see below for comparison) you need dependencies being to be installed in dev/build environment.
+Building only requires a recent Go SDK (v1.21+) thanks to `purego`.
+But testing and running requires additional shared libs.
+Depending on the PDF engine you choose (see below for comparison) you need it installed in your dev/build environment.
 
-In any case you need a recent Go SDK (v1.21+) and (with the exception of PDFium-WASM) a C compiler toolchain.
-
-All instructions supplied here suppose a unix-like environment.
+All instructions supplied here suppose a Linux environment.
+TES is only tested on Linux, might work on MacOS/Darwin as well but needs modifications to be compatible with Windows.
 
 ### PDFium
 
-Follow the instructions in [go-pdfium](https://github.com/klippa-app/go-pdfium):
+PDFium is the default implementation and works without any configuration as long as the lib is present in a standard path.
 
-- Download the PDFium binaries and header files or compile the lib yourself.
-- Create a PKG config file (preferably in `/usr/local/lib/pkgconfig/pdfium.pc`).
-- Set `LD_LIBRARY_PATH` and `PKG_CONFIG_PATH` if needed.
+If you have LibreOffice installed you don't necessarily need to download PDFium.
+TES will use `/usr/lib/libreoffice/program/libpdfiumlo.so` instead `libpdfium.so`, if available.
 
-### PDFium Webassembly
+Otherwise or if you prefer a current version of the upstream lib:
 
-If you want to test PDFium without the cgo hassle use the build tag `pdfium_wasm`.
-This will decrease the speed of text extraction and will make the service boot slower.
+- Download the correct PDFium binary for your platform from [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) or compile the lib yourself.
+- Put `libpdfium.so` in `/usr/local/lib/` (my recommendation).
+- Set the config env variable in your shell via `export TES_PDF_LIB_PATH=/path/to/libpdfium.so` if you put elsewhere.
 
-### Poppler
+### Poppler (`poppler-glib`)
 
-Install dependencies on Debian based systems via `apt-get install libpoppler-glib-dev`.
+- Install dependencies on Debian based systems via `apt-get install libpoppler-glib8`.
+- `export TES_PDF_LIB_NAME=poppler` in your shell.
+- If TES cannot load the lib try setting `export TES_PDF_LIB_PATH=/path/to/libpoppler-glib.so` in your shell.
 
 ### MuPDF
 
-Everything you need is included in the `go-fitz` wrapper (header files, binaries).
+- Have look at [this Containerfile](Containerfile.mupdf-ubuntu) to get an idea how to build a MuPDF shared lib for Debian or Ubuntu.
+  You can build that image, run it and then copy the lib to your host system via `podman cp`.
+- Put `libmupdf.so` in `/usr/local/lib/`.
+- Set the config env variable in your shell, `export TES_PDF_LIB_PATH=/path/to/libmupdf.so` if you put elsewhere.
+- `export TES_PDF_LIB_NAME=mupdf` in your shell.
+- Set `MU_PDF_VERSION` according to the libs version.
 
 ## Build locally
 
-To build the service just run `go build` with one of these `tags`:
-
-- `pdfium`
-- `pdfium_wasm`
-- `poppler`
-- `mupdf`
-
-I recommend supplying the tag `nomsgpack` as well, shrinking the build.
+I recommend supplying the tag `nomsgpack` to shrink the build.
 See [Gin docs](https://github.com/gin-gonic/gin/blob/master/docs/doc.md#build-without-msgpack-rendering-feature).
 
-Examples:
-
 ```sh
-go build -tags nomsgpack,pdfium -o tes-pdfium
-go build -tags nomsgpack,poppler -o tes-poppler
-go build -tags nomsgpack,mupdf -o tes-mupdf
+go build -tags nomsgpack -o tes
 ```
 
 If you don't need the NATS based cache additionally supply the build tag `cache_nop`.
@@ -101,7 +126,7 @@ If you want to process image files or scanned PDFs TES got you covered.
 All you need to do is:
 
 1. Install Tesseract, on Debian/Ubuntu run `apt install tesseract-ocr`
-2. Install any language model file you need.
+2. Install any language model file you need. English is included by default.
     1. Run `apt install tesseract-ocr-script-latn` for a model that supports multiple languages with latin script (rather large)
     2. Or run `apt install tesseract-ocr-deu` for the german model (smaller but specific)
 3. Configure TES to pass on your language preference to Tesseract by setting the environment variable, e.g. `TES_TESSERACT_LANGS=Latin+osd` when running TES.
@@ -119,32 +144,31 @@ NOTE: This feature is not well tested and thus considered experimental.
 
 ##  PDFium, MuPDF or Poppler?
 
-Concerning the quality of text extracted by theses libs in my experience *Poppler* and *PDFium* are better than *MuPDF*.
+Concerning the quality of text extracted by theses libs in my experience *Poppler* and *PDFium* are a bit better than *MuPDF*.
 But complicated as the Portable Document Format is there are a lot of edge cases one lib handles better than the other–and some where neither can do right.
 
 Regarding speed with ordinary (rather small) files *PDFium* and *MuPDF* are mostly astride.
 
 Some other aspects:
 
-|                              | PDFium                   | Poppler            | MuPDF                   |
-|------------------------------|--------------------------|--------------------|-------------------------|
-| License                      | ✅ permissive             | ⚠️ Copyleft        | ⚠️ Copyleft or commercial |
+|                              | PDFium                    | Poppler             | MuPDF                    |
+|------------------------------|---------------------------|---------------------|--------------------------|
+| License                      | ✅ permissive             | ⚠️ Copyleft          | ⚠️ Copyleft or commercial |
 | Performance with small files | ✅ good                   | ❌ bad              | ✅ good                  |
-| Performance with large files | ✅ good                   | 🚀 best            | ❌ bad                   |
+| Performance with large files | ✅ good                   | 🚀 best             | ❌ bad                   |
 | Memory consumption           | ❌ high with large files¹ | ✅ consistently low | ❌ high with large files |
 | Available from Linux sources
-(deb, rpm, apk)                | ❌ no¹ | ✅ headers & lib | ✅ headers & static lib
-| Multi-threaded               | ❌ no²                     | ✅ yes        | ✅ yes        |
+(deb, rpm, apk)                | ❌ no, but...¹            | ✅ yes             | ✔️ partially²              |
+| Multi-threaded               | ❌ no³                    | ✅ yes             | ✅ yes                    |
 
-¹ At runtime you can use the LibreOffice build of *PDFium*, `libpdfiumlo.so` from the Debian package `libreoffice-core-nogui`.
+¹ At runtime you can use the LibreOffice build of *PDFium*, `libpdfiumlo.so` from the Debian/Ubuntu package `libreoffice-core-nogui`.
 Using this lib instead of [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) performance drops a bit (maybe 10%), but in turn memory consumption with large files decreases a lot.
 See [Containerfile](Containerfile.pdfiumlo-ubuntu) on how to use this shared lib.
 
-² *PDFium* is not thread safe.
-For that reason in single-threaded mode `go-pdfium` uses a lock to protect the lib instance against concurrent access.
-TES sticks to that mode instead of the alternatives (Webassembly or multiprocessing via gRPC)
-because they are bad for performance.
-In my tests with `curl --parallel` and ~100 Files it was still faster than the multi-threaded WASM version.
+² Debian and Ubuntu only ship static libs of MuPDF, Alpine and Arch have shared libs as well. 
+
+³ *PDFium* is not thread safe.
+For that reason TES uses a lock to protect the lib instance against concurrent access and and multi-processing approach (forking a new TES process, if PDFium is busy)
 
 ## Build container images
 
@@ -155,11 +179,17 @@ I use Podman but everything should work with Docker as well.
 Ubuntu refers to Ubuntu 22.04 (*Jammy*).
 
 ```sh
-# Use a volume to speed up subsequent builds—remove the need to re-download and re-compile all dependencies
+# optional: use a volume to speed up subsequent builds—remove the need to re-download and re-compile all dependencies
 mkdir --mode 777 --parents /tmp/cache
+
+# All-in-one on Alpine:
+podman build --pull . -f Containerfile.alpine -t tes:alpine --volume /tmp/cache:/tmp
 
 # MuPDF on Alpine:
 podman build --pull . -f Containerfile.mupdf-alpine -t tes:mupdf-alpine --volume /tmp/cache:/tmp
+
+# MuPDF on Ubuntu:
+podman build --pull . -f Containerfile.mupdf-ubuntu -t tes:mupdf-ubuntu --volume /tmp/cache:/tmp
 
 # Poppler on Alpine:
 podman build --pull . -f Containerfile.poppler-alpine -t tes:poppler-alpine --volume /tmp/cache:/tmp
@@ -173,7 +203,7 @@ podman build --pull . -f Containerfile.pdfium-ubuntu -t tes:pdfium-ubuntu --volu
 # PDFium from Libreoffice on Ubuntu
 podman build --pull . -f Containerfile.pdfiumlo-ubuntu -t tes:pdfiumlo-ubuntu --volume /tmp/cache:/tmp
 
-# PDFium + Tesseract (Latin/multi-lang) on Ubuntu
+# PDFium (LO) + Tesseract (Latin/multi-lang) on Ubuntu
 podman build --pull . -f Containerfile.pdfiumlo-tesseract-latin-ubuntu -t tes:pdfiumlo-ocr-ubuntu --volume /tmp/cache:/tmp
 ```
 
@@ -217,6 +247,8 @@ Configuration happens through environment variables only.
 | `TES_NATS_CONNECT_RETRIES`            | Number of times a connection to an external NATS server/cluster and to JetStream is being tried. Default: `10`                                                                                 |
 | `TES_HOST_PORT`                       | Listen address of HTTP server. Default: `:8080` (same as `0.0.0.0:8080`)                                                                                                                       |
 | `TES_NO_HTTP`                         | If `true` and `TES_EXPOSE_NATS` is `true`, too, no HTTP server is started                                                                                                                      |
+| `TES_PDF_LIB_NAME`                    | Name of the PDF implementation to load; options: `pdfium` (default), `poppler`, `mupdf`                                                                                                        |
+| `TES_PDF_LIB_PATH`                    | Path or basename of the shared lib (`.so`, `.dylib`, `.dll`); if empty some default names are tried                                                                                            |
 | `TES_REMOVE_NEWLINES`                 | If true, extracted text will be compacted by replacing newlines with whitespace. Default: `true`                                                                                               |
 | `TES_FORK_THRESHOLD`                  | Maximum content length (size in bytes) of a file that is being converted in-process rather than by a subprocess in fork-exec style. Choose a negative value to disable forking. Default: 2 MiB |
 | `TES_HTTP_CLIENT_DISABLE_COMPRESSION` | Disable `Accept-Encoding: gzip` header in outgoing HTTP Requests. Default: `false`                                                                                                             |
@@ -249,7 +281,7 @@ At the moment there is no elaborated command line interface supporting more cust
 
 ### Run as a service
 
-Build and run the service, e.g. `go run -tags pdfium,nomsgpack`.
+Build and run the service, e.g. `go run -tags nomsgpack`.
 Use it as follows:
 
 ```shell
@@ -279,6 +311,7 @@ Http-Content-Length: 6341610
 Http-Last-Modified: Mon, 17 Jun 2024 13:19:17 GMT
 X-Doctype: pdf
 X-Document-Created: 2024-04-11T15:06:17+02:00
+X-Document-Creator: Adobe InDesign 19.3 (Windows)
 X-Document-Modified: 2024-04-11T15:06:45+02:00
 X-Document-Pages: 14
 X-Document-Version: PDF-1.7

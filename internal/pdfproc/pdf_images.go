@@ -23,7 +23,7 @@ func init() {
 	pdfConf = model.NewDefaultConfiguration()
 }
 
-// ProcessImages applies readFunc to every image found on the page with the specified zero-based page
+// ProcessImages applies readFunc to every image found on the page with the specified zero-based page number
 func ProcessImages(rs io.ReadSeeker, pageIndex int, readFunc func(model.Image)) {
 	pageStr := []string{strconv.Itoa(pageIndex + 1)}
 	pdfcpuapi.ExtractImages(rs, pageStr, func(img model.Image, singleImgPerPage bool, maxPageDigits int) error {

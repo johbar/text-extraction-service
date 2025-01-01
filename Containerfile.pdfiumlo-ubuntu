@@ -1,19 +1,7 @@
 ARG BUILD_IMG=docker.io/golang:bookworm
 ARG RUNTIME_IMG=docker.io/ubuntu:jammy
 FROM $BUILD_IMG AS builder
-ARG BUILD_TAGS=nomsgpack,pdfium
-
-WORKDIR /usr/src/app
-
-# RUN apt-get update && apt-get --no-install-recommends install -y 
-
-RUN curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz \
-    -o /tmp/pdfium.tgz
-WORKDIR /opt/pdfium
-RUN tar -xf /tmp/pdfium.tgz
-
-RUN mkdir --parents /usr/local/lib/pkgconfig && echo "Name: PDFium\nDescription: PDFium\nVersion: 6392\nRequires:\n\nLibs: -L/opt/pdfium/lib -lpdfium\nCflags: -I/opt/pdfium/include\n" > /usr/local/lib/pkgconfig/pdfium.pc
-
+ARG BUILD_TAGS=
 
 WORKDIR /usr/src/app
 
@@ -27,9 +15,10 @@ COPY . .
 
 ENV CGO_ENABLED=1 GIN_MODE=release DEBIAN_FRONTEND=noninteractive
 
-RUN go build -ldflags="-s -w" -tags "${BUILD_TAGS}" -v -o /go/text-extraction-service
+RUN go build -ldflags="-s -w" -tags "nomsgpack ${BUILD_TAGS}" -v -o /go/text-extraction-service
 ## Runtime Image ##
 FROM $RUNTIME_IMG
+ARG DEBIAN_FRONTEND=noninteractive
 
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
@@ -40,14 +29,10 @@ RUN apt-get update && \
     rm libreoffice-core-nogui_*.deb && \
     apt-get --no-install-recommends --no-install-suggests install ca-certificates wv libopenjp2-7 liblcms2-2 libabsl-dev -y && \
     rm -rf /var/lib/apt
-    
-# disguise the LibreOffice lib as pdfium
-RUN ln -s /usr/lib/libreoffice/program/libpdfiumlo.so /usr/lib/libpdfium.so \
-    && ldd /usr/lib/libpdfium.so
 
 USER nobody
 
-ENV GIN_MODE=release HOME=/tmp
+ENV GIN_MODE=release HOME=/tmp TES_PDF_LIB_NAME=pdfium
 
 # Expose the service and Nats (optional)
 EXPOSE 4222 8080

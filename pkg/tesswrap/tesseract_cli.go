@@ -1,4 +1,4 @@
-//go:build !gosseract && !tesseract_wasm && !tesseract_lib && !tesseract_pure
+//go:build !tesseract_pure
 
 // This is the default implementation
 package tesswrap

@@ -1,20 +1,11 @@
 ARG BUILD_IMG=docker.io/golang:bookworm
 ARG RUNTIME_IMG=docker.io/ubuntu:jammy
 FROM $BUILD_IMG AS builder
-ARG BUILD_TAGS=nomsgpack,pdfium
+ARG BUILD_TAGS=""
 
 WORKDIR /usr/src/app
 
-RUN curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz \
-    -o /tmp/pdfium.tgz
-WORKDIR /opt/pdfium
-RUN tar -xf /tmp/pdfium.tgz
-
-RUN mkdir --parents /usr/local/lib/pkgconfig && echo "Name: PDFium\nDescription: PDFium\nVersion: 6392\nRequires:\n\nLibs: -L/opt/pdfium/lib -lpdfium\nCflags: -I/opt/pdfium/include\n" > /usr/local/lib/pkgconfig/pdfium.pc
-
-WORKDIR /usr/src/app
-
-ENV HOME=/tmp GOPATH=/tmp
+ENV HOME=/tmp GOPATH=/tmp GIN_MODE=release
 
 # pre-copy/cache go.mod for pre-downloading dependencies and only redownloading them in subsequent builds if they change
 COPY go.mod go.sum ./
@@ -22,23 +13,25 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-ENV CGO_ENABLED=1 GIN_MODE=release
+RUN go build -ldflags="-s -w" -tags "nomsgpack $BUILD_TAGS" -v -o /go/text-extraction-service
 
-RUN go build -ldflags="-s -w" -tags "$BUILD_TAGS" -v -o /go/text-extraction-service
 ## Runtime Image ##
 FROM $RUNTIME_IMG
 
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
 RUN apt-get update && \
-    apt-get --no-install-recommends --no-install-suggests install ca-certificates wv -y && \
+    apt-get --no-install-recommends --no-install-suggests -y install ca-certificates wv curl && \
     rm -rf /var/lib/apt
 
-COPY --from=builder /opt/pdfium/lib/libpdfium.so /usr/lib/libpdfium.so
+RUN curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz \
+    | tar -xz -C /usr lib/libpdfium.so
 
 USER nobody
 
-ENV GIN_MODE=release HOME=/tmp
+WORKDIR /tmp
+
+ENV GIN_MODE=release HOME=/tmp TES_PDF_LIB_NAME=pdfium
 
 # Expose the service and Nats (optional)
 EXPOSE 4222 8080

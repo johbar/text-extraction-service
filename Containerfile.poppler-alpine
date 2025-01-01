@@ -2,9 +2,6 @@ FROM docker.io/golang:alpine as builder
 
 WORKDIR /usr/src/app
 
-# Install build dependenies
-RUN apk update && apk add
-
 # Do the Build rootless
 USER nobody
 
@@ -16,13 +13,12 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-RUN go build -ldflags="-s -w" -tags nomsgpack,poppler -v -o /go/text-extraction-service
+RUN go build -ldflags="-s -w" -tags nomsgpack -v -o /go/text-extraction-service
 ## Runtime Image ##
 FROM docker.io/alpine:latest
 
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
-# Needed at runtime, too:
 RUN apk update && apk add poppler-glib wv
 
 USER nobody
@@ -32,6 +28,6 @@ EXPOSE 4222 8080
 
 VOLUME /tmp/nats
 
-ENV GIN_MODE=release HOME=/tmp
+ENV GIN_MODE=release HOME=/tmp TES_PDF_LIB_NAME=poppler
 
 CMD ["text-extraction-service"]

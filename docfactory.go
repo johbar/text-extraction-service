@@ -12,12 +12,7 @@ import (
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 )
 
-// Document represents any kind of document this service can convert to plain text
-type Document interface {
-	StreamText(io.Writer)
-	MetadataMap() map[string]string
-	Close()
-}
+
 
 func NewDocFromStream(r io.Reader) (Document, error) {
 	data, err := io.ReadAll(r)

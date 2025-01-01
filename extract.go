@@ -71,7 +71,10 @@ func ExtractBody(c *gin.Context) {
 	defer doc.Close()
 	metadata := doc.MetadataMap()
 	addMetadataAsHeaders(c.Writer.Header(), &metadata)
-	doc.StreamText(c.Writer)
+	done, pw := RunDehyphenator(c.Writer)
+	doc.ProcessPages(pw, WriteTextOrRunOcrOnPage)
+	pw.Close()
+	<-done
 }
 
 func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status int, err error) {
@@ -161,7 +164,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		mWriter = io.MultiWriter(w, &text)
 	}
 	done, pw := RunDehyphenator(mWriter)
-	doc.StreamText(pw)
+	doc.ProcessPages(pw, WriteTextOrRunOcrOnPage)
 	pw.Close()
 	<-done
 	if !silent {
@@ -219,7 +222,7 @@ type ForkedDoc struct {
 }
 
 // NewDocFromForkedProcess creates a Document whose content and metadata is being extracted by a forked subprocess
-func NewDocFromForkedProcess(r io.ReadCloser) (*ForkedDoc, error) {
+func NewDocFromForkedProcess(r io.Reader) (Document, error) {
 	me, err := os.Executable()
 	if err != nil {
 		logger.Error("Could not find out who I am", "err", err)
@@ -256,7 +259,10 @@ func (d *ForkedDoc) StreamText(w io.Writer) {
 		logger.Error("Error waiting for subprocess to finish", "err", err)
 	}
 	logger.Info("Subprocess finished", "state", d.cmd.ProcessState.String())
+}
 
+func (d *ForkedDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
+	d.StreamText(w)
 }
 
 func (d *ForkedDoc) MetadataMap() map[string]string {

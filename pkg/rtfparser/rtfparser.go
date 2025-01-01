@@ -467,6 +467,10 @@ func (d *RichTextDoc) Text() string {
 	return rtf2text(d.rtfContent, charsWithFmt)
 }
 
+func (d *RichTextDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
+	process(d.Text(), 0, w, nil)
+}
+
 func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.Writer) {
 	var charMap *charmap.Charmap
 	var decoder *encoding.Decoder

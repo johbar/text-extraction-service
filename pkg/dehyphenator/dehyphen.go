@@ -23,33 +23,30 @@ var RemoveNewlines bool = false
 // Dehyphanate removes newlines and hyphens at the end of lines and
 // writes all remaining text back to out. Hyphens are preserved if appropriate.
 func Dehyphenate(in io.Reader, out bufio.Writer) error {
-	lastLineEndedWithHyphen := false
+	// this is the default, when the trailing char in last line has not been a hyphen
+	lastLinesTrailingHyphen := '\x00'
 	s := bufio.NewScanner(in)
 	defer out.Flush()
+
 	for s.Scan() {
-		currentLine := strings.ReplaceAll(s.Text(), "\uFFFE", "")
-		trimmed := []rune(strings.TrimSpace(currentLine))
-		if len(trimmed) == 0 || isHyphen(trimmed[0]) {
+		currentLine := strings.TrimSpace(s.Text())
+		if len(currentLine) == 0 || isHyphen(rune(currentLine[0])) {
 			// Skip empty and hyphen-only lines
-			if !RemoveNewlines {
-				out.WriteRune('\n')
-			}
+			// if !RemoveNewlines {
+			// 	out.WriteRune('\n')
+			// }
 			continue
-		} else {
-			// We trim all leading and trailing whitespace
-			currentLine = string(trimmed)
 		}
-		if lastLineEndedWithHyphen && unicode.IsUpper([]rune(currentLine)[0]) {
+		if (lastLinesTrailingHyphen != '\x00') && unicode.IsUpper([]rune(currentLine)[0]) {
 			// The last line ended with a hyphen that we removed.
 			// The current line starts with an uppercase letter.
 			// Now we have to put it back first.
-			out.WriteString("-")
+			out.WriteRune(lastLinesTrailingHyphen)
 		}
 		// reset last line status
-		lastLineEndedWithHyphen = false
+		lastLinesTrailingHyphen = '\x00'
 		if !endsWithHyphen(currentLine) {
-			_, err := out.WriteString(currentLine)
-			if err != nil {
+			if _, err := out.WriteString(currentLine); err != nil {
 				return err
 			}
 			if !RemoveNewlines {
@@ -60,10 +57,9 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 		} else {
 			// possible dehyphenation candidate
 			if currentRunes := []rune(currentLine); unicode.IsUpper(currentRunes[len(currentRunes)-2]) {
-				// Line ends with uppercase rune before hyphen.
+				// But line ends with uppercase rune before hyphen.
 				// So keep it as it is.
-				_, err := out.WriteString(currentLine)
-				if err != nil {
+				if _, err := out.WriteString(currentLine); err != nil {
 					return err
 				}
 			} else {
@@ -71,9 +67,8 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 				// but maybe in next line
 				// remove the hyphen and memoize that
 				// so we can reattach it in the next iteration if necessary
-				lastLineEndedWithHyphen = true
-				_, err := out.WriteString(string(currentRunes[0 : len(currentRunes)-1]))
-				if err != nil {
+				lastLinesTrailingHyphen = currentRunes[len(currentRunes)-1]
+				if _, err := out.WriteString(string(currentRunes[0 : len(currentRunes)-1])); err != nil {
 					return err
 				}
 			}

@@ -17,6 +17,8 @@ var (
 	TessBaseAPICreate func() uintptr
 	TessBaseAPIDelete func(handle uintptr)
 	TessBaseAPIInit3  func(baseApiHandle uintptr, datapath unsafe.Pointer, lang *byte) int
+	// This returns a vector, essentially a slice. purego can't deal with that
+	// TessBaseAPIGetAvailableLanguagesAsVector func(baseApiHandle uintptr) *uintptr
 	/*
 		Close down tesseract and free up all memory. End() is equivalent to destructing and reconstructing
 		your TessBaseAPI. Once End() has been used, none of the other API functions may be used other than Init.

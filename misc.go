@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -18,16 +17,19 @@ import (
 )
 
 type ImageDoc struct {
-	data     []byte
+	data     *[]byte
 	mimetype string
 }
 
 func NewDocFromImage(data []byte, mimetype string) *ImageDoc {
-	return &ImageDoc{data: data, mimetype: mimetype}
+	return &ImageDoc{data: &data, mimetype: mimetype}
+}
+func (d *ImageDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
+	d.StreamText(w)
 }
 
 func (d *ImageDoc) StreamText(w io.Writer) {
-	tesswrap.ImageReaderToTextWriter(bytes.NewReader(d.data), w)
+	tesswrap.ImageReaderToTextWriter(bytes.NewReader(*d.data), w)
 }
 
 func (d *ImageDoc) Close() {
@@ -54,7 +56,8 @@ func (d *ImageDoc) MetadataMap() map[string]string {
 // Otherwise it looks for images on page pageNum and sends them to tesseract.
 // The result is then being written to w.
 func WriteTextOrRunOcrOnPage(pageText string, pageNum int, w io.Writer, pdfData *[]byte) {
-	if len(pageText) > 0 {
+	if len(strings.TrimSpace(pageText)) > 0 {
+		// if len(pageText) > 0 {
 		w.Write([]byte(pageText))
 	} else if tesswrap.Initialized {
 		logger.Info("No Text found. Looking for images for OCR", "page", pageNum)
@@ -120,9 +123,11 @@ func PrintMetadataAndTextToStdout(url string) {
 	}
 	meta, _ := json.Marshal(doc.MetadataMap())
 	os.Stdout.Write(meta)
-	fmt.Println()
-	doc.StreamText(os.Stdout)
-	fmt.Println()
+	os.Stdout.WriteString("\n")
+	done, w := RunDehyphenator(os.Stdout)
+	doc.ProcessPages(w, WriteTextOrRunOcrOnPage)
+	w.Close()
+	<- done
 }
 
 // LogAndFixConfigIssues logs warnings regarding configuration and fixes any issues of this kind
@@ -134,14 +139,16 @@ func LogAndFixConfigIssues() {
 		logger.Info("GOMEMLIMIT", "Bytes", debug.SetMemoryLimit(-1), "MBytes", debug.SetMemoryLimit(-1)/1024/1024)
 	}
 
-	if tessOk, whyNot := tesswrap.IsTesseractConfigOk(); !tessOk {
-		logger.Warn("Language config is invalid. Tesseract will be disabled.", "reason", whyNot)
-		tesswrap.Initialized = false
+	if tesswrap.Initialized {
+		if tessOk, whyNot := tesswrap.IsTesseractConfigOk(); !tessOk {
+			logger.Warn("Language config is invalid. Tesseract will be disabled.", "reason", whyNot)
+			tesswrap.Initialized = false
+		}
 	}
 
 	if !docparser.Initialized {
 		logger.Warn("wvWare is not available in PATH. We will not be able to extract legacy MS Word documents.")
 	}
 
-	logger.Info("PDF implementation", "lib", pdfImplementation)
+	logger.Info("PDF implementation", "lib", pdfImpl.Lib)
 }

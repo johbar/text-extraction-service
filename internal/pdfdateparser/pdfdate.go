@@ -18,14 +18,15 @@ func PdfDateToTime(pdfdate string) (time.Time, error) {
 	return result, err
 }
 
-// PdfDateToIso returns the PDF date/time as RFC3339 String
-func PdfDateToIso(pdfdate string) (string, error) {
+// PdfDateToIso returns the PDF date/time as RFC3339 string.
+// Returns an empty string in case error is not nil.
+func PdfDateToIso(pdfdate string) string {
 	if pdfdate == "" {
-		return "", nil
+		return ""
 	}
 	t, err := PdfDateToTime(pdfdate)
 	if err != nil {
-		return "", err
+		return ""
 	}
-	return t.Format(time.RFC3339), nil
+	return t.Format(time.RFC3339)
 }

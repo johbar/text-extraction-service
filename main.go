@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"runtime/debug"
 
 	"github.com/gin-contrib/expvar"
 	"github.com/gin-gonic/gin"
@@ -13,10 +14,9 @@ import (
 )
 
 var (
-	cache                Cache
-	cacheNop             bool
-	closeDocChan         chan Document
-	pdfImplementation    string // Which lib is being used for PDFs?
+	cache        Cache
+	cacheNop     bool
+	closeDocChan chan Document
 	logger               *slog.Logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
 	saveExtractedDocChan chan *ExtractedDocument
 	srv                  http.Server
@@ -29,10 +29,13 @@ func main() {
 	// set static/global config of submodules
 	tesswrap.Languages = tesConfig.TesseractLangs
 	dehyphenator.RemoveNewlines = tesConfig.RemoveNewlines
-
+	if err := LoadLib(tesConfig.PdfLibName, tesConfig.PdfLibPath); err != nil {
+		panic(err)
+	}
 	// one shot mode: don't start a server, just process a single file provided on the command line
 	if len(os.Args) > 1 {
-		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
+		debug.SetGCPercent(-1)
+		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 		LogAndFixConfigIssues()
 		PrintMetadataAndTextToStdout(os.Args[1])
 		return

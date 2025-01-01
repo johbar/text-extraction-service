@@ -1,0 +1,68 @@
+ARG BUILD_IMG=docker.io/golang:bookworm
+ARG RUNTIME_IMG=docker.io/ubuntu:jammy
+
+FROM $BUILD_IMG AS builder
+ARG MUPDF_VERSION=1.25.2
+ARG DEBIAN_FRONTEND=noninteractive
+ARG BUILD_TAGS=""
+
+WORKDIR /usr/src/app
+
+ENV HOME=/tmp GOPATH=/tmp GIN_MODE=release 
+
+# pre-copy/cache go.mod for pre-downloading dependencies and only redownloading them in subsequent builds if they change
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+
+COPY . .
+
+RUN go build -ldflags="-s -w" -tags "nomsgpack $BUILD_TAGS" -v -o /go/text-extraction-service
+
+## Build MuPDF - stripped down shared lib
+
+# Use system libs instead of vendored third-party code from MuPDF
+RUN apt-get update && \
+    apt-get --no-install-recommends --no-install-suggests -y install ca-certificates curl pkg-config libz-dev libfreetype-dev libjbig2dec0-dev  libjpeg62-turbo-dev && \
+    rm -rf /var/lib/apt
+
+WORKDIR /opt
+
+RUN echo Building MuPDF v${MUPDF_VERSION}; curl -sSf --location https://mupdf.com/downloads/archive/mupdf-${MUPDF_VERSION}-source.tar.gz | \
+    tar --strip-components 1 -xz
+
+# monkey patch unused functionality and dependencies away
+RUN rm -rf  source/fitz/jmemcust.c \
+    source/fitz/harfbuzz.c source/fitz/encode-jpx.c \
+    source/html source/svg/ source/cbz source/xps/ source/tools/ \
+    source/pdf/pdf-image-rewriter.c source/pdf/pdf-clean-file.c && \
+    sed -i -e '/SYS_OPENJPEG_LIBS := -lopenjp2/d' -e '/SYS_HARFBUZZ_LIBS := -lharfbuzz/d' Makerules
+
+RUN make -j4 HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no HAVE_TESSERACT=no USE_SYSTEM_LIBS=yes shared=yes build=release \
+    XCFLAGS='-DTOFU -DTOFU_CJK -DTOFU_SIL -DFZ_ENABLE_OCR_OUTPUT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_ODT_OUTPUT=0 -DFZ_ENABLE_XPS=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_CBZ=0 -DFZ_ENABLE_IMG=0 -DFZ_ENABLE_EPUB=0 -DFZ_ENABLE_ICC=0 -DFZ_ENABLE_JPX=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_HTML=0 -DFZ_ENABLE_HTML_ENGINE=0 -DFZ_ENABLE_OFFICE=0 -DFZ_ENABLE_FB2=0 -DFZ_ENABLE_MOBI=0 -DFZ_ENABLE_TXT=0 -DFZ_PLOTTERS_G=0 -DFZ_PLOTTERS_RGB=0 -DFZ_PLOTTERS_N=0 -DFZ_PLOTTERS_CMYK=0' \
+    libs
+
+
+## Runtime Image ##
+FROM $RUNTIME_IMG
+ARG MUPDF_VERSION=1.25.2
+ARG DEBIAN_FRONTEND=noninteractive
+
+COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
+COPY --from=builder /opt/build/shared-release/libmupdf.so /usr/local/lib
+
+RUN apt-get update && \
+apt-get --no-install-recommends --no-install-suggests -y install ca-certificates libfreetype6 libjbig2dec0 libjpeg62 wv curl && \
+rm -rf /var/lib/apt
+
+USER nobody
+
+WORKDIR /tmp
+
+ENV GIN_MODE=release HOME=/tmp TES_PDF_LIB_NAME=mupdf MUPDF_VERSION=${MUPDF_VERSION}
+
+# Expose the service and Nats (optional)
+EXPOSE 4222 8080
+
+VOLUME /tmp/nats
+
+CMD ["text-extraction-service"]
