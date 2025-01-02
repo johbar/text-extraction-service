@@ -236,7 +236,7 @@ Configuration happens through environment variables only.
 |---------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `TES_BUCKET`                          | Name of the object store bucket in NATS to use for caching. It is being created when it doesn't exist. Default: `TES_PLAINTEXTS`                                                               |
 | `TES_REPLICAS`                        | Replication factor for object store bucket in external NATS cluster                                                                                                                            |
-| `TES_EXPOSE_NATS`                     | Wether to allow connections to the embedded NATS server (bool)                                                                                                                                 |
+| `TES_EXPOSE_NATS`                     | Wether to allow connections to the embedded NATS server (bool). Default: `false`                                                                                                               |
 | `TES_NATS_HOST`                       | Listen host/IP of embedded NATS server when `TES_EXPOSE_NATS`is `true`. Default: `localhost`                                                                                                   |
 | `TES_NATS_PORT`                       | Listen Port (TCP) of embedded NATS server when `TES_EXPOSE_NATS`is `true`. Default: `4222`                                                                                                     |
 | `TES_NATS_STORE_DIR`                  | Storage path for the embedded NATS server. Default: `/tmp/nats`                                                                                                                                |
@@ -344,3 +344,36 @@ There are a few request options you can add as query params (behind `?`/`&` in t
 |------------------|------------------------------------------------------------------|
 | `noCache=true`   | Force extracting the files content, bypassing the cache          |
 | `silent=true`    | Only update the cache and send the metadata, but not the content |
+
+## NATS Microservice interface (experimental)
+
+If you are a friend of NATS.io you can interact with TES via NATS request/reply.
+At the moment there are two endpoints/subjects available TES instances connected to NATS (embedded or external) subscribe to:
+
+- `update-cache` with an URL as payload. TES will validate or update the cache entry for the specified URL and reply with a simple `done`
+- `extract-remote` with a simple JSON Payload representing the query parameters of an equivalent HTTP request.
+
+This feature is considered experimental insofar it lacks customizability and might be subject to change.
+
+Examples using the NATS CLI:
+
+```shell
+# Start TES with TES_EXPOSE_NATS=true, embedded NATS will listen on standard port...
+$ TES_EXPOSE_NATS=true ./text-extraction-service
+$ nats request extract-remote '{"url": "https://assets.avm.de/files/docs/fritzbox/FRITZ!Box%207690/FRITZ!Box%207690_qig_de_DE.pdf", "noCache": true}'
+23:48:23 Sending request on "extract-remote"
+23:48:24 Received with rtt 1.495585644s
+23:48:24 X-Doctype: pdf
+23:48:24 X-Document-Creator: Adobe InDesign 19.3 (Windows)
+23:48:24 X-Document-Modified: 2024-04-11T15:06:45+02:00
+23:48:24 X-Document-Producer: Adobe PDF Library 17.0
+23:48:24 X-Parsed-By: PDFium
+23:48:24 Etag: "60c3ea-61b15cff07c5e"
+23:48:24 Http-Content-Length: 6341610
+23:48:24 X-Document-Pages: 14
+23:48:24 X-Document-Version: PDF-1.7
+23:48:24 Http-Last-Modified: Mon, 17 Jun 2024 13:19:17 GMT
+23:48:24 X-Document-Created: 2024-04-11T15:06:17+02:00
+
+Kurzanleitung Lieferumfang Abbildung Anzahl und Bezeichnung FON 1 Info...
+```
