@@ -80,7 +80,12 @@ func RunDehyphenator(w io.Writer) (done chan bool, pw *io.PipeWriter) {
 	finished := make(chan bool)
 	pr, pw := io.Pipe()
 	go func() {
-		dehyphenator.DehyphenateReaderToWriter(pr, w)
+		err := dehyphenator.DehyphenateReaderToWriter(pr, w)
+		if err != nil {
+			// If the dehyphenator failed, we proceed in streaming the content
+			logger.Warn("dehyphenator failed", "err", err)
+			io.Copy(w, pr)
+		}
 		pr.Close()
 		finished <- true
 		close(finished)
@@ -124,6 +129,7 @@ func PrintMetadataAndTextToStdout(url string) {
 	meta, _ := json.Marshal(doc.MetadataMap())
 	os.Stdout.Write(meta)
 	os.Stdout.WriteString("\n")
+	// w := os.Stdout
 	done, w := RunDehyphenator(os.Stdout)
 	doc.ProcessPages(w, WriteTextOrRunOcrOnPage)
 	w.Close()

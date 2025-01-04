@@ -134,9 +134,13 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	// so parse and extract it
 	logger.Debug("Start parsing", "url", url, "content-length", response.ContentLength)
 	var doc Document
+	skipDehyphenator := false
 	if tesConfig.ForkThreshold > -1 && response.ContentLength > tesConfig.ForkThreshold {
 		// file size above threshold - fork a subprocess
 		doc, err = NewDocFromForkedProcess(response.Body)
+		// the forked TES process does dehyphenation already
+		// and the dehyphenator failes with input not containing newlines
+		skipDehyphenator = true
 	} else {
 		doc, err = NewDocFromStream(response.Body)
 	}
@@ -163,10 +167,14 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	} else {
 		mWriter = io.MultiWriter(w, &text)
 	}
-	done, pw := RunDehyphenator(mWriter)
-	doc.ProcessPages(pw, WriteTextOrRunOcrOnPage)
-	pw.Close()
-	<-done
+	if skipDehyphenator {
+		doc.ProcessPages(mWriter, WriteTextOrRunOcrOnPage)
+	} else {
+		done, pw := RunDehyphenator(mWriter)
+		doc.ProcessPages(pw, WriteTextOrRunOcrOnPage)
+		pw.Close()
+		<-done
+	}
 	if !silent {
 		logger.Debug("Streaming response done", "url", url)
 	}
@@ -219,6 +227,7 @@ type ForkedDoc struct {
 	cmd        *exec.Cmd
 	metadata   map[string]string
 	textStream io.ReadCloser
+	cancel     context.CancelFunc
 }
 
 // NewDocFromForkedProcess creates a Document whose content and metadata is being extracted by a forked subprocess
@@ -228,7 +237,7 @@ func NewDocFromForkedProcess(r io.Reader) (Document, error) {
 		logger.Error("Could not find out who I am", "err", err)
 		return nil, err
 	}
-	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(2*time.Minute))
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Minute))
 	cmd := exec.CommandContext(ctx, me, "-")
 	cmd.Stdin = r
 	cmd.Stderr = os.Stderr
@@ -238,7 +247,7 @@ func NewDocFromForkedProcess(r io.Reader) (Document, error) {
 	cmd.WaitDelay = time.Minute
 	cmd.Start()
 	logger.Debug("Subprocess started", "pid", cmd.Process.Pid)
-	doc := &ForkedDoc{cmd: cmd, textStream: stdout}
+	doc := &ForkedDoc{cmd: cmd, textStream: stdout, cancel: cancel}
 	// Read one line to get the metadata
 	if scanner.Scan() {
 		metadataJson := scanner.Text()
@@ -246,14 +255,18 @@ func NewDocFromForkedProcess(r io.Reader) (Document, error) {
 		json.Unmarshal([]byte(metadataJson), &metadata)
 		doc.metadata = metadata
 	}
-	logger.Info("Finished reading metadata from subprocess")
+	logger.Debug("Finished reading metadata from subprocess")
 	return doc, err
 }
 
 // StreamText may only be invoked once!
 func (d *ForkedDoc) StreamText(w io.Writer) {
 	written, err := io.Copy(w, d.textStream)
-	logger.Info("Read from subprocess", "bytes", written, "err", err)
+	if err != nil {
+		logger.Error("Reading from subprocess after", "bytes", written, "err", err)
+		return
+	}
+	logger.Debug("Finished reading from subprocess", "bytes", written)
 	err = d.cmd.Wait()
 	if err != nil {
 		logger.Error("Error waiting for subprocess to finish", "err", err)
@@ -272,5 +285,6 @@ func (d *ForkedDoc) MetadataMap() map[string]string {
 func (d *ForkedDoc) Close() {
 	// the subprocesses stdout should already be closed...
 	d.textStream.Close()
+	d.cancel()
 	d.cmd.Cancel()
 }

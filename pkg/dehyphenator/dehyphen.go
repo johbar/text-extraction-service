@@ -29,12 +29,13 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 	defer out.Flush()
 
 	for s.Scan() {
+		//
 		currentLine := strings.TrimSpace(s.Text())
-		if len(currentLine) == 0 || isHyphen(rune(currentLine[0])) {
+		currentRunes := []rune(currentLine)
+		currentRuneCount := len(currentRunes)
+		if currentRuneCount == 0 || currentRuneCount == 1 && isHyphen(currentRunes[0]) {
 			// Skip empty and hyphen-only lines
-			// if !RemoveNewlines {
-			// 	out.WriteRune('\n')
-			// }
+
 			continue
 		}
 		if (lastLinesTrailingHyphen != '\x00') && unicode.IsUpper([]rune(currentLine)[0]) {
@@ -45,7 +46,7 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 		}
 		// reset last line status
 		lastLinesTrailingHyphen = '\x00'
-		if !endsWithHyphen(currentLine) {
+		if !endsWithHyphen(currentRunes) {
 			if _, err := out.WriteString(currentLine); err != nil {
 				return err
 			}
@@ -56,7 +57,7 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 			}
 		} else {
 			// possible dehyphenation candidate
-			if currentRunes := []rune(currentLine); unicode.IsUpper(currentRunes[len(currentRunes)-2]) {
+			if unicode.IsUpper(currentRunes[currentRuneCount-2]) {
 				// But line ends with uppercase rune before hyphen.
 				// So keep it as it is.
 				if _, err := out.WriteString(currentLine); err != nil {
@@ -67,19 +68,18 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 				// but maybe in next line
 				// remove the hyphen and memoize that
 				// so we can reattach it in the next iteration if necessary
-				lastLinesTrailingHyphen = currentRunes[len(currentRunes)-1]
-				if _, err := out.WriteString(string(currentRunes[0 : len(currentRunes)-1])); err != nil {
+				lastLinesTrailingHyphen = currentRunes[currentRuneCount-1]
+				if _, err := out.WriteString(string(currentRunes[0 : currentRuneCount-1])); err != nil {
 					return err
 				}
 			}
 		}
 		out.Flush()
 	}
-	return nil
+	return s.Err()
 }
 
-func endsWithHyphen(line string) bool {
-	r := []rune(line)
+func endsWithHyphen(r []rune) bool {
 	if len(r) < 1 {
 		return false
 	}
@@ -93,9 +93,9 @@ func isHyphen(char rune) bool {
 
 // DehyphenateReaderToWriter reads text from in and writes it back to out,
 // removing all newlines and hyphens at the end of each line when appropriate.
-func DehyphenateReaderToWriter(in io.Reader, out io.Writer) {
+func DehyphenateReaderToWriter(in io.Reader, out io.Writer) error {
 	w := bufio.NewWriter(out)
-	Dehyphenate(in, *w)
+	return Dehyphenate(in, *w)
 }
 
 func DehyphenateString(in string) (string, error) {

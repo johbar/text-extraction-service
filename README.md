@@ -358,8 +358,9 @@ This feature is considered experimental insofar it lacks customizability and mig
 Examples using the NATS CLI:
 
 ```shell
-# Start TES with TES_EXPOSE_NATS=true, embedded NATS will listen on standard port...
-$ TES_EXPOSE_NATS=true ./text-extraction-service
+# Start TES with TES_EXPOSE_NATS=true, embedded NATS will listen on standard port:
+$ TES_EXPOSE_NATS=true ./text-extraction-service &
+# Call NATS CLI:
 $ nats request extract-remote '{"url": "https://assets.avm.de/files/docs/fritzbox/FRITZ!Box%207690/FRITZ!Box%207690_qig_de_DE.pdf", "noCache": true}'
 23:48:23 Sending request on "extract-remote"
 23:48:24 Received with rtt 1.495585644s

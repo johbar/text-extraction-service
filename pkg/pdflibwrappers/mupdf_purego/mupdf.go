@@ -12,8 +12,8 @@ import (
 
 	"github.com/ebitengine/purego"
 	"github.com/johbar/text-extraction-service/v2/internal/pdfdateparser"
+	"github.com/johbar/text-extraction-service/v2/internal/unix"
 	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers"
-	"golang.org/x/sys/unix"
 )
 
 // Document represents fitz document.
