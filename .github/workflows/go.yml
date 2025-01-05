@@ -10,7 +10,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build-linux:
+  build-on-ubuntu:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,11 +23,12 @@ jobs:
       - name: Install dependencies
         run: | 
           sudo apt-get update -qq
-          sudo apt-get install -q -y ca-certificates wv curl poppler-glib
+          sudo apt-get install -q -y ca-certificates wv curl libpoppler-glib8
       - name: Install libpdfium
         run: curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz | sudo tar -xz -C /usr lib/libpdfium.so
       - name: Run basic test
         env:
+          TES_PDF_LIB_NAME: poppler
           TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
       - name: Run basic test
@@ -46,9 +47,8 @@ jobs:
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
       - name: Build service
         run: go build -tags nomsgpack,embed_pdfium
-      - name: Run basic test
+      - name: Run basic test - embedded pdfium
         env:
-          TES_PDF_LIB_NAME: poppler
           TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-embedded-on-darwin:
@@ -68,12 +68,12 @@ jobs:
           TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
       - name: Install Poppler and MuPDF
-        run: brew install poppler; brew info poppler
+        run: brew install poppler; brew info poppler; ls -lah /usr/lib/ || true; ls -lah /opt/homebrew/lib/ || true
       - name: Run with Poppler
         env:
           TES_REMOVE_NEWLINES: '0'
           TES_PDF_LIB_NAME: poppler
-          # TES_PDF_LIB_PATH: /
+          TES_PDF_LIB_PATH: /opt/homebrew/libpoppler.dylib
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-embedded-on-alpine:
       runs-on: "ubuntu-latest"
