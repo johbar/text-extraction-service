@@ -30,7 +30,7 @@ jobs:
         env:
           TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-  build-linux-embedded:
+  build-embedded-on-ubuntu:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +46,7 @@ jobs:
         env:
           TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-  build-on-darwin:
+  build-embedded-on-darwin:
     runs-on: "macos-latest"
     steps:
       - uses: actions/checkout@v4
@@ -62,8 +62,10 @@ jobs:
         env:
           TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-  build-on-alpine:
+  build-embedded-on-alpine:
       runs-on: "alpine-latest"
+      container: 
+        image: alpine:latest
       steps:
         - uses: actions/checkout@v4
         - name: Set up Go
