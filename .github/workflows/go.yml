@@ -29,7 +29,7 @@ jobs:
       - name: Run basic test
         env:
           TES_REMOVE_NEWLINES: '0'
-        run: time text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+        run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-linux-embedded:
     runs-on: ubuntu-latest
     steps:
@@ -45,7 +45,7 @@ jobs:
       - name: Run basic test
         env:
           TES_REMOVE_NEWLINES: '0'
-        run: time text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+        run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-on-darwin:
     runs-on: "macos-latest"
     steps:
@@ -61,7 +61,7 @@ jobs:
       - name: Run basic test
         env:
           TES_REMOVE_NEWLINES: '0'
-        run: time text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+        run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-on-alpine:
       runs-on: "alpine-latest"
       steps:
@@ -77,4 +77,4 @@ jobs:
         - name: Run basic test
           env:
             TES_REMOVE_NEWLINES: '0'
-          run: time text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+          run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
