@@ -22,10 +22,10 @@ jobs:
         run: go build -tags nomsgpack
       - name: Install dependencies
         run: | 
-          apt-get update -qq
-          apt-get install -q -y ca-certificates wv curl
+          sudo apt-get update -qq
+          sudo apt-get install -q -y ca-certificates wv curl
       - name: Install libpdfium
-        run: curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz | tar -xz -C /usr lib/libpdfium.so
+        run: curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz | sudo tar -xz -C /usr lib/libpdfium.so
       - name: Run basic test
         env:
           TES_REMOVE_NEWLINES: '0'
@@ -41,7 +41,7 @@ jobs:
       - name: Download libpdfium
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
       - name: Build service
-        run: go build -tags nomsgpack,pdfium_embed
+        run: go build -tags nomsgpack,embed_pdfium
       - name: Run basic test
         env:
           TES_REMOVE_NEWLINES: '0'
@@ -57,7 +57,7 @@ jobs:
       - name: Download libpdfium
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
       - name: Build service
-        run: go build -tags nomsgpack,pdfium_embed
+        run: go build -tags nomsgpack,embed_pdfium
       - name: Run basic test
         env:
           TES_REMOVE_NEWLINES: '0'
@@ -73,7 +73,7 @@ jobs:
         - name: Download libpdfium
           run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
         - name: Build service
-          run: go build -tags nomsgpack,pdfium_embed
+          run: go build -tags nomsgpack,embed_pdfium
         - name: Run basic test
           env:
             TES_REMOVE_NEWLINES: '0'
