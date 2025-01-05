@@ -23,9 +23,13 @@ jobs:
       - name: Install dependencies
         run: | 
           sudo apt-get update -qq
-          sudo apt-get install -q -y ca-certificates wv curl
+          sudo apt-get install -q -y ca-certificates wv curl poppler-glib
       - name: Install libpdfium
         run: curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz | sudo tar -xz -C /usr lib/libpdfium.so
+      - name: Run basic test
+        env:
+          TES_REMOVE_NEWLINES: '0'
+        run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
       - name: Run basic test
         env:
           TES_REMOVE_NEWLINES: '0'
@@ -44,6 +48,7 @@ jobs:
         run: go build -tags nomsgpack,embed_pdfium
       - name: Run basic test
         env:
+          TES_PDF_LIB_NAME: poppler
           TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-embedded-on-darwin:
@@ -63,7 +68,7 @@ jobs:
           TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
       - name: Install Poppler and MuPDF
-        run: brew install poppler-glib
+        run: brew install poppler
       - name: Run with Poppler
         env:
           TES_REMOVE_NEWLINES: '0'
@@ -82,19 +87,20 @@ jobs:
           run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
         - name: Build service
           run: go build -tags nomsgpack,embed_pdfium
-        - name: Run basic test
+        - name: Run basic test - PDFium
           env:
             TES_REMOVE_NEWLINES: '0'
           run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
         - name: Install MuPDF and Poppler
           run: apk update && apk add --no-cache mupdf-libs poppler-glib wv icu-libs && ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so
-        - name: Test with Poppler
+        - name: Run basic test - Poppler
           env:
             TES_REMOVE_NEWLINES: '0'
             TES_PDF_LIB_NAME: poppler
           run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-        - name: Test with MuPDF
+        - name: Run basic test - MuPDF
           env:
             TES_REMOVE_NEWLINES: '0'
             TES_PDF_LIB_NAME: mupdf
+            MUPDF_VERSION: "1.24.10"
           run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
