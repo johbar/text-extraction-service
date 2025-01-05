@@ -13,42 +13,68 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: 'go.mod'
-    - name: Build service
-      run: go build -tags nomsgpack
-    - name: Install dependencies
-      run: | 
-        apt-get update -qq
-        apt-get install -q -y ca-certificates wv curl
-    - name: Install libpdfium
-      run: curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz | tar -xz -C /usr lib/libpdfium.so
-    - name: Run basic test
-      env:
-        TES_REMOVE_NEWLINES: '0'
-      run: time text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Build service
+        run: go build -tags nomsgpack
+      - name: Install dependencies
+        run: | 
+          apt-get update -qq
+          apt-get install -q -y ca-certificates wv curl
+      - name: Install libpdfium
+        run: curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz | tar -xz -C /usr lib/libpdfium.so
+      - name: Run basic test
+        env:
+          TES_REMOVE_NEWLINES: '0'
+        run: time text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-linux-embedded:
     runs-on: ubuntu-latest
-    steps: &steps
-    - uses: actions/checkout@v4
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: 'go.mod'
-    - name: Download libpdfium
-      run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
-    - name: Build service
-      run: go build -tags nomsgpack,pdfium_embed
-    - name: Run basic test
-      env:
-        TES_REMOVE_NEWLINES: '0'
-      run: time text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Download libpdfium
+        run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+      - name: Build service
+        run: go build -tags nomsgpack,pdfium_embed
+      - name: Run basic test
+        env:
+          TES_REMOVE_NEWLINES: '0'
+        run: time text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-on-darwin:
     runs-on: "macos-latest"
-    steps: *steps
-  build-on-darwin:
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Download libpdfium
+        run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+      - name: Build service
+        run: go build -tags nomsgpack,pdfium_embed
+      - name: Run basic test
+        env:
+          TES_REMOVE_NEWLINES: '0'
+        run: time text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+  build-on-alpine:
       runs-on: "alpine-latest"
-      steps: *steps
+      steps:
+        - uses: actions/checkout@v4
+        - name: Set up Go
+          uses: actions/setup-go@v5
+          with:
+            go-version-file: 'go.mod'
+        - name: Download libpdfium
+          run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+        - name: Build service
+          run: go build -tags nomsgpack,pdfium_embed
+        - name: Run basic test
+          env:
+            TES_REMOVE_NEWLINES: '0'
+          run: time text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
