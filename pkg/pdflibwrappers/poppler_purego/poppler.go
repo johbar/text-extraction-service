@@ -64,7 +64,7 @@ var (
 	poppler_document_get_modification_date func(uintptr) int64
 
 	poppler_page_get_text func(uintptr) *byte
-	defaultLibNames       = []string{"libpoppler-glib.so", "libpoppler-glib.so.8", "libpoppler-glib.dylib"}
+	defaultLibNames       = []string{"libpoppler-glib.so", "libpoppler-glib.so.8", "libpoppler-glib.8.dylib", "libpoppler-glib.dylib"}
 )
 
 func InitLib(path string) (string, error) {

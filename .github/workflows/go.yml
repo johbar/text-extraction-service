@@ -68,12 +68,11 @@ jobs:
           TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
       - name: Install Poppler and MuPDF
-        run: brew install poppler; brew info poppler; ls -lah /usr/lib/ || true; ls -lah /opt/homebrew/lib/ || true
+        run: brew install poppler
       - name: Run with Poppler
         env:
           TES_REMOVE_NEWLINES: '0'
           TES_PDF_LIB_NAME: poppler
-          TES_PDF_LIB_PATH: /opt/homebrew/libpoppler.dylib
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-embedded-on-alpine:
       runs-on: "ubuntu-latest"
