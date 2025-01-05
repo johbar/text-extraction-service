@@ -156,5 +156,8 @@ func LogAndFixConfigIssues() {
 		logger.Warn("wvWare is not available in PATH. We will not be able to extract legacy MS Word documents.")
 	}
 
-	logger.Info("PDF implementation", "lib", pdfImpl.Lib)
+	logger.Info("PDF implementation", "lib", pdfImpl)
+	// This ensures, that forked instances of TES will the same lib
+	os.Setenv("TES_PDF_LIB_NAME", pdfImpl.libShort)
+	os.Setenv("TES_PDF_LIB_PATH", pdfImpl.LibPath)
 }

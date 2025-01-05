@@ -67,17 +67,17 @@ var (
 	defaultLibNames       = []string{"libpoppler-glib.so", "libpoppler-glib.so.8", "libpoppler-glib.dylib"}
 )
 
-func InitLib(path string) error {
+func InitLib(path string) (string, error) {
 	var lib uintptr
 	var err error
 	if len(path) > 0 {
-		lib, err = pdflibwrappers.TryLoadLib(path)
+		lib, path, err = pdflibwrappers.TryLoadLib(path)
 	} else {
-		lib, err = pdflibwrappers.TryLoadLib(defaultLibNames...)
+		lib, path, err = pdflibwrappers.TryLoadLib(defaultLibNames...)
 	}
 
 	if err != nil {
-		return err
+		return "", err
 	}
 	purego.RegisterLibFunc(&free, lib, "free")
 	purego.RegisterLibFunc(&g_bytes_new, lib, "g_bytes_new")
@@ -100,7 +100,7 @@ func InitLib(path string) error {
 	purego.RegisterLibFunc(&poppler_document_get_creation_date, lib, "poppler_document_get_creation_date")
 	purego.RegisterLibFunc(&poppler_document_get_modification_date, lib, "poppler_document_get_modification_date")
 
-	return nil
+	return path, nil
 }
 
 // Version returns the version of the Poppler shared library

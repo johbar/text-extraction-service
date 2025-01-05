@@ -61,17 +61,17 @@ type Document struct {
 	pages  int
 }
 
-func InitLib(path string) error {
+func InitLib(path string) (string, error) {
 	var lib uintptr
 	var err error
 	if len(path) > 0 {
-		lib, err = pdflibwrappers.TryLoadLib(path)
+		lib, path, err = pdflibwrappers.TryLoadLib(path)
 	} else {
-		lib, err = pdflibwrappers.TryLoadLib(defaultLibNames...)
+		lib, path, err = pdflibwrappers.TryLoadLib(defaultLibNames...)
 	}
 
 	if err != nil {
-		return err
+		return "", err
 	}
 	purego.RegisterLibFunc(&FPDF_InitLibrary, lib, "FPDF_InitLibrary")
 	purego.RegisterLibFunc(&FPDF_DestroyLibrary, lib, "FPDF_DestroyLibrary")
@@ -89,7 +89,7 @@ func InitLib(path string) error {
 	purego.RegisterLibFunc(&FPDF_GetMetaText, lib, "FPDF_GetMetaText")
 
 	FPDF_InitLibrary()
-	return nil
+	return path, nil
 }
 
 func Load(data []byte) (*Document, error) {

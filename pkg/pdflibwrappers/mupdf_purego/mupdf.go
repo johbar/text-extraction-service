@@ -67,17 +67,17 @@ var (
 	defaultLibNames = []string{"libmupdf.so", "libmupdf.dylib", "/usr/local/lib/libmupdf.so"}
 )
 
-func InitLib(path string) error {
+func InitLib(path string) (string, error) {
 	var libmupdf uintptr
 	var err error
 	if len(path) > 0 {
-		libmupdf, err = pdflibwrappers.TryLoadLib(path)
+		libmupdf, path, err = pdflibwrappers.TryLoadLib(path)
 	} else {
-		libmupdf, err = pdflibwrappers.TryLoadLib(defaultLibNames...)
+		libmupdf, path, err = pdflibwrappers.TryLoadLib(defaultLibNames...)
 	}
 
 	if err != nil {
-		return err
+		return "", err
 	}
 	purego.RegisterLibFunc(&fz_new_context_imp, libmupdf, "fz_new_context_imp")
 	purego.RegisterLibFunc(&fz_drop_context, libmupdf, "fz_drop_context")
@@ -98,9 +98,9 @@ func InitLib(path string) error {
 	if ver := version(); ver != "" {
 		MuPdfVersion = ver
 	} else {
-		return errors.New("cannot determine MuPDF version needed to create fz_context")
+		return "", errors.New("cannot determine MuPDF version needed to create fz_context")
 	}
-	return nil
+	return path, nil
 }
 
 // Load returns new fitz document from byte slice.

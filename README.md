@@ -15,9 +15,9 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 ## Features
 
 - Support for PDFs, RTFs and legacy MS Word (.doc) files
-- Three pluggable C/C++ PDF engine implementations
+- Support for three runtime-pluggable C/C++ PDF engines
     - Google Chromium's [PDFium](https://pdfium.googlesource.com/pdfium/)
-    - Free Desktops [Poppler lib](https://poppler.freedesktop.org/)
+    - Free Desktops [Poppler](https://poppler.freedesktop.org/)
     - Artifex' [MuPDF](https://mupdf.com/)
 - Optional Dehyphenation of extracted text, specifically for German
 - Extraction of document metadata (title, author, creation date etc)
@@ -35,11 +35,20 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 
 ## License
 
-This service inherits the Open Source license of the PDF lib used to built it:
+This service inherits the Open Source license of the PDF lib used at runtime:
 
 - PDFium: [Apache-2](https://pdfium.googlesource.com/pdfium/+/master/LICENSE)
 - Poppler: GPL-2.0
 - MuPDF: AGPL-3.0 (commercial license available)
+
+This approach is unusual and probably problematic.
+There is an unresolved debate about the consequences of linking against GPL libraries concerning the licensing obligations of a software.
+With the current `purego`-based implementation there is not even a compile-time dependency on Poppler or MuPDF.
+But these libraries can still be loaded at runtime and will run in the same address space, just like any other dynamically links library.
+
+I'm not an OSS license expert but considering these issues putting TES under GPL by default seems the safest approach to be compliant, even if, with PDFium being the default implementation, there is no actual integration with GPL libs by default.
+
+Nevertheless, if you intend to fork this project and remove the GPL-related code in favor of PDFium only, feel free to put it under Apache-2 license.
 
 ## Design Goals (and some words on the development of TES)
 
@@ -49,10 +58,9 @@ Later I discovered PDFium as an additional FOSS solution.
 
 Initially I used `cgo` to integrate these libs with Go (using open source wrappers like [go-pdfium](https://github.com/klippa-app/go-pdfium) and [go-fitz](https://github.com/gen2brain/go-fitz) or even writing my own for Poppler).
 Build tags were used to decide which lib to link against.
-Later I facilitated (purego)[https://github.com/ebitengine/purego] to get rid of it all.
+Later I facilitated [purego](https://github.com/ebitengine/purego) to get rid of it all.
 No more `cgo`, C header files, `pkg-config` or build tags!
 There are still a lot of runtime dependencies, but the build system can be as simple as `go build`, including cross compiling.
-But user
 
 Using C/C++ PDF libs to do the heavy lifting of text extraction is one part of the solution.
 The other is the integration of an optional cache and the algorithm used when serving extraction requests:
@@ -75,7 +83,7 @@ Additional design considerations and assumptions:
 ## Dev Setup - Building TES
 
 Building only requires a recent Go SDK (v1.21+) thanks to `purego`.
-But testing and running requires additional shared libs.
+But testing and running TES requires additional shared libs.
 Depending on the PDF engine you choose (see below for comparison) you need it installed in your dev/build environment.
 
 All instructions supplied here suppose a Linux environment.
@@ -86,7 +94,7 @@ TES is only tested on Linux, might work on MacOS/Darwin as well but needs modifi
 PDFium is the default implementation and works without any configuration as long as the lib is present in a standard path.
 
 If you have LibreOffice installed you don't necessarily need to download PDFium.
-TES will use `/usr/lib/libreoffice/program/libpdfiumlo.so` instead `libpdfium.so`, if available.
+TES will use `/usr/lib/libreoffice/program/libpdfiumlo.so` which is compatible with `libpdfium.so`, if available.
 
 Otherwise or if you prefer a current version of the upstream lib:
 
@@ -103,11 +111,11 @@ Otherwise or if you prefer a current version of the upstream lib:
 ### MuPDF
 
 - Have look at [this Containerfile](Containerfile.mupdf-ubuntu) to get an idea how to build a MuPDF shared lib for Debian or Ubuntu.
-  You can build that image, run it and then copy the lib to your host system via `podman cp`.
+  You can also build that image, run it and then copy the lib to your host system via `podman cp`.
 - Put `libmupdf.so` in `/usr/local/lib/`.
-- Set the config env variable in your shell, `export TES_PDF_LIB_PATH=/path/to/libmupdf.so` if you put elsewhere.
+- Set the config env variable in your shell via `export TES_PDF_LIB_PATH=/path/to/libmupdf.so` if you put elsewhere.
 - `export TES_PDF_LIB_NAME=mupdf` in your shell.
-- Set `MU_PDF_VERSION` according to the libs version.
+- Set `MUPDF_VERSION` according to the lib version.
 
 ## Build locally
 
