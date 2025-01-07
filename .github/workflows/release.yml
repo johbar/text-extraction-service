@@ -1,0 +1,30 @@
+name: Release-Artefacts
+on:
+  release: 
+    types: created
+jobs:
+  compile:
+    name: Build Release Artefacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Install UPX
+        run: sudo apt-get install -q -y upx
+      - name: Compile TES for Mac and Linux, arm64 and amd64
+        env:
+          GOFLAGS: |
+            "-ldflags=-s -w" -tags=nomsgpack,embed_pdfium
+        run: |
+          for GOOS in linux darwin; do
+            for GOARCH in amd64 arm64; do
+              GOARCH=$GOARCH GOOS=$GOOS pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+              GOARCH=$GOARCH GOOS=$GOOS go build -o "tes-${GOOS}-${GOARCH}" && \
+              file "tes-${GOOS}-${GOARCH}"
+              upx "tes-${GOOS}-${GOARCH}"
+            done
+          done
+          ls -lah

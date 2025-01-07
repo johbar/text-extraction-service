@@ -9,32 +9,38 @@ set -o nounset
 set -o errexit
 # set -x
 
-os=$(uname)
-arch=$(uname -m)
 musl="$(ldd '/bin/true' | grep -qF musl && printf '-musl' || true)"
+os=$(go env GOOS)
+arch="$(go env GOARCH)${musl:-}"
 
 my_path=$(readlink -f $0)
 my_dir=$(dirname "$my_path")
 ext=''
 
-if test "$arch" = 'x86_64' ; then
+
+case "$arch" in
+  'amd64')
     arch='x64'
-fi
+    ;;
+  '386')
+    arch='x86'
+esac
 
 case $os in
-  'Linux')
-    os="linux${musl}"
+  'linux')
     ext='so'
     ;;
-  'Darwin')
+  'darwin')
     os='mac'
     ext='dylib'
+    ;;
+  *)
+    printf "not a supported OS: %s\n" "$os"; exit 1;
     ;;
 esac
 
 printf "arch=%s\n" "$arch"
 printf "os=%s\n" "$os"
-printf "my_dir=%s\n" "$my_dir\n"
 
 url="https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-${os}-${arch}.tgz"
 
@@ -42,4 +48,5 @@ printf "Downloading %s to %s\n" "$url" "$my_dir"
 (
     cd "$my_dir"
     wget  -q -O - "$url" | tar -xzv lib/libpdfium.${ext}
+    file lib/libpdfium.${ext}
 )
