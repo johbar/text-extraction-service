@@ -37,7 +37,7 @@ jobs:
     container: golang:alpine
     steps:
       - name: Install tools
-        run: apk update && apk add file binutils
+        run: apk update && apk add file binutils binutils-aarch64
       - uses: actions/checkout@v4
       - name: Build arm64 and amd64 Linux Binaries
         run: |
@@ -86,6 +86,8 @@ jobs:
         uses: actions/download-artifact@v4 
         with: 
           path: ./dist
+          merge-multiple: true
+      - run: ls -lah && du -h .
       - name: Create Release draft
         uses: ncipollo/release-action@v1
         with:

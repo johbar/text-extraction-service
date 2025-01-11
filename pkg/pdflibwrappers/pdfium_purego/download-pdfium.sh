@@ -58,7 +58,10 @@ try_to_strip () {
     if test "${os}" = 'mac' && strip -S -x "${1}"; then
       du -h "${1}"
     fi
-    if test "${goos}" = 'linux' && /usr/bin/${linux_arch}-linux-gnu-strip "${1}"; then 
+    if test "${goos}" = 'linux'; then 
+      for strip_bin in strip /usr/bin/*strip; do
+        "$strip_bin" "${1}" && break || continue
+      done
       du -h "${1}"
     fi
 }
