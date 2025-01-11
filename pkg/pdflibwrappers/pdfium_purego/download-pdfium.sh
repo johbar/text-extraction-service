@@ -10,9 +10,8 @@ set -o nounset
 set -o errexit
 # set -x
 
-musl="$(ldd '/bin/true' | grep -qF musl && printf '-musl' || true)"
 os=$(go env GOOS)
-arch="$(go env GOARCH)${musl:-}"
+arch="$(go env GOARCH)"
 
 my_path=$(readlink -f $0)
 my_dir=$(dirname "${my_path}")
@@ -33,6 +32,10 @@ case "${arch}" in
     exit 1;
     ;;
 esac
+
+
+musl="$(ldd '/bin/true' | grep -qF musl && printf '-musl' || true)"
+arch="${arch}${musl:-}"
 
 case ${os} in
   'linux')
@@ -55,11 +58,11 @@ lib_path="lib/libpdfium.${ext}"
 (
     cd "${my_dir}"
     wget  -q -O - "${url}" | tar -xzv "${lib_path}"
-    printf "Extracted lib to %s/lib/libpdfium.%s\s" "${my_dir}" "${ext}"
+    printf "Extracted lib to %s/lib/libpdfium.%s\n" "${my_dir}" "${ext}"
     file "${lib_path}"
     du -h "${lib_path}"
     printf "Trying to strip...\n"
-    if strip --strip-unneeded "${lib_path}"; then
+    if strip "${lib_path}"; then
       du -h "${lib_path}"
     fi
     printf "Done.\n"
