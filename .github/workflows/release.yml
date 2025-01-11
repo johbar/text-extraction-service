@@ -21,7 +21,7 @@ jobs:
         run: |
           mkdir dist
           for GOARCH in amd64 arm64; do
-            exe="dist/tes-pdfium-${GOOS}-${GOARCH}"
+            exe="dist/tes-pdfium-linux-${GOARCH}"
             GOARCH=$GOARCH pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
             GOARCH=$GOARCH go build -o "${exe}" && \
             file "${exe}"
@@ -85,13 +85,13 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@v4 
         with: 
-          path: ./dist
           merge-multiple: true
-      - run: ls -lah && du -h .
+      - run: |
+          ls -lah && du -h .
       - name: Create Release draft
         uses: ncipollo/release-action@v1
         with:
           draft: true
           omitBody: true
-          artifacts: dist/*
+          artifacts: "tes-*"
 
