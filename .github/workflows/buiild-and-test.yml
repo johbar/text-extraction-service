@@ -1,11 +1,8 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
-name: Go
-
+name: Build and test
+env:
+  TES_REMOVE_NEWLINES: '0'  
 on:
   push:
-    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -29,11 +26,8 @@ jobs:
       - name: Run basic test
         env:
           TES_PDF_LIB_NAME: poppler
-          TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
       - name: Run basic test
-        env:
-          TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-embedded-on-ubuntu:
     runs-on: ubuntu-latest
@@ -48,8 +42,6 @@ jobs:
       - name: Build service
         run: go build -tags nomsgpack,embed_pdfium
       - name: Run basic test - embedded pdfium
-        env:
-          TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-embedded-on-darwin:
     runs-on: "macos-latest"
@@ -64,43 +56,38 @@ jobs:
       - name: Build service
         run: go build -tags nomsgpack,embed_pdfium
       - name: Run basic test
-        env:
-          TES_REMOVE_NEWLINES: '0'
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
       - name: Install Poppler
         run: brew install poppler
       - name: Run with Poppler
         env:
-          TES_REMOVE_NEWLINES: '0'
           TES_PDF_LIB_NAME: poppler
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-embedded-on-alpine:
       runs-on: "ubuntu-latest"
-      container: alpine:latest
+      container: alpine:3.21
       steps:
         - uses: actions/checkout@v4
         - name: Set up Go
           uses: actions/setup-go@v5
           with:
             go-version-file: 'go.mod'
+        - name: Install some tools
+          run: apk update && apk add --no-cache file binutils
         - name: Download libpdfium
           run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
         - name: Build service
           run: go build -tags nomsgpack,embed_pdfium
         - name: Run basic test - PDFium
-          env:
-            TES_REMOVE_NEWLINES: '0'
           run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
         - name: Install MuPDF and Poppler
-          run: apk update && apk add --no-cache mupdf-libs poppler-glib wv icu-libs && ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so
+          run: apk add --no-cache mupdf-libs poppler-glib wv icu-libs && ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so
         - name: Run basic test - Poppler
           env:
-            TES_REMOVE_NEWLINES: '0'
             TES_PDF_LIB_NAME: poppler
           run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
         - name: Run basic test - MuPDF
           env:
-            TES_REMOVE_NEWLINES: '0'
             TES_PDF_LIB_NAME: mupdf
             MUPDF_VERSION: "1.24.10"
           run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
