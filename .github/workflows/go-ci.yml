@@ -72,8 +72,8 @@ jobs:
           uses: actions/setup-go@v5
           with:
             go-version-file: 'go.mod'
-        - name: Install file tool
-          run: apk update && apk add --no-cache file
+        - name: Install some tools
+          run: apk update && apk add --no-cache file binutils
         - name: Download libpdfium
           run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
         - name: Build service

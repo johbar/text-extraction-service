@@ -63,7 +63,7 @@ lib_path="lib/libpdfium.${ext}"
     if test "${os}" = 'mac' && strip -S -x "${lib_path}"; then
       du -h "${lib_path}"
     fi
-    if test "${goos}" = "linux" && strip --all-unused "${lib_path}"; then 
+    if test "${goos}" = "linux" && strip -s "${lib_path}"; then 
       du -h "${lib_path}"
     fi
     printf "Done.\n"
