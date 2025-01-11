@@ -3,7 +3,6 @@ env:
   TES_REMOVE_NEWLINES: '0'  
 on:
   push:
-    tags-ignore: "v*"
   pull_request:
     branches: [ "main" ]
 

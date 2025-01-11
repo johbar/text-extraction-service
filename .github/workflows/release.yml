@@ -1,4 +1,4 @@
-name: Release-Artefacts
+name: Release Artefacts
 on:
   push: 
     tags: "v*"
@@ -94,5 +94,5 @@ jobs:
         with:
           draft: true
           omitBody: true
-          artifacts: "tes-*"
+          artifacts: "*"
 
