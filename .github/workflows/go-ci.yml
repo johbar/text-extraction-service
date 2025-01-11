@@ -72,6 +72,8 @@ jobs:
           uses: actions/setup-go@v5
           with:
             go-version-file: 'go.mod'
+        - name: Install file tool
+          run: apk update && apk add --no-cache file
         - name: Download libpdfium
           run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
         - name: Build service
@@ -79,7 +81,7 @@ jobs:
         - name: Run basic test - PDFium
           run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
         - name: Install MuPDF and Poppler
-          run: apk update && apk add --no-cache mupdf-libs poppler-glib wv icu-libs && ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so
+          run: apk add --no-cache mupdf-libs poppler-glib wv icu-libs && ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so
         - name: Run basic test - Poppler
           env:
             TES_PDF_LIB_NAME: poppler
