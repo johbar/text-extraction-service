@@ -35,7 +35,7 @@ esac
 
 
 musl="$(ldd '/bin/true' | grep -qF musl && printf '-musl' || true)"
-arch="${arch}${musl:-}"
+arch="${musl:-}${arch}"
 
 case ${os} in
   'linux')
@@ -62,7 +62,7 @@ lib_path="lib/libpdfium.${ext}"
     file "${lib_path}"
     du -h "${lib_path}"
     printf "Trying to strip...\n"
-    if strip "${lib_path}"; then
+    if strip -S "${lib_path}"; then
       du -h "${lib_path}"
     fi
     printf "Done.\n"
