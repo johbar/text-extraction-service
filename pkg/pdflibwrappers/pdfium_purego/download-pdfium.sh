@@ -33,13 +33,11 @@ case "${arch}" in
     ;;
 esac
 
-
-musl="$(ldd '/bin/true' | grep -qF musl && printf '-musl' || true)"
-arch="${musl:-}${arch}"
-
 case ${os} in
   'linux')
     ext='so'
+    musl="$(ldd '/bin/true' | grep -qF musl && printf '-musl' || true)"
+    os="linux${musl}"
     ;;
   'darwin')
     os='mac'
@@ -62,7 +60,7 @@ lib_path="lib/libpdfium.${ext}"
     file "${lib_path}"
     du -h "${lib_path}"
     printf "Trying to strip...\n"
-    if strip -S "${lib_path}"; then
+    if strip -S -x "${lib_path}"; then
       du -h "${lib_path}"
     fi
     printf "Done.\n"
