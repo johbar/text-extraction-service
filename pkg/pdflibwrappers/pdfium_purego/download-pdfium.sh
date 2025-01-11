@@ -1,10 +1,11 @@
 #!/usr/bin/env sh
 
 ## 
-# Loads the latest pdfium shared lib from Github for the current platform
+# Loads the latest pdfium shared lib from Github.
+# In honors GOOS and GOARCH but only for combinations of linux and darwin with arm64 and am64
 # This scripts aims to be platform independent and should work on MacOS and Linux (glibc or musl).
-
 ##
+
 set -o nounset
 set -o errexit
 # set -x
@@ -14,19 +15,26 @@ os=$(go env GOOS)
 arch="$(go env GOARCH)${musl:-}"
 
 my_path=$(readlink -f $0)
-my_dir=$(dirname "$my_path")
+my_dir=$(dirname "${my_path}")
 ext=''
 
 
-case "$arch" in
+case "${arch}" in
   'amd64')
     arch='x64'
     ;;
   '386')
     arch='x86'
+    ;;
+  'arm64')
+    ;;
+  *)
+    printf "not a supported architecture: %s\n" "${arch}"
+    exit 1;
+    ;;
 esac
 
-case $os in
+case ${os} in
   'linux')
     ext='so'
     ;;
@@ -35,18 +43,24 @@ case $os in
     ext='dylib'
     ;;
   *)
-    printf "not a supported OS: %s\n" "$os"; exit 1;
+    printf "not a supported OS: %s\n" "${os}"
+    exit 1;
     ;;
 esac
 
-printf "arch=%s\n" "$arch"
-printf "os=%s\n" "$os"
-
 url="https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-${os}-${arch}.tgz"
 
-printf "Downloading %s to %s\n" "$url" "$my_dir"
+printf "Downloading %s\n" "${url}"
+lib_path="lib/libpdfium.${ext}"
 (
-    cd "$my_dir"
-    wget  -q -O - "$url" | tar -xzv lib/libpdfium.${ext}
-    file lib/libpdfium.${ext}
+    cd "${my_dir}"
+    wget  -q -O - "${url}" | tar -xzv "${lib_path}"
+    printf "Extracted lib to %s/lib/libpdfium.%s\s" "${my_dir}" "${ext}"
+    file "${lib_path}"
+    du -h "${lib_path}"
+    printf "Trying to strip...\n"
+    if strip --strip-unneeded "${lib_path}"; then
+      du -h "${lib_path}"
+    fi
+    printf "Done.\n"
 )

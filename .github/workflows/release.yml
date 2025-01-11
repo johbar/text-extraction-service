@@ -1,7 +1,7 @@
 name: Release-Artefacts
 on:
-  release: 
-    types: created
+  push: 
+    tags: "v*"
 jobs:
   compile:
     name: Build Release Artefacts
@@ -12,19 +12,26 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
-      - name: Install UPX
-        run: sudo apt-get install -q -y upx
       - name: Compile TES for Mac and Linux, arm64 and amd64
         env:
           GOFLAGS: |
             "-ldflags=-s -w" -tags=nomsgpack,embed_pdfium
         run: |
+          mkdir dist
           for GOOS in linux darwin; do
             for GOARCH in amd64 arm64; do
+              exe="dist/tes-${GOOS}-${GOARCH}"
               GOARCH=$GOARCH GOOS=$GOOS pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
-              GOARCH=$GOARCH GOOS=$GOOS go build -o "tes-${GOOS}-${GOARCH}" && \
-              file "tes-${GOOS}-${GOARCH}"
-              upx "tes-${GOOS}-${GOARCH}"
+              GOARCH=$GOARCH GOOS=$GOOS go build -o "${exe}" && \
+              file "${exe}"
+              gzip --keep "${exe}"
             done
           done
           ls -lah
+      - name: Publish Release
+        uses: ncipollo/release-action@v1
+        with:
+          draft: true
+          omitBody: true
+          artifacts: dist/*
+

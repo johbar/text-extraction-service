@@ -19,7 +19,7 @@ func init() {
 }
 
 func TestPdfium(t *testing.T) {
-	err := pdfium_purego.InitLib("")
+	_, err := pdfium_purego.InitLib("")
 	if err != nil {
 		t.Fatalf("pdfium could not be loaded: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestPdfium(t *testing.T) {
 }
 
 func TestPoppler(t *testing.T) {
-	err := poppler_purego.InitLib("")
+	_, err := poppler_purego.InitLib("")
 	if err != nil {
 		t.Fatalf("poppler could not be loaded: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestPoppler(t *testing.T) {
 }
 
 func TestMuPdf(t *testing.T) {
-	err := mupdfpure.InitLib("")
+	_, err := mupdfpure.InitLib("")
 	if err != nil {
 		t.Fatalf("poppler could not be loaded: %v", err)
 	}
