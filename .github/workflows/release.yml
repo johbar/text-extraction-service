@@ -87,7 +87,7 @@ jobs:
         with: 
           merge-multiple: true
       - run: |
-          sha256sum * > checksums.txt
+          sha256sum * > sha256sum.txt
           ls -lah && du -h .
       - name: Create Release draft
         uses: ncipollo/release-action@v1
