@@ -2,9 +2,12 @@ name: Release-Artefacts
 on:
   push: 
     tags: "v*"
+env:
+  GOFLAGS: |
+            "-ldflags=-s -w" -tags=nomsgpack,embed_pdfium
 jobs:
-  compile:
-    name: Build Release Artefacts
+  compile-linux:
+    name: Build glibc Linux Release Artefacts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -12,23 +15,78 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
-      - name: Compile TES for Mac and Linux, arm64 and amd64
-        env:
-          GOFLAGS: |
-            "-ldflags=-s -w" -tags=nomsgpack,embed_pdfium
+      - name: Install cross-compiling tools
+        run: sudo apt-get install -y -q binutils-aarch64-linux-gnu
+      - name: Compile TES for Linux, arm64 and amd64
         run: |
           mkdir dist
-          for GOOS in linux darwin; do
-            for GOARCH in amd64 arm64; do
-              exe="dist/tes-${GOOS}-${GOARCH}"
-              GOARCH=$GOARCH GOOS=$GOOS pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
-              GOARCH=$GOARCH GOOS=$GOOS go build -o "${exe}" && \
-              file "${exe}"
-              gzip --keep "${exe}"
-            done
+          for GOARCH in amd64 arm64; do
+            exe="dist/tes-pdfium-${GOOS}-${GOARCH}"
+            GOARCH=$GOARCH pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+            GOARCH=$GOARCH go build -o "${exe}" && \
+            file "${exe}"
           done
-          ls -lah
-      - name: Publish Release
+      - name: Save GNU Linux Artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: "tes-linux-pdfium-embedded"
+          path: ./dist/*
+  compile-musl-linux:
+    name: Build Musl libc Linux Artifacts
+    runs-on: ubuntu-latest
+    container: golang:alpine
+    steps:
+      - name: Install tools
+        run: apk update && apk add file binutils
+      - uses: actions/checkout@v4
+      - name: Build arm64 and amd64 Linux Binaries
+        run: |
+          mkdir dist
+          for GOARCH in amd64 arm64; do
+            exe="dist/tes-pdfium-musl-linux-${GOARCH}"
+            GOARCH=$GOARCH pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+            GOARCH=$GOARCH go build -o "${exe}" && \
+            file "${exe}"
+          done
+      - name: Save Musl Linux Artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: "tes-musl-linux-pdfium-embedded"
+          path: ./dist/*
+  compile-darwin:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Build for Darwin on arm64 and amd64
+        run: |
+          mkdir dist
+          for GOARCH in amd64 arm64; do
+            exe="dist/tes-pdfium-mac-${GOARCH}"
+            GOARCH=$GOARCH pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+            GOARCH=$GOARCH go build -o "${exe}" && \
+            file "${exe}"
+          done
+      - name: Save Darwin Artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: "tes-darwin-pdfium-embedded"
+          path: ./dist/*
+  create-release:
+    runs-on: ubuntu-latest
+    needs: 
+      - compile-darwin
+      - compile-linux
+      - compile-musl-linux
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4 
+        with: 
+          path: ./dist
+      - name: Create Release draft
         uses: ncipollo/release-action@v1
         with:
           draft: true
