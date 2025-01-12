@@ -45,9 +45,9 @@ This service inherits the Open Source license of the PDF lib used at runtime:
 This approach is unusual and probably problematic.
 There is an unresolved debate about the consequences of linking against GPL libraries concerning the licensing obligations of a software.
 With the current `purego`-based implementation there is not even a compile-time dependency on Poppler or MuPDF.
-But these libraries can still be loaded at runtime and will run in the same address space, just like any other dynamically links library.
+But these libraries can still be loaded at runtime and will run in the same address space, just like any other dynamically linked library.
 
-I'm not an OSS license expert but considering these issues putting TES under GPL by default seems the safest approach to be compliant, even if, with PDFium being the default implementation, there is no actual integration with GPL libs by default.
+I'm not an OSS license expert but considering these issues putting TES under GPL by default seems the safest approach to be compliant, even if, with Apache/2-licensed PDFium being the default implementation, there is no actual integration with GPL libs by default.
 
 Nevertheless, if you intend to fork this project and remove the GPL-related code in favor of PDFium only, feel free to put it under Apache-2 license.
 
