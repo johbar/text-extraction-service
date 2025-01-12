@@ -46,13 +46,14 @@ func LoadPdfLib(libName string, libPath string) error {
 		} else {
 			var err2 error
 			libPath, err2 = pdfium.ExtractLibpdfium()
-			if err != nil {
+			if err2 != nil {
 				return errors.Join(err, err2)
 			}
 			logger.Debug("libpdfium extracted to temp dir", "path", libPath)
 			libPath, err2 = pdfium.InitLib(libPath)
 			if err2 == nil {
 				pdfImpl = pdfImplementation{libShort: "pdfium", LibDescription: "PDFium", LibPath: libPath, delete: true}
+				err = nil
 			} else {
 				err = errors.Join(err, err2)
 			}
