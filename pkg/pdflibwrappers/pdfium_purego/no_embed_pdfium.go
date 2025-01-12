@@ -2,6 +2,8 @@
 
 package pdfium_purego
 
-func ExtractLibpdfium() string {
-	return ""
+import "errors"
+
+func ExtractLibpdfium() (string, error) {
+	return "", errors.New("pdfium is not embedded in this build")
 }

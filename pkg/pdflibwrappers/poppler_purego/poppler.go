@@ -23,8 +23,8 @@ type DocumentInfo struct {
 }
 
 type GError struct {
-	domain  uint32
-	code    int32
+	_       uint32
+	_       int32
 	message *byte
 }
 
@@ -172,7 +172,6 @@ func (d *Document) StreamText(w io.Writer) {
 	for n := 0; n < d.NumPages(); n++ {
 		page := d.GetPage(n)
 		w.Write([]byte(page.Text()))
-		// WriteTextOrRunOcrOnPage(page.Text(), n, w, d.data)
 		page.Close()
 	}
 }
