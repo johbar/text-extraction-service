@@ -32,6 +32,7 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 - Processing password protected files
 - Processing files from web servers that require authentication of any kind (cookie, header, referral, user agent etc)
 - A lot of common document formats, including odt, docx, html, xml
+- Running on MS Windows
 
 ## License
 
@@ -75,10 +76,14 @@ Additional design considerations and assumptions:
 
 - Do everything in-memory and in-process, whenever you can. No disk I/O, no invocation of external programs (except for `wvWare`).
 - The web service client does not care that much about, say, the PDF itself, but rather the textual content and some metadata.
-  They know the URL, so that's all TES needs to do the job.
+  They don't want to download it to post it to TES, but they know the URL, so that's all TES needs to do the job.
 - The client does not care that much about the PDFs layout as they do about its textual content.
   So text returned by TES should only be semantically correct concerning the order of words on pages etc. but not accurate in presentation.
-  Join words split up by hyphens on line endings, remove newlines in order to save bandwidth etc.
+  ➡️ Join words split up by hyphens on line endings, remove newlines in order to save bandwidth etc.
+
+## Quick start
+
+On the [releases page](https://github.com/johbar/text-extraction-service/releases/) you find binaries that have libpdfium.so/.dylib embedded.
 
 ## Dev Setup - Building TES
 
@@ -99,6 +104,7 @@ TES will use `/usr/lib/libreoffice/program/libpdfiumlo.so` which is compatible w
 Otherwise or if you prefer a current version of the upstream lib:
 
 - Download the correct PDFium binary for your platform from [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) or compile the lib yourself.
+  You can also use the [downloader script](https://github.com/johbar/text-extraction-service/blob/main/pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh) to do so.
 - Put `libpdfium.so` in `/usr/local/lib/` (my recommendation).
 - Set the config env variable in your shell via `export TES_PDF_LIB_PATH=/path/to/libpdfium.so` if you put elsewhere.
 
@@ -106,11 +112,11 @@ Otherwise or if you prefer a current version of the upstream lib:
 
 - Install dependencies on Debian based systems via `apt-get install libpoppler-glib8`.
 - `export TES_PDF_LIB_NAME=poppler` in your shell.
-- If TES cannot load the lib try setting `export TES_PDF_LIB_PATH=/path/to/libpoppler-glib.so` in your shell.
+- If TES cannot load the lib, file a bug report please and try setting `export TES_PDF_LIB_PATH=/path/to/libpoppler-glib.so` in your shell.
 
 ### MuPDF
 
-- Have look at [this Containerfile](Containerfile.mupdf-ubuntu) to get an idea how to build a MuPDF shared lib for Debian or Ubuntu.
+- Have look at [this Containerfile](Containerfile.mupdf-ubuntu) to get an idea how to build MuPDF as a shared lib for Debian or Ubuntu.
   You can also build that image, run it and then copy the lib to your host system via `podman cp`.
 - Put `libmupdf.so` in `/usr/local/lib/`.
 - Set the config env variable in your shell via `export TES_PDF_LIB_PATH=/path/to/libmupdf.so` if you put elsewhere.
@@ -176,11 +182,11 @@ See [Containerfile](Containerfile.pdfiumlo-ubuntu) on how to use this shared lib
 ² Debian and Ubuntu only ship static libs of MuPDF, Alpine and Arch have shared libs as well. 
 
 ³ *PDFium* is not thread safe.
-For that reason TES uses a lock to protect the lib instance against concurrent access and and multi-processing approach (forking a new TES process, if PDFium is busy)
+For that reason TES uses a lock to protect the lib instance against concurrent access and a multi-processing approach (forking a new TES process, connected with pipes, if PDFium is busy)
 
 ## Build container images
 
-This repo includes a bunch of Containerfiles for building images in a multi-stage style.
+This repo includes a bunch of Containerfiles for building images in a multi-stage style for various setups (PDF lib, Tesseract).
 
 I use Podman but everything should work with Docker as well.
 
@@ -290,7 +296,7 @@ At the moment there is no elaborated command line interface supporting more cust
 
 ### Run as a service
 
-Build and run the service, e.g. `go run -tags nomsgpack`.
+Build and run the service, e.g. `go run -tags nomsgpack` or use a binary supplied at the [releases page](https://github.com/johbar/text-extraction-service/releases/).
 Use it as follows:
 
 ```shell
