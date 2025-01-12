@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime/debug"
 
 	"github.com/gin-contrib/expvar"
@@ -14,9 +15,9 @@ import (
 )
 
 var (
-	cache        Cache
-	cacheNop     bool
-	closeDocChan chan Document
+	cache                Cache
+	cacheNop             bool
+	closeDocChan         chan Document
 	logger               *slog.Logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
 	saveExtractedDocChan chan *ExtractedDocument
 	srv                  http.Server
@@ -29,8 +30,21 @@ func main() {
 	// set static/global config of submodules
 	tesswrap.Languages = tesConfig.TesseractLangs
 	dehyphenator.RemoveNewlines = tesConfig.RemoveNewlines
-	if err := LoadLib(tesConfig.PdfLibName, tesConfig.PdfLibPath); err != nil {
+	// Load PDF lib
+	if err := LoadPdfLib(tesConfig.PdfLibName, tesConfig.PdfLibPath); err != nil {
 		panic(err)
+	}
+	if pdfImpl.delete {
+		logger.Debug("libpdfium extracted to temp dir", "path", pdfImpl.LibPath)
+		// Delete the extracted file before process is terminated.
+		// We could also delete it earlier, after it has been loaded but then a forked process couldn't use the same file.
+		go func() {
+			sigint := make(chan os.Signal, 1)
+			signal.Notify(sigint, os.Interrupt)
+			<-sigint
+			deleteExtractedLib()
+		}()
+		defer deleteExtractedLib()
 	}
 	// one shot mode: don't start a server, just process a single file provided on the command line
 	if len(os.Args) > 1 {

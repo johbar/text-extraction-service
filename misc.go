@@ -133,7 +133,7 @@ func PrintMetadataAndTextToStdout(url string) {
 	done, w := RunDehyphenator(os.Stdout)
 	doc.ProcessPages(w, WriteTextOrRunOcrOnPage)
 	w.Close()
-	<- done
+	<-done
 }
 
 // LogAndFixConfigIssues logs warnings regarding configuration and fixes any issues of this kind
@@ -153,11 +153,20 @@ func LogAndFixConfigIssues() {
 	}
 
 	if !docparser.Initialized {
-		logger.Warn("wvWare is not available in PATH. We will not be able to extract legacy MS Word documents.")
+		logger.Info("wvWare is not available in PATH. We will not be able to extract legacy MS Word documents.")
 	}
 
 	logger.Info("PDF implementation", "lib", pdfImpl)
-	// This ensures, that forked instances of TES will the same lib
+	// This ensures, that forked instances of TES will use the same lib
 	os.Setenv("TES_PDF_LIB_NAME", pdfImpl.libShort)
 	os.Setenv("TES_PDF_LIB_PATH", pdfImpl.LibPath)
+}
+
+func deleteExtractedLib() {
+	err := os.Remove(pdfImpl.LibPath)
+	if err != nil {
+		logger.Warn("Could not delete libpdfium in temp dir", "path", pdfImpl.LibPath)
+		return
+	}
+	logger.Debug("libpdfium deleted in temp dir", "path", pdfImpl.LibPath)
 }

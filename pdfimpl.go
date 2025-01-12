@@ -18,9 +18,10 @@ var (
 )
 
 type pdfImplementation struct {
-	libShort      string
-	LibDesciption string
-	LibPath       string
+	libShort       string
+	LibDescription string
+	LibPath        string
+	delete         bool
 }
 
 // Document represents any kind of document this service can convert to plain text
@@ -33,29 +34,40 @@ type Document interface {
 	Close()
 }
 
-// LoadLib returns a handle of one of the compatible PDF libs, signified by libName.
+// LoadPdfLib returns a handle of one of the compatible PDF libs, signified by libName.
 // It will be loaded from libPath. If libPath is an empty string, default locations and basenames will be attempted.
 // Returns an error if the specified lib can not be loaded from one of theses paths.
-func LoadLib(libName string, libPath string) error {
+func LoadPdfLib(libName string, libPath string) error {
 	switch strings.ToLower(libName) {
 	case "pdfium":
 		libPath, err := pdfium.InitLib(libPath)
 		if err == nil {
-			pdfImpl = pdfImplementation{libShort: "pdfium", LibDesciption: "PDFium", LibPath: libPath}
-		} else if libInTempDir := pdfium.ExtractLibpdfium(); len(libInTempDir) > 0 {
-			return LoadLib(libName, libInTempDir)
+			pdfImpl = pdfImplementation{libShort: "pdfium", LibDescription: "PDFium", LibPath: libPath}
+		} else {
+			var err2 error
+			libPath, err2 = pdfium.ExtractLibpdfium()
+			if err != nil {
+				return errors.Join(err, err2)
+			}
+			logger.Debug("libpdfium extracted to temp dir", "path", libPath)
+			libPath, err2 = pdfium.InitLib(libPath)
+			if err2 == nil {
+				pdfImpl = pdfImplementation{libShort: "pdfium", LibDescription: "PDFium", LibPath: libPath, delete: true}
+			} else {
+				err = errors.Join(err, err2)
+			}
 		}
 		return err
 	case "poppler":
 		libPath, err := poppler.InitLib(libPath)
 		if err == nil {
-			pdfImpl = pdfImplementation{libShort: "poppler", LibDesciption: "Poppler (GLib) version " + poppler.Version(), LibPath: libPath}
+			pdfImpl = pdfImplementation{libShort: "poppler", LibDescription: "Poppler (GLib) version " + poppler.Version(), LibPath: libPath}
 		}
 		return err
 	case "mupdf":
 		libPath, err := mupdf.InitLib(libPath)
 		if err == nil {
-			pdfImpl = pdfImplementation{libShort: "mupdf", LibDesciption: "MuPDF", LibPath: libPath}
+			pdfImpl = pdfImplementation{libShort: "mupdf", LibDescription: "MuPDF", LibPath: libPath}
 		}
 		return err
 	}
