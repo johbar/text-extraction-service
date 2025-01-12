@@ -72,7 +72,7 @@ printf "Downloading %s\n" "${url}"
 lib_path="lib/libpdfium.${ext}"
 (
     cd "${my_dir}"
-    wget  -q -O - "${url}" | tar -xzv "${lib_path}"
+    wget  -q -O - "${url}" | tar -xz "${lib_path}"
     printf "Extracted lib to %s/lib/libpdfium.%s\n" "${my_dir}" "${ext}"
     file "${lib_path}" || true
     try_to_strip "${lib_path}"
