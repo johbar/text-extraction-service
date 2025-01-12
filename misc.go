@@ -101,10 +101,11 @@ func PrintMetadataAndTextToStdout(url string) {
 	if strings.HasPrefix(url, "http") {
 		resp, err := http.Get(url)
 		if err != nil {
+			logger.Error("HTTP error", "url", url, "err", err)
 			os.Exit(1)
 		}
 		if resp.StatusCode >= 400 {
-			logger.Error("HTTP error", "url", url, "err", err)
+			logger.Error("HTTP error", "url", url, "status", resp.Status)
 			os.Exit(1)
 		}
 		stream = resp.Body
