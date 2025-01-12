@@ -256,11 +256,12 @@ Configuration happens through environment variables only.
 | `TES_HOST_PORT`                       | Listen address of HTTP server. Default: `:8080` (same as `0.0.0.0:8080`)                                                                                                                       |
 | `TES_NO_HTTP`                         | If `true` and `TES_EXPOSE_NATS` is `true`, too, no HTTP server is started                                                                                                                      |
 | `TES_PDF_LIB_NAME`                    | Name of the PDF implementation to load; options: `pdfium` (default), `poppler`, `mupdf`                                                                                                        |
-| `TES_PDF_LIB_PATH`                    | Path or basename of the shared lib (`.so`, `.dylib`, `.dll`); if empty some default names are tried                                                                                            |
+| `TES_PDF_LIB_PATH`                    | Path or basename of the shared lib (`.so`, `.dylib`, `.dll`); if empty some default names and paths are tried                                                                                  |
 | `TES_REMOVE_NEWLINES`                 | If true, extracted text will be compacted by replacing newlines with whitespace. Default: `true`                                                                                               |
 | `TES_FORK_THRESHOLD`                  | Maximum content length (size in bytes) of a file that is being converted in-process rather than by a subprocess in fork-exec style. Choose a negative value to disable forking. Default: 2 MiB |
 | `TES_HTTP_CLIENT_DISABLE_COMPRESSION` | Disable `Accept-Encoding: gzip` header in outgoing HTTP Requests. Default: `false`                                                                                                             |
 | `TES_TESSERACT_LANGS`                 | Set languages for Tesseract OCR as a list of 3-letter-codes, separated by `+`. Default: `Latin` = all languages with latin script                                                              |
+| `TES_LOG_LEVEL`                       | Sets the log level. Options (case-insensitive) `info` (default), `debug`, `warn`, `error`                                                                                                      |
 
 ## Security considerations
 

@@ -21,6 +21,7 @@ type ExtractedDocument struct {
 	Url      *string
 	Metadata *map[string]string
 	Text     []byte
+	Doc      Document
 }
 
 type RequestParams struct {
@@ -36,19 +37,15 @@ func init() {
 }
 
 func saveAndCloseExtracedDocs() {
-	for {
-		select {
-		case doc := <-closeDocChan:
-			doc.Close()
-			logger.Debug("Document closed.")
-		case doc := <-saveExtractedDocChan:
-			for i := 0; i <= 5; i++ {
-				err := cache.Save(doc)
-				if err == nil {
-					break
-				}
-				logger.Warn("Could not save text to cache", "retries", i, "url", doc.Url)
+	for doc := range postprocessDocChan {
+		doc.Doc.Close()
+		logger.Debug("Document closed.", "url", doc.Url)
+		for i := 0; i <= 5; i++ {
+			err := cache.Save(doc)
+			if err == nil {
+				break
 			}
+			logger.Warn("Could not save text to cache", "retries", i, "url", doc.Url)
 		}
 	}
 }
@@ -56,7 +53,8 @@ func saveAndCloseExtracedDocs() {
 // ExtractBody returns the request body's plain text content.
 // Returns a JSON encoded error message if the body is not parsable.
 func ExtractBody(c *gin.Context) {
-	doc, err := NewDocFromStream(c.Request.Body)
+	origin := "POST request"
+	doc, err := NewDocFromStream(c.Request.Body, &origin)
 	if err != nil {
 		logger.Error("Error parsing response body", "err", err)
 		c.AbortWithStatus(http.StatusUnprocessableEntity)
@@ -131,12 +129,12 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	skipDehyphenator := false
 	if tesConfig.ForkThreshold > -1 && response.ContentLength > tesConfig.ForkThreshold {
 		// file size above threshold - fork a subprocess
-		doc, err = NewDocFromForkedProcess(response.Body)
+		doc, err = NewDocFromForkedProcess(response.Body, &url)
 		// the forked TES process does dehyphenation already
 		// and the dehyphenator failes with input not containing newlines
 		skipDehyphenator = true
 	} else {
-		doc, err = NewDocFromStream(response.Body)
+		doc, err = NewDocFromStream(response.Body, &url)
 	}
 	if err != nil {
 		logger.Error("Error when parsing", "err", err, "url", url, "headers", response.Header)
@@ -172,16 +170,13 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	if !silent {
 		logger.Debug("Streaming response done", "url", url)
 	}
-	closeDocChan <- doc
-	if noCache {
-		return http.StatusOK, nil
-	}
 	extracted := &ExtractedDocument{
 		Url:      &url,
 		Text:     text.Bytes(),
 		Metadata: &metadata,
+		Doc:      doc,
 	}
-	saveExtractedDocChan <- extracted
+	postprocessDocChan <- extracted
 	return http.StatusOK, nil
 }
 

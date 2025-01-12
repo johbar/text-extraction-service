@@ -15,18 +15,18 @@ import (
 )
 
 var (
-	cache                Cache
-	cacheNop             bool
-	closeDocChan         chan Document
-	logger               *slog.Logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
-	saveExtractedDocChan chan *ExtractedDocument
-	srv                  http.Server
-	tesConfig            TesConfig
-	httpClient           *http.Client
+	cache              Cache = NopCache{}
+	cacheNop           bool
+	logger             *slog.Logger
+	postprocessDocChan chan *ExtractedDocument
+	srv                http.Server
+	tesConfig          TesConfig
+	httpClient         *http.Client
 )
 
 func main() {
 	tesConfig = NewTesConfigFromEnv()
+	logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: tesConfig.logLevel}))
 	// set static/global config of submodules
 	tesswrap.Languages = tesConfig.TesseractLangs
 	dehyphenator.RemoveNewlines = tesConfig.RemoveNewlines
@@ -35,7 +35,6 @@ func main() {
 		panic(err)
 	}
 	if pdfImpl.delete {
-		logger.Debug("libpdfium extracted to temp dir", "path", pdfImpl.LibPath)
 		// Delete the extracted file before process is terminated.
 		// We could also delete it earlier, after it has been loaded but then a forked process couldn't use the same file.
 		go func() {
@@ -57,11 +56,10 @@ func main() {
 	if tesConfig.Debug {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 		// this might expose passwords in the log...
-		logger.Debug("starting with config", "conf", tesConfig)
+		logger.Debug("Starting with config", "conf", tesConfig)
 	}
 	LogAndFixConfigIssues()
-	closeDocChan = make(chan Document, 100)
-	saveExtractedDocChan = make(chan *ExtractedDocument, 100)
+	postprocessDocChan = make(chan *ExtractedDocument, 100)
 	go saveAndCloseExtracedDocs()
 
 	router := gin.New()

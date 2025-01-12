@@ -12,9 +12,7 @@ import (
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 )
 
-
-
-func NewDocFromStream(r io.Reader) (Document, error) {
+func NewDocFromStream(r io.Reader, orgin *string) (Document, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -23,10 +21,10 @@ func NewDocFromStream(r io.Reader) (Document, error) {
 		return nil, errors.New("zero-length data can not be parsed")
 	}
 	mtype := mimetype.Detect(data)
-	logger.Debug("Detected", "mimetype", mtype.String())
+	logger.Debug("Detected", "mimetype", mtype.String(), "orgin", orgin)
 	switch mtype.String() {
 	case "application/pdf":
-		return NewFromBytes(data)
+		return NewFromBytes(data, orgin)
 	case "application/msword":
 		fallthrough
 	case "application/x-ole-storage":
@@ -36,7 +34,7 @@ func NewDocFromStream(r io.Reader) (Document, error) {
 	case "text/rtf":
 		return rtfparser.NewFromBytes(data)
 	}
-	if tesswrap.Initialized && strings.HasPrefix(mtype.String(), "image/" ){
+	if tesswrap.Initialized && strings.HasPrefix(mtype.String(), "image/") {
 		return NewDocFromImage(data, mtype.String()), nil
 	}
 	// returning a part of the content helps with debugging webservers that return 2xx with an error message in the body

@@ -76,7 +76,7 @@ func LoadPdfLib(libName string, libPath string) error {
 }
 
 // NewFromBytes returns a PDF Document parsed by the particular PDF lib that was loaded before
-func NewFromBytes(data []byte) (doc Document, err error) {
+func NewFromBytes(data []byte, origin *string) (doc Document, err error) {
 	switch pdfImpl.libShort {
 	case "pdfium":
 		if libIsFree := pdfium.Lock.TryLock(); libIsFree {
@@ -85,7 +85,7 @@ func NewFromBytes(data []byte) (doc Document, err error) {
 			return pdf, err
 		} else {
 			r := bytes.NewReader(data)
-			return NewDocFromForkedProcess(r)
+			return NewDocFromForkedProcess(r, origin)
 		}
 	case "poppler":
 		return poppler.Load(data)

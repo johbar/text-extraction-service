@@ -16,13 +16,14 @@ type ForkedDoc struct {
 	metadata   map[string]string
 	textStream io.ReadCloser
 	cancel     context.CancelFunc
+	origin     *string
 }
 
 // NewDocFromForkedProcess creates a Document whose content and metadata is being extracted by a forked subprocess
-func NewDocFromForkedProcess(r io.Reader) (Document, error) {
+func NewDocFromForkedProcess(r io.Reader, origin *string) (Document, error) {
 	me, err := os.Executable()
 	if err != nil {
-		logger.Error("Could not find out who I am", "err", err)
+		logger.Error("Could not find out who I am", "err", err, "origin", origin)
 		return nil, err
 	}
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Minute))
@@ -31,11 +32,11 @@ func NewDocFromForkedProcess(r io.Reader) (Document, error) {
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.StdoutPipe()
 	scanner := bufio.NewScanner(stdout)
-	logger.Info("Starting subprocess")
+	logger.Debug("Starting subprocess", "origin", origin)
 	cmd.WaitDelay = time.Minute
 	cmd.Start()
-	logger.Debug("Subprocess started", "pid", cmd.Process.Pid)
-	doc := &ForkedDoc{cmd: cmd, textStream: stdout, cancel: cancel}
+	logger.Info("Subprocess started", "pid", cmd.Process.Pid, "origin", origin)
+	doc := &ForkedDoc{cmd: cmd, textStream: stdout, cancel: cancel, origin: origin}
 	// Read one line to get the metadata
 	if scanner.Scan() {
 		metadataJson := scanner.Text()
@@ -43,7 +44,7 @@ func NewDocFromForkedProcess(r io.Reader) (Document, error) {
 		json.Unmarshal([]byte(metadataJson), &metadata)
 		doc.metadata = metadata
 	}
-	logger.Debug("Finished reading metadata from subprocess")
+	logger.Debug("Finished reading metadata from subprocess", "origin", origin)
 	return doc, err
 }
 
@@ -51,15 +52,15 @@ func NewDocFromForkedProcess(r io.Reader) (Document, error) {
 func (d *ForkedDoc) StreamText(w io.Writer) {
 	written, err := io.Copy(w, d.textStream)
 	if err != nil {
-		logger.Error("Reading from subprocess after", "bytes", written, "err", err)
+		logger.Error("Reading from subprocess failed after", "bytes", written, "err", err, "origin", d.origin)
 		return
 	}
-	logger.Debug("Finished reading from subprocess", "bytes", written)
+	logger.Debug("Finished reading from subprocess", "bytes", written, "origin", d.origin)
 	err = d.cmd.Wait()
 	if err != nil {
-		logger.Error("Error waiting for subprocess to finish", "err", err)
+		logger.Error("Error waiting for subprocess to finish", "err", err, "origin", d.origin)
 	}
-	logger.Info("Subprocess finished", "state", d.cmd.ProcessState.String())
+	logger.Info("Subprocess finished", "state", d.cmd.ProcessState.String(), "origin", d.origin)
 }
 
 func (d *ForkedDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {

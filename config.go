@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"time"
 
@@ -23,6 +24,9 @@ type TesConfig struct {
 	ForkThreshold int64 `env:"TES_FORK_THRESHOLD" default:"2097152"`
 	// Disable Accept-Encoding=gzip header in outgoing HTTP Requests
 	HttpClientDisableCompression bool `env:"TES_HTTP_CLIENT_DISABLE_COMPRESSION" default:"false"`
+	// Log level (DEBUG, INFO, WARN, ERROR)
+	LogLevel string `env:"TES_LOG_LEVEL" default:"INFO"`
+	logLevel slog.Level
 	// NATS max msg size (embedded server only)
 	NatsMaxPayload int32 `env:"TES_MAX_PAYLOAD" default:"8388608"`
 	// embedded NATS server storage location. Default: /tmp/nats
@@ -61,6 +65,10 @@ func NewTesConfigFromEnv() TesConfig {
 	if err := env.Load(&cfg, nil); err != nil {
 		logger.Error("Loading config failed", "err", err)
 		os.Exit(1)
+	}
+
+	if err := cfg.logLevel.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
+		cfg.logLevel = slog.LevelInfo
 	}
 	return cfg
 }
