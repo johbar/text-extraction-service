@@ -171,7 +171,11 @@ func (d *Document) StreamText(w io.Writer) {
 	// logger.Debug("Extracting", "pages", d.GetNPages())
 	for n := 0; n < d.NumPages(); n++ {
 		page := d.GetPage(n)
-		w.Write([]byte(page.Text()))
+		_, err := w.Write([]byte(page.Text()))
+		if err != nil{
+			page.Close()
+			break;
+		}
 		page.Close()
 	}
 }

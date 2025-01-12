@@ -129,7 +129,10 @@ func (d *Document) Text(i int) string {
 func (d *Document) StreamText(w io.Writer) {
 	for i := range d.pages {
 		pageText := d.Text(i)
-		w.Write([]byte(pageText))
+		_, err := w.Write([]byte(pageText))
+		if err != nil{
+			break;
+		}
 	}
 }
 

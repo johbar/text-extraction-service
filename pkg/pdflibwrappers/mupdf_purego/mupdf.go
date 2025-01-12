@@ -164,7 +164,10 @@ func (d *Document) Text(pageIndex int) (string, error) {
 func (d *Document) StreamText(w io.Writer) {
 	for i := 0; i < d.NumPages(); i++ {
 		txt, _ := d.Text(i)
-		w.Write([]byte(txt))
+		_, err := w.Write([]byte(txt)) 
+		if err != nil {
+			break
+		}
 	}
 }
 func (d *Document) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
