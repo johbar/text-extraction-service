@@ -81,7 +81,7 @@ url="https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfiu
 printf "Downloading %s\n" "${url}"
 local_name="${name_in_tar}.${ext}"
 (
-    mkdir --parents "${my_dir}/lib"
+    mkdir -p "${my_dir}/lib"
     cd "${my_dir}/lib"
     wget  -q -O - "${url}" | tar -xz --strip-components 1 "${path_in_tar}/${local_name}"
     printf "Extracted lib to %s\n" "${my_dir}/${name_in_tar}${ext}"
