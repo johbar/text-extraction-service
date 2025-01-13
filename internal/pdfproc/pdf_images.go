@@ -21,6 +21,10 @@ var pdfConf *model.Configuration
 
 func init() {
 	pdfConf = model.NewDefaultConfiguration()
+	pdfConf.Optimize = false
+	pdfConf.OptimizeResourceDicts = false
+	pdfConf.ValidateLinks = false
+	pdfConf.Offline = true
 }
 
 // ProcessImages applies readFunc to every image found on the page with the specified zero-based page number

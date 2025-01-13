@@ -7,6 +7,22 @@ on:
     branches: [ "main" ]
 
 jobs:
+  build-on-windows:
+    runs-on: windows-latest      
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Download libpdfium
+        shell: 'C:\msys64\usr\bin\bash.exe'
+        run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+      - name: Build service
+        run: go build -tags nomsgpack,embed_pdfium
+      - name: Run basic test - embedded pdfium
+        shell: 'C:\msys64\usr\bin\bash.exe'
+        run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
   build-on-ubuntu:
     runs-on: ubuntu-latest
     steps:

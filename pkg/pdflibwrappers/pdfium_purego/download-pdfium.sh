@@ -13,6 +13,9 @@ set -o errexit
 goos=$(go env GOOS)
 arch=$(go env GOARCH)
 linux_arch="${arch}"
+# default for *nix
+path_in_tar='lib'
+name_in_tar='libpdfium'
 
 my_path=$(readlink -f $0)
 my_dir=$(dirname "${my_path}")
@@ -46,6 +49,13 @@ case ${goos} in
     os='mac'
     ext='dylib'
     ;;
+  'windows')
+    os='win'
+    # overwrite for windows:
+    path_in_tar='bin'
+    name_in_tar='pdfium'
+    ext='dll'
+    ;;
   *)
     printf "not a supported OS: %s\n" "${os}"
     exit 1;
@@ -53,8 +63,8 @@ case ${goos} in
 esac
 
 try_to_strip () {
-    du -h "${lib_path}"
     printf "Trying to strip...\n"
+    du -h "${1}"
     if test "${os}" = 'mac' && strip -S -x "${1}"; then
       du -h "${1}"
     fi
@@ -69,12 +79,13 @@ try_to_strip () {
 url="https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-${os}-${arch}.tgz"
 
 printf "Downloading %s\n" "${url}"
-lib_path="lib/libpdfium.${ext}"
+local_name="${name_in_tar}.${ext}"
 (
-    cd "${my_dir}"
-    wget  -q -O - "${url}" | tar -xz "${lib_path}"
-    printf "Extracted lib to %s/lib/libpdfium.%s\n" "${my_dir}" "${ext}"
-    file "${lib_path}" || true
-    try_to_strip "${lib_path}"
+    mkdir --parents "${my_dir}/lib"
+    cd "${my_dir}/lib"
+    wget  -q -O - "${url}" | tar -xz --strip-components 1 "${path_in_tar}/${local_name}"
+    printf "Extracted lib to %s\n" "${my_dir}/${name_in_tar}${ext}"
+    file "${local_name}" || true
+    try_to_strip "${local_name}"
     printf "Done.\n"
 )

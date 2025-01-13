@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime/debug"
 
 	"github.com/gin-contrib/expvar"
 	"github.com/gin-gonic/gin"
@@ -47,7 +46,7 @@ func main() {
 	}
 	// one shot mode: don't start a server, just process a single file provided on the command line
 	if len(os.Args) > 1 {
-		debug.SetGCPercent(-1)
+		// debug.SetGCPercent(-1)
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 		LogAndFixConfigIssues()
 		PrintMetadataAndTextToStdout(os.Args[1])
