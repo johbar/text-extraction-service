@@ -76,6 +76,14 @@ try_to_strip () {
     fi
 }
 
+download () {
+  if which curl 2>&1 >/dev/null ; then
+    curl -sS --location "$1"
+  else 
+    wget -q -o - "$1"
+  fi
+}
+
 url="https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-${os}-${arch}.tgz"
 
 printf "Downloading %s\n" "${url}"
@@ -83,7 +91,7 @@ local_name="${name_in_tar}.${ext}"
 (
     mkdir -p "${my_dir}/lib"
     cd "${my_dir}/lib"
-    wget  -q -O - "${url}" | tar -xz --strip-components 1 "${path_in_tar}/${local_name}"
+    download "${url}" | tar -xz --strip-components 1 "${path_in_tar}/${local_name}"
     printf "Extracted lib to %s\n" "${my_dir}/${name_in_tar}${ext}"
     file "${local_name}" || true
     try_to_strip "${local_name}"
