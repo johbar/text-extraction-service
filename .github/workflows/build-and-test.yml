@@ -18,7 +18,9 @@ jobs:
       - name: Install some tools
         shell: bash
         run: |
-          pacman -S wget
+          ls -lah /c/
+          ls -lah /c/msys64
+          C:\msys64\pacman -S wget
       - name: Download libpdfium
         shell: bash
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
