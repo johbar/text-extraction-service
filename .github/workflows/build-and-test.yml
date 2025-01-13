@@ -15,11 +15,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-      - name: Install some tools
-        shell: bash
-        run: |
-          env
-          ls -lah /c/msys64/usr/
       - name: Download libpdfium
         shell: bash
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
@@ -28,88 +23,88 @@ jobs:
       - name: Run basic test - embedded pdfium
         shell: bash
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-  # build-on-ubuntu:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Set up Go
-  #       uses: actions/setup-go@v5
-  #       with:
-  #         go-version: '1.23'
-  #     - name: golangci-lint
-  #       uses: golangci/golangci-lint-action@v6
-  #       with:
-  #         args: --timeout 120s --max-same-issues 10
-  #       continue-on-error: true
-  #     - name: Build service
-  #       run: go build -tags nomsgpack
-  #     - name: Install dependencies
-  #       run: | 
-  #         sudo apt-get update -qq
-  #         sudo apt-get install -q -y ca-certificates wv curl libpoppler-glib8
-  #     - name: Install libpdfium
-  #       run: curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz | sudo tar -xz -C /usr lib/libpdfium.so
-  #     - name: Run basic test
-  #       env:
-  #         TES_PDF_LIB_NAME: poppler
-  #       run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-  #     - name: Run basic test
-  #       run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-  # build-embedded-on-ubuntu:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Set up Go
-  #       uses: actions/setup-go@v5
-  #       with:
-  #         go-version: '1.23'
-  #     - name: Download libpdfium
-  #       run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
-  #     - name: Build service
-  #       run: go build -tags nomsgpack,embed_pdfium
-  #     - name: Run basic test - embedded pdfium
-  #       run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-  # build-embedded-on-darwin:
-  #   runs-on: "macos-latest"
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Set up Go
-  #       uses: actions/setup-go@v5
-  #       with:
-  #         go-version: '1.23'
-  #     - name: Download libpdfium
-  #       run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
-  #     - name: Build service
-  #       run: go build -tags nomsgpack,embed_pdfium
-  #     - name: Run basic test
-  #       run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-  #     - name: Install Poppler
-  #       run: brew install poppler
-  #     - name: Run with Poppler
-  #       env:
-  #         TES_PDF_LIB_NAME: poppler
-  #       run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-  # build-embedded-on-alpine:
-  #     runs-on: "ubuntu-latest"
-  #     container: "golang:alpine"
-  #     steps:
-  #       - uses: actions/checkout@v4
-  #       - name: Install some tools
-  #         run: apk update && apk add --no-cache file binutils
-  #       - name: Download libpdfium
-  #         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
-  #       - name: Build service
-  #         run: go build -tags nomsgpack,embed_pdfium
-  #       - name: Run basic test - PDFium
-  #         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-  #       - name: Install MuPDF and Poppler
-  #         run: apk add --no-cache mupdf-libs poppler-glib wv icu-libs && ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so
-  #       - name: Run basic test - Poppler
-  #         env:
-  #           TES_PDF_LIB_NAME: poppler
-  #         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-  #       - name: Run basic test - MuPDF
-  #         env:
-  #           TES_PDF_LIB_NAME: mupdf
-  #           MUPDF_VERSION: "1.24.10"
-  #         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+  build-on-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          args: --timeout 120s --max-same-issues 10
+        continue-on-error: true
+      - name: Build service
+        run: go build -tags nomsgpack
+      - name: Install dependencies
+        run: | 
+          sudo apt-get update -qq
+          sudo apt-get install -q -y ca-certificates wv curl libpoppler-glib8
+      - name: Install libpdfium
+        run: curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz | sudo tar -xz -C /usr lib/libpdfium.so
+      - name: Run basic test
+        env:
+          TES_PDF_LIB_NAME: poppler
+        run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+      - name: Run basic test
+        run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+  build-embedded-on-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Download libpdfium
+        run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+      - name: Build service
+        run: go build -tags nomsgpack,embed_pdfium
+      - name: Run basic test - embedded pdfium
+        run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+  build-embedded-on-darwin:
+    runs-on: "macos-latest"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Download libpdfium
+        run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+      - name: Build service
+        run: go build -tags nomsgpack,embed_pdfium
+      - name: Run basic test
+        run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+      - name: Install Poppler
+        run: brew install poppler
+      - name: Run with Poppler
+        env:
+          TES_PDF_LIB_NAME: poppler
+        run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+  build-embedded-on-alpine:
+      runs-on: "ubuntu-latest"
+      container: "golang:alpine"
+      steps:
+        - uses: actions/checkout@v4
+        - name: Install some tools
+          run: apk update && apk add --no-cache file binutils
+        - name: Download libpdfium
+          run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+        - name: Build service
+          run: go build -tags nomsgpack,embed_pdfium
+        - name: Run basic test - PDFium
+          run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+        - name: Install MuPDF and Poppler
+          run: apk add --no-cache mupdf-libs poppler-glib wv icu-libs && ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so
+        - name: Run basic test - Poppler
+          env:
+            TES_PDF_LIB_NAME: poppler
+          run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
+        - name: Run basic test - MuPDF
+          env:
+            TES_PDF_LIB_NAME: mupdf
+            MUPDF_VERSION: "1.24.10"
+          run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
