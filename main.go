@@ -25,7 +25,7 @@ var (
 
 func main() {
 	tesConfig = NewTesConfigFromEnv()
-	logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: tesConfig.logLevel}))
+	logger = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: tesConfig.logLevel}))
 	// set static/global config of submodules
 	tesswrap.Languages = tesConfig.TesseractLangs
 	dehyphenator.RemoveNewlines = tesConfig.RemoveNewlines
@@ -53,10 +53,10 @@ func main() {
 		return
 	}
 	if tesConfig.Debug {
-		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		logger = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 		// this might expose passwords in the log...
-		logger.Debug("Starting with config", "conf", tesConfig)
 	}
+	logger.Debug("Starting Text Extraction Service with config", "conf", tesConfig)
 	LogAndFixConfigIssues()
 	postprocessDocChan = make(chan *ExtractedDocument, 100)
 	go saveAndCloseExtracedDocs()

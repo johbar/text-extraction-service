@@ -12,6 +12,7 @@ import (
 	"github.com/johbar/text-extraction-service/v2/internal/pdfproc"
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
+	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers"
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
@@ -164,6 +165,7 @@ func LogAndFixConfigIssues() {
 }
 
 func deleteExtractedLib() {
+	pdflibwrappers.CloseLib()
 	err := os.Remove(pdfImpl.LibPath)
 	if err != nil {
 		logger.Warn("Could not delete libpdfium in temp dir", "path", pdfImpl.LibPath)

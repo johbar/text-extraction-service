@@ -8,6 +8,8 @@ import (
 	"github.com/ebitengine/purego"
 )
 
+var CloseLib func() = func() {}
+
 // TryLoadLib tries to load a shared object/dynamically linked library
 // from various paths and returns a handle or 0 and an error.
 func TryLoadLib(paths ...string) (uintptr, string, error) {
