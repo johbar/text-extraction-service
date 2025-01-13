@@ -52,7 +52,6 @@ var (
 
 	// PDFium is not thread-safe. This lock guards the lib against concurrent access in places where this is known to be necessary
 	Lock            sync.Mutex
-	defaultLibNames = []string{"libpdfium.so", "/usr/lib/libreoffice/program/libpdfiumlo.so", "libpdfium.dylib"}
 )
 
 type Document struct {

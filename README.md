@@ -32,7 +32,6 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 - Processing password protected files
 - Processing files from web servers that require authentication of any kind (cookie, header, referral, user agent etc)
 - A lot of common document formats, including odt, docx, html, xml
-- Running on MS Windows
 
 ## License
 
@@ -92,7 +91,6 @@ But testing and running TES requires additional shared libs.
 Depending on the PDF engine you choose (see below for comparison) you need it installed in your dev/build environment.
 
 All instructions supplied here suppose a Linux environment.
-TES is only tested on Linux, might work on MacOS/Darwin as well but needs modifications to be compatible with Windows.
 
 ### PDFium
 

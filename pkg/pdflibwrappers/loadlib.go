@@ -1,3 +1,5 @@
+//go:build linux || darwin
+
 package pdflibwrappers
 
 import (
@@ -5,6 +7,8 @@ import (
 
 	"github.com/ebitengine/purego"
 )
+
+var CloseLib func() = func() {}
 
 // TryLoadLib tries to load a shared object/dynamically linked library
 // from various paths and returns a handle or 0 and an error.
