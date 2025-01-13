@@ -80,7 +80,7 @@ download () {
   if which curl 2>&1 >/dev/null ; then
     curl -sS --location "$1"
   else 
-    wget -q -o - "$1"
+    wget -q -O - "$1"
   fi
 }
 
