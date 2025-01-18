@@ -31,17 +31,28 @@ func NewDocFromForkedProcess(r io.Reader, origin *string) (Document, error) {
 	cmd.Stdin = r
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
 	scanner := bufio.NewScanner(stdout)
 	logger.Debug("Starting subprocess", "origin", origin)
 	cmd.WaitDelay = time.Minute
-	cmd.Start()
+	err = cmd.Start()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
 	logger.Info("Subprocess started", "pid", cmd.Process.Pid, "origin", origin)
 	doc := &ForkedDoc{cmd: cmd, textStream: stdout, cancel: cancel, origin: origin}
 	// Read one line to get the metadata
 	if scanner.Scan() {
 		metadataJson := scanner.Text()
 		metadata := make(map[string]string)
-		json.Unmarshal([]byte(metadataJson), &metadata)
+		if err := json.Unmarshal([]byte(metadataJson), &metadata); err != nil {
+			logger.Error("Malformed input encountered when reading metadata")
+			return nil, err
+		}
 		doc.metadata = metadata
 	}
 	logger.Debug("Finished reading metadata from subprocess", "origin", origin)
@@ -49,21 +60,21 @@ func NewDocFromForkedProcess(r io.Reader, origin *string) (Document, error) {
 }
 
 // StreamText may only be invoked once!
-func (d *ForkedDoc) StreamText(w io.Writer) {
+func (d *ForkedDoc) StreamText(w io.Writer) error {
 	written, err := io.Copy(w, d.textStream)
 	if err != nil {
-		logger.Error("Reading from subprocess failed after", "bytes", written, "err", err, "origin", d.origin)
-		return
+		return err
 	}
 	logger.Debug("Finished reading from subprocess", "bytes", written, "origin", d.origin)
 	err = d.cmd.Wait()
 	if err != nil {
-		logger.Error("Error waiting for subprocess to finish", "err", err, "origin", d.origin)
+		return err
 	}
 	logger.Info("Subprocess finished", "state", d.cmd.ProcessState.String(), "origin", d.origin)
+	return nil
 }
 
-func (d *ForkedDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
+func (d *ForkedDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
 	d.StreamText(w)
 }
 
@@ -75,5 +86,5 @@ func (d *ForkedDoc) Close() {
 	// the subprocesses stdout should already be closed...
 	d.textStream.Close()
 	d.cancel()
-	d.cmd.Cancel()
+	_ = d.cmd.Cancel()
 }

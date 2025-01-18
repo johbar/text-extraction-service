@@ -65,7 +65,7 @@ esac
 try_to_strip () {
     printf "Trying to strip...\n"
     du -h "${1}"
-    if test "${os}" = 'mac' && strip -S -x "${1}"; then
+    if test "${goos}" = 'darwin' && strip -S -x "${1}"; then
       du -h "${1}"
     fi
     if test "${goos}" = 'linux'; then 

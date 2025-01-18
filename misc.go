@@ -25,12 +25,12 @@ type ImageDoc struct {
 func NewDocFromImage(data []byte, mimetype string) *ImageDoc {
 	return &ImageDoc{data: &data, mimetype: mimetype}
 }
-func (d *ImageDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
+func (d *ImageDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
 	d.StreamText(w)
 }
 
-func (d *ImageDoc) StreamText(w io.Writer) {
-	tesswrap.ImageReaderToTextWriter(bytes.NewReader(*d.data), w)
+func (d *ImageDoc) StreamText(w io.Writer) error {
+	return tesswrap.ImageReaderToTextWriter(bytes.NewReader(*d.data), w)
 }
 
 func (d *ImageDoc) Close() {
@@ -56,10 +56,12 @@ func (d *ImageDoc) MetadataMap() map[string]string {
 // WriteTextOrRunOcrOnPage writes pageText to w if it is not empty.
 // Otherwise it looks for images on page pageNum and sends them to tesseract.
 // The result is then being written to w.
-func WriteTextOrRunOcrOnPage(pageText string, pageNum int, w io.Writer, pdfData *[]byte) {
+func WriteTextOrRunOcrOnPage(pageText string, pageNum int, w io.Writer, pdfData *[]byte) error {
 	if len(strings.TrimSpace(pageText)) > 0 {
-		// if len(pageText) > 0 {
-		w.Write([]byte(pageText))
+		if _, err := w.Write([]byte(pageText)); err != nil {
+			logger.Error("Could not write to output", "err", err)
+			return err
+		}
 	} else if tesswrap.Initialized {
 		logger.Info("No Text found. Looking for images for OCR", "page", pageNum)
 		rs := bytes.NewReader(*pdfData)
@@ -67,12 +69,16 @@ func WriteTextOrRunOcrOnPage(pageText string, pageNum int, w io.Writer, pdfData 
 			logger.Info("Image found. Starting OCR.", "page", pageNum, "name", img.Name, "type", img.FileType)
 			err := tesswrap.ImageReaderToTextWriter(img, w)
 			if err != nil {
-				logger.Error("tesseract failed", "err", err)
+				logger.Error("Tesseract failed", "err", err)
 			}
 		})
 	}
 	// ensure there is a newline at the end of every page
-	w.Write([]byte{'\n'})
+	if _, err := w.Write([]byte{'\n'}); err != nil {
+		logger.Error("Could not write to output", "err", err)
+		return err
+	}
+	return nil
 }
 
 // RunDehyphenator starts the dehyphenator process on another Go routine.
@@ -84,10 +90,14 @@ func RunDehyphenator(w io.Writer) (done chan bool, pw *io.PipeWriter) {
 		err := dehyphenator.DehyphenateReaderToWriter(pr, w)
 		if err != nil {
 			// If the dehyphenator failed, we proceed in streaming the content
-			logger.Warn("dehyphenator failed", "err", err)
-			io.Copy(w, pr)
+			logger.Warn("Dehyphenator failed", "err", err)
+			if _, err := io.Copy(w, pr); err != nil {
+				logger.Error("RunDehyphenator: Could not write to output stream", "err", err)
+			}
 		}
-		pr.Close()
+		if err := pr.Close(); err != nil {
+			logger.Error("RunDehyphenator: Could not close PipeReader in go routine")
+		}
 		finished <- true
 		close(finished)
 	}()
@@ -129,9 +139,16 @@ func PrintMetadataAndTextToStdout(url string) {
 		os.Exit(2)
 	}
 	meta, _ := json.Marshal(doc.MetadataMap())
-	os.Stdout.Write(meta)
-	os.Stdout.WriteString("\n")
-	// w := os.Stdout
+	_, err = os.Stdout.Write(meta)
+	if err != nil {
+		logger.Error("Could not write to output", "err", err)
+		os.Exit(1)
+	}
+	_, err = os.Stdout.WriteString("\n")
+	if err != nil {
+		logger.Error("Could not write to output", "err", err)
+		os.Exit(1)
+	}
 	done, w := RunDehyphenator(os.Stdout)
 	doc.ProcessPages(w, WriteTextOrRunOcrOnPage)
 	w.Close()

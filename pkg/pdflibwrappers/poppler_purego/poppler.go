@@ -167,22 +167,25 @@ func (d *Document) Text(pageIndex int) string {
 }
 
 // StreamText writes the document's plain text content to an io.Writer
-func (d *Document) StreamText(w io.Writer) {
+func (d *Document) StreamText(w io.Writer) error {
 	// logger.Debug("Extracting", "pages", d.GetNPages())
 	for n := 0; n < d.NumPages(); n++ {
 		page := d.GetPage(n)
 		_, err := w.Write([]byte(page.Text()))
-		if err != nil{
+		if err != nil {
 			page.Close()
-			break;
+			return err
 		}
 		page.Close()
 	}
+	return nil
 }
 
-func (d *Document) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
+func (d *Document) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
 	for i := range d.pages {
-		process(d.Text(i), i, w, d.data)
+		if err := process(d.Text(i), i, w, d.data); err != nil {
+			return
+		}
 	}
 }
 

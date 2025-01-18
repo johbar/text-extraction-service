@@ -439,8 +439,8 @@ func NewFromBytes(data []byte) (d *RichTextDoc, err error) {
 	return
 }
 
-func (d *RichTextDoc) StreamText(w io.Writer) {
-	rtf2textWriter(d.rtfContent, charsNoFmt, w)
+func (d *RichTextDoc) StreamText(w io.Writer) error {
+	return rtf2textWriter(d.rtfContent, charsNoFmt, w)
 }
 
 // Rtf2SingleLine converts RTF formatted input to
@@ -467,11 +467,11 @@ func (d *RichTextDoc) Text() string {
 	return rtf2text(d.rtfContent, charsWithFmt)
 }
 
-func (d *RichTextDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
+func (d *RichTextDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
 	process(d.Text(), 0, w, nil)
 }
 
-func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.Writer) {
+func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.Writer) error {
 	var charMap *charmap.Charmap
 	var decoder *encoding.Decoder
 	var stack []stackEntry
@@ -497,11 +497,15 @@ func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.W
 				curskip--
 			} else if !ignorable {
 				if charMap == nil || decoder == nil {
-					out.WriteString(tchar)
+					if _, err := out.WriteString(tchar); err != nil {
+						return err
+					}
 				} else {
 					tcharDec, err := decoder.String(tchar)
 					if err == nil {
-						out.WriteString(tcharDec)
+						if _, err := out.WriteString(tcharDec); err != nil {
+							return err
+						}
 
 					}
 				}
@@ -525,11 +529,15 @@ func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.W
 			curskip = 0
 			if character == "~" {
 				if !ignorable {
-					out.WriteString("\xA0")
+					if _, err := out.WriteString("\xA0"); err != nil {
+						return err
+					}
 				}
 			} else if strings.Contains("{}\\", character) {
 				if !ignorable {
-					out.WriteString(character)
+					if _, err := out.WriteString(character); err != nil {
+						return err
+					}
 				}
 			} else if character == "*" {
 				ignorable = true
@@ -540,8 +548,9 @@ func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.W
 				ignorable = true
 			} else if ignorable {
 			} else if specialCharacters[word] != "" {
-				out.WriteString(
-					specialCharacters[word])
+				if _, err := out.WriteString(specialCharacters[word]); err != nil {
+					return err
+				}
 			} else if word == "ansicpg" {
 				var ok bool
 				if charMap, ok = charmaps[arg]; ok {
@@ -557,7 +566,9 @@ func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.W
 				if c < 0 {
 					c += 0x10000
 				}
-				out.WriteRune(rune(c))
+				if _, err := out.WriteRune(rune(c)); err != nil {
+					return err
+				}
 				curskip = ucskip
 			}
 		case hex != "":
@@ -566,10 +577,13 @@ func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.W
 			} else if !ignorable {
 				c, _ := strconv.ParseInt(hex, 16, 0)
 				if charMap == nil {
-					out.WriteRune(rune(c))
+					if _, err := out.WriteRune(rune(c)); err != nil {
+						return err
+					}
 				} else {
-					out.WriteRune(
-						charMap.DecodeByte(byte(c)))
+					if _, err := out.WriteRune(charMap.DecodeByte(byte(c))); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -577,6 +591,7 @@ func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.W
 		out.Flush()
 	}
 	// log.Printf("Number of matches: %v", numMatches)
+	return nil
 }
 
 // IsFileRTF checks if the data indicates a RTF file

@@ -161,19 +161,23 @@ func (d *Document) Text(pageIndex int) (string, error) {
 	return txt, nil
 }
 
-func (d *Document) StreamText(w io.Writer) {
+func (d *Document) StreamText(w io.Writer) error {
 	for i := 0; i < d.NumPages(); i++ {
 		txt, _ := d.Text(i)
-		_, err := w.Write([]byte(txt)) 
+		_, err := w.Write([]byte(txt))
 		if err != nil {
-			break
+			return err
 		}
 	}
+	return nil
 }
-func (d *Document) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
+
+func (d *Document) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
 	for i := range d.pages {
 		txt, _ := d.Text(i)
-		process(txt, i, w, d.data)
+		if err := process(txt, i, w, d.data); err != nil {
+			return
+		}
 	}
 }
 

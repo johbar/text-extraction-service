@@ -59,11 +59,15 @@ func (store ObjectStoreCache) StreamText(url string, w io.Writer) error {
 	defer cancel()
 	info, err := store.Get(ctx, url)
 	if err != nil {
+		// FIXME logging the error and returning it is bad style
 		logger.Error("Could not receive text from NATS object store", "url", url, "err", err)
 		return err
 	}
-	io.Copy(w, info)
-	return nil
+	_, err = io.Copy(w, info)
+	if err != nil {
+		logger.Error("Could not read or write text from NATS object store", "url", url, "err", err)
+	}
+	return err
 }
 
 func (store ObjectStoreCache) Save(doc *ExtractedDocument) error {

@@ -9,8 +9,8 @@ package docparser
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
-	"log/slog"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -71,31 +71,30 @@ func NewFromBytes(data []byte) (doc *WordDoc, err error) {
 func NewFromStream(stream io.ReadCloser) (doc *WordDoc, err error) {
 	data, err := io.ReadAll(stream)
 	if err != nil {
-		slog.Error("docparser: could not read stream", "err", err)
+		return nil, err
 	}
 	// stream.Close()
 	return NewFromBytes(data)
 }
 
-func readMetadata(r io.ReaderAt) (m DocMetadata, err error) {
+func readMetadata(r io.ReaderAt) (DocMetadata, error) {
 	defer func() {
 		if e := recover(); e != nil {
-			slog.Error("docparser: panic when reading doc format", "err", e)
+			println("docparser: panic when reading doc format", "err", e)
 		}
 	}()
-
+	var err error
+	var m DocMetadata
 	doc, err := mscfb.New(r)
 	if err != nil {
-		slog.Error("docparser: could not read doc", "err", err)
 		return m, err
 	}
 
 	props := msoleps.New()
 
-	for entry, err := doc.Next(); err == nil; entry, err = doc.Next() {
+	for entry, err2 := doc.Next(); err2 == nil; entry, err2 = doc.Next() {
 		if msoleps.IsMSOLEPS(entry.Initial) {
 			if oerr := props.Reset(doc); oerr != nil {
-				slog.Error("docparser: could not reset props", "err", oerr)
 				err = oerr
 				break
 			}
@@ -185,35 +184,27 @@ func (d *WordDoc) MetadataMap() map[string]string {
 	return m
 }
 
-func (d *WordDoc) Text() string {
-	if d.text == "" {
-		buf := bytes.NewBuffer(*d.data)
-		d.text = doc2text(buf)
-	}
-	return d.text
+func (d *WordDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
+	d.StreamText(w)
 }
 
-func (d *WordDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
-	process(d.Text(), 0, w, nil)
-}
-
-func (d *WordDoc) StreamText(w io.Writer) {
+func (d *WordDoc) StreamText(w io.Writer) error {
 	if d.text != "" {
 		w.Write([]byte(d.text))
 	} else {
 		cmd := exec.Command("wvWare", "-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8", "/dev/stdin")
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			slog.Error("docparser: could not connect stdout", "err", err)
+			return err
 		}
 		s := bufio.NewScanner(stdout)
 		cmd.Stdin = bytes.NewBuffer(*d.data)
 		err = cmd.Start()
 		if err != nil {
-			slog.Error("docparser: could not start wvWare", "err", err)
 			if exitErr, ok := err.(*exec.ExitError); ok {
-				slog.Error("docpaser: wvWare failed", "err", exitErr.Stderr)
+				err =errors.Join(err, errors.New(string(exitErr.Stderr)))
 			}
+			return err
 		}
 
 		for s.Scan() {
@@ -226,25 +217,12 @@ func (d *WordDoc) StreamText(w io.Writer) {
 		}
 		err = cmd.Wait()
 		if err != nil {
-			slog.Error("docparser failed", "err", err)
 			if exitErr, ok := err.(*exec.ExitError); ok {
-				slog.Error("docparser: wvWare failed", "err", exitErr.Stderr)
+				return exitErr
 			}
 		}
 	}
-}
-
-func doc2text(r io.Reader) string {
-	cmd := exec.Command("wvWare", "-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8", "/dev/stdin")
-	cmd.Stdin = r
-	out, err := cmd.Output()
-	if err != nil {
-		slog.Error("docparser failed", "err", err)
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			slog.Error("docparser: wvWare failed", "err", exitErr.Stderr)
-		}
-	}
-	return string(out)
+	return nil
 }
 
 // Close is a no-op

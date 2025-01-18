@@ -27,9 +27,9 @@ type pdfImplementation struct {
 // Document represents any kind of document this service can convert to plain text
 type Document interface {
 	// StreamText writes all text w
-	StreamText(w io.Writer)
+	StreamText(w io.Writer) error
 	// ProcessPages invokes process for every page of the document
-	ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, docData *[]byte))
+	ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, docData *[]byte) error)
 	MetadataMap() map[string]string
 	Close()
 }
@@ -43,9 +43,9 @@ func LoadPdfLib(libName string, libPath string) error {
 		libPath, err := pdfium.InitLib(libPath)
 		if err == nil {
 			pdfImpl = pdfImplementation{libShort: "pdfium", LibDescription: "PDFium", LibPath: libPath}
-			} else {
-				var err2 error
-				libPath, err2 = pdfium.ExtractLibpdfium()
+		} else {
+			var err2 error
+			libPath, err2 = pdfium.ExtractLibpdfium()
 			if err2 != nil {
 				return errors.Join(err, err2)
 			}
@@ -79,10 +79,10 @@ func LoadPdfLib(libName string, libPath string) error {
 func NewFromBytes(data []byte, origin *string) (doc Document, err error) {
 	switch pdfImpl.libShort {
 	case "pdfium":
-		if libIsFree := pdfium.Lock.TryLock(); libIsFree {
+		if pdfium.Lock.TryLock() {
+			d, err := pdfium.Load(data)
 			pdfium.Lock.Unlock()
-			pdf, err := pdfium.Load(data)
-			return pdf, err
+			return d, err
 		} else {
 			r := bytes.NewReader(data)
 			return NewDocFromForkedProcess(r, origin)

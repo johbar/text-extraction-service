@@ -20,8 +20,9 @@ import (
 var (
 	FPDF_InitLibrary    func()
 	FPDF_DestroyLibrary func()
-
-	FPDF_LoadMemDocument func(data unsafe.Pointer, length uint64, password unsafe.Pointer) uintptr
+	FPDF_GetLastError   func() uint64
+	
+ 	FPDF_LoadMemDocument func(data unsafe.Pointer, length uint64, password unsafe.Pointer) uintptr
 	// document
 	FPDF_GetPageCount  func(docHandle uintptr) int
 	FPDF_CloseDocument func(docHandle uintptr)
@@ -51,7 +52,7 @@ var (
 	FPDF_GetMetaText func(documenthandle uintptr, tag string, resultBuf unsafe.Pointer, bufLength uint64) (bytesNeeded uint64)
 
 	// PDFium is not thread-safe. This lock guards the lib against concurrent access in places where this is known to be necessary
-	Lock            sync.Mutex
+	Lock sync.Mutex
 )
 
 type Document struct {
@@ -73,6 +74,8 @@ func InitLib(path string) (string, error) {
 		return "", err
 	}
 	purego.RegisterLibFunc(&FPDF_InitLibrary, lib, "FPDF_InitLibrary")
+	purego.RegisterLibFunc(&FPDF_GetLastError, lib, "FPDF_GetLastError")
+
 	purego.RegisterLibFunc(&FPDF_DestroyLibrary, lib, "FPDF_DestroyLibrary")
 	purego.RegisterLibFunc(&FPDF_LoadMemDocument, lib, "FPDF_LoadMemDocument")
 	purego.RegisterLibFunc(&FPDF_CloseDocument, lib, "FPDF_CloseDocument")
@@ -109,6 +112,8 @@ func (d *Document) Close() {
 
 // Text returns page i's text
 func (d *Document) Text(i int) string {
+	Lock.Lock()
+	defer Lock.Unlock()
 	pageHandle := FPDF_LoadPage(d.handle, int32(i))
 	defer FPDF_ClosePage(pageHandle)
 	pageTextHandle := FPDFText_LoadPage(pageHandle)
@@ -125,20 +130,24 @@ func (d *Document) Text(i int) string {
 	return result
 }
 
-func (d *Document) StreamText(w io.Writer) {
+func (d *Document) StreamText(w io.Writer) error {
 	for i := range d.pages {
 		pageText := d.Text(i)
 		_, err := w.Write([]byte(pageText))
-		if err != nil{
-			break;
+		if err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
-func (d *Document) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte)) {
+func (d *Document) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
 	for i := range d.pages {
-		process(d.Text(i), i, w, &d.data)
+		if err := process(d.Text(i), i, w, &d.data); err != nil {
+			return
+		}
 	}
+	return
 }
 
 func (d *Document) MetadataMap() map[string]string {

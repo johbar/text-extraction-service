@@ -42,7 +42,9 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 			// The last line ended with a hyphen that we removed.
 			// The current line starts with an uppercase letter.
 			// Now we have to put it back first.
-			out.WriteRune(lastLinesTrailingHyphen)
+			if _, err := out.WriteRune(lastLinesTrailingHyphen); err != nil {
+				return err
+			}
 		}
 		// reset last line status
 		lastLinesTrailingHyphen = '\x00'
@@ -51,9 +53,13 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 				return err
 			}
 			if !RemoveNewlines {
-				out.WriteRune('\n')
+				if _, err := out.WriteRune('\n'); err != nil {
+					return err
+				}
 			} else {
-				out.WriteRune(' ')
+				if _, err := out.WriteRune(' '); err != nil {
+					return err
+				}
 			}
 		} else {
 			// possible dehyphenation candidate
