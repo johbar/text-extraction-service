@@ -20,7 +20,7 @@ type ForkedDoc struct {
 }
 
 // NewDocFromForkedProcess creates a Document whose content and metadata is being extracted by a forked subprocess
-func NewDocFromForkedProcess(r io.Reader, origin *string) (Document, error) {
+func NewDocFromForkedProcess(r io.Reader, origin *string) (*ForkedDoc, error) {
 	me, err := os.Executable()
 	if err != nil {
 		logger.Error("Could not find out who I am", "err", err, "origin", origin)
@@ -59,6 +59,18 @@ func NewDocFromForkedProcess(r io.Reader, origin *string) (Document, error) {
 	return doc, err
 }
 
+func (d *ForkedDoc) Pages() int {
+	return -1
+}
+
+func (d *ForkedDoc) Data() *[]byte {
+	return nil
+}
+
+func (d *ForkedDoc) Text(i int) (string, bool) {
+	panic("not allowed")
+}
+
 // StreamText may only be invoked once!
 func (d *ForkedDoc) StreamText(w io.Writer) error {
 	written, err := io.Copy(w, d.textStream)
@@ -74,9 +86,6 @@ func (d *ForkedDoc) StreamText(w io.Writer) error {
 	return nil
 }
 
-func (d *ForkedDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
-	d.StreamText(w)
-}
 
 func (d *ForkedDoc) MetadataMap() map[string]string {
 	return d.metadata

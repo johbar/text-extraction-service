@@ -31,7 +31,7 @@ func InitCache(js jetstream.JetStream, conf TesConfig) Cache {
 		if conf.FailWithoutJetstream {
 			os.Exit(1)
 		} else {
-			logger.Warn("NATS object store could not be initialized and `TES_FAIL_WITHOUT_JS option is false. Disabling cache.")
+			logger.Warn("NATS object store could not be initialized and `TES_FAIL_WITHOUT_JS` option is false. Disabling cache.")
 			cacheNop = true
 			return NopCache{}
 		}
@@ -77,7 +77,6 @@ func (store ObjectStoreCache) Save(doc *ExtractedDocument) error {
 	r := bytes.NewReader(doc.Text)
 	info, err := store.ObjectStore.Put(ctx, m, r)
 	if err != nil {
-		logger.Error("Could not save text and metadata to NATS object store", "err", err)
 		return err
 	}
 	logger.Info("Saved text and metadata in NATS object store bucket", "url", *doc.Url, "chunks", info.Chunks, "size", info.Size)

@@ -64,7 +64,7 @@ func ExtractBody(c *gin.Context) {
 	metadata := doc.MetadataMap()
 	addMetadataAsHeaders(c.Writer.Header(), &metadata)
 	done, pw := RunDehyphenator(c.Writer)
-	doc.ProcessPages(pw, WriteTextOrRunOcrOnPage)
+	WriteTextOrRunOcr(doc, pw, "<POST req>")
 	pw.Close()
 	<-done
 }
@@ -131,7 +131,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		// file size above threshold - fork a subprocess
 		doc, err = NewDocFromForkedProcess(response.Body, &url)
 		// the forked TES process does dehyphenation already
-		// and the dehyphenator failes with input not containing newlines
+		// and the dehyphenator fails with input not containing newlines
 		skipDehyphenator = true
 	} else {
 		doc, err = NewDocFromStream(response.Body, &url)
@@ -151,7 +151,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		metadata["http-content-length"] = fmt.Sprintf("%d", contentLength)
 	}
 	addMetadataAsHeaders(header, &metadata)
-	logger.Debug("Parsing finished", "url", url)
+	logger.Debug("Finished parsing", "url", url)
 	var text bytes.Buffer
 	var mWriter io.Writer
 	if silent {
@@ -160,10 +160,17 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		mWriter = io.MultiWriter(w, &text)
 	}
 	if skipDehyphenator {
-		doc.ProcessPages(mWriter, WriteTextOrRunOcrOnPage)
+		doc.StreamText(mWriter)
 	} else {
 		done, pw := RunDehyphenator(mWriter)
-		doc.ProcessPages(pw, WriteTextOrRunOcrOnPage)
+		if err := WriteTextOrRunOcr(doc, pw, url); err != nil{
+			pw.Close()
+			<-done 
+			doc.Close()
+			// Client might have closed connection, so text couldn't be written
+			// and is not complete. We don't want to save incomplete docs.
+			return 499, err
+		}
 		pw.Close()
 		<-done
 	}

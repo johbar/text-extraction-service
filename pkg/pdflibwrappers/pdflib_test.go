@@ -28,7 +28,7 @@ func TestPdfium(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	txt := d.Text(0)
+	txt, _ := d.Text(0)
 	checkTextLength(t, txt)
 	t.Log(txt)
 	meta := d.MetadataMap()
@@ -46,7 +46,7 @@ func TestPoppler(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	txt := d.Text(0)
+	txt, _:= d.Text(0)
 	checkTextLength(t, txt)
 	t.Log(txt)
 	meta := d.MetadataMap()
@@ -64,7 +64,7 @@ func TestMuPdf(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	txt := d.Text(0)
+	txt, _:= d.Text(0)
 	checkTextLength(t, txt)
 	t.Log(txt)
 	meta := d.MetadataMap()

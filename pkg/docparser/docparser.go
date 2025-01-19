@@ -68,13 +68,12 @@ func NewFromBytes(data []byte) (doc *WordDoc, err error) {
 	return
 }
 
-func NewFromStream(stream io.ReadCloser) (doc *WordDoc, err error) {
-	data, err := io.ReadAll(stream)
-	if err != nil {
-		return nil, err
-	}
-	// stream.Close()
-	return NewFromBytes(data)
+func (d *WordDoc) Pages() int {
+	return -1
+}
+
+func (d *WordDoc) Data() *[]byte {
+	return d.data
 }
 
 func readMetadata(r io.ReaderAt) (DocMetadata, error) {
@@ -184,8 +183,23 @@ func (d *WordDoc) MetadataMap() map[string]string {
 	return m
 }
 
-func (d *WordDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
-	d.StreamText(w)
+func (d *WordDoc) Text(i int) (string, bool) {
+	if i != 1 {
+		return "", false
+	}
+	if len(d.text) > 0 {
+		return d.text, false
+	}
+	buf := bytes.NewBuffer(*d.data)
+	cmd := exec.Command("wvWare", "-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8", "/dev/stdin")
+	cmd.Stdin = buf
+	out, err := cmd.Output()
+	if err != nil {
+		println(err)
+		println(cmd.Stderr)
+	}
+	result := reCleaner.ReplaceAllLiteral(out, []byte(" "))
+	return string(result), false
 }
 
 func (d *WordDoc) StreamText(w io.Writer) error {
@@ -202,7 +216,7 @@ func (d *WordDoc) StreamText(w io.Writer) error {
 		err = cmd.Start()
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok {
-				err =errors.Join(err, errors.New(string(exitErr.Stderr)))
+				err = errors.Join(err, errors.New(string(exitErr.Stderr)))
 			}
 			return err
 		}

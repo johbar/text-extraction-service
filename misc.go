@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -17,66 +16,49 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
-type ImageDoc struct {
-	data     *[]byte
-	mimetype string
-}
-
-func NewDocFromImage(data []byte, mimetype string) *ImageDoc {
-	return &ImageDoc{data: &data, mimetype: mimetype}
-}
-func (d *ImageDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
-	d.StreamText(w)
-}
-
-func (d *ImageDoc) StreamText(w io.Writer) error {
-	return tesswrap.ImageReaderToTextWriter(bytes.NewReader(*d.data), w)
-}
-
-func (d *ImageDoc) Close() {
-	// no op
-}
-
-func (d *ImageDoc) MetadataMap() map[string]string {
-	meta := make(map[string]string)
-	meta["x-doctype"] = d.mimetype
-	// this isn't really useful and may even be expensive in terms of cpu/memory and new deps
-	// so omitting it for now...
-
-	// img, typ, err := image.Decode(bytes.NewReader(d.data))
-	// if err != nil {
-	// 	return
-	// }
-
-	// p := img.Bounds().Size()
-	// meta["x-image-dimensions"] = fmt.Sprintf("%dx%d", p.X, p.Y)
-	return meta
-}
-
-// WriteTextOrRunOcrOnPage writes pageText to w if it is not empty.
-// Otherwise it looks for images on page pageNum and sends them to tesseract.
-// The result is then being written to w.
-func WriteTextOrRunOcrOnPage(pageText string, pageNum int, w io.Writer, pdfData *[]byte) error {
-	if len(strings.TrimSpace(pageText)) > 0 {
-		if _, err := w.Write([]byte(pageText)); err != nil {
-			logger.Error("Could not write to output", "err", err)
+func WriteTextOrRunOcr(d Document, w io.Writer, origin string) error {
+	var ctx *model.Context
+	var err error
+	if d.Pages() < 1 {
+		return d.StreamText(w)
+	}
+	for i := range d.Pages() {
+		text, hasImages := d.Text(i)
+		if len(text) == 0 && hasImages && tesswrap.Initialized {
+			if ctx == nil {
+				logger.Debug("Parsing file with pdfcpu for image extraction", "origin", origin)
+				ctx, err = pdfproc.ParseForImageExtraction(*d.Data())
+				if err != nil {
+					logger.Error("pdfcpu failed", "err", err, "origin", origin)
+					continue
+				}
+			}
+			images, err := pdfproc.GetImages(ctx, i)
+			if err != nil {
+				logger.Error("Extracting images failed", "err", err, "origin", origin)
+				continue
+			}
+			for _, img := range images {
+				logger.Info("Image found. Starting OCR", "origin", origin, "page", i, "type", img.FileType, "name", img.Name)
+				ocrText, err := tesswrap.ImageReaderToText(img)
+				if err != nil {
+					logger.Error("Tesseract failed", "err", err, "origin", origin, "page", i, "imgName", img.Name)
+					// we don't return that error, because we don't want to abort/fail the processing
+					continue
+				}
+				if _, err := w.Write([]byte(ocrText)); err != nil {
+					logger.Error("Could not write to output", "err", err)
+					return err
+				}
+			}
+		}
+		if _, err := w.Write([]byte(text)); err != nil {
 			return err
 		}
-	} else if tesswrap.Initialized {
-		logger.Info("No Text found. Looking for images for OCR", "page", pageNum)
-		rs := bytes.NewReader(*pdfData)
-		pdfproc.ProcessImages(rs, pageNum, func(img model.Image) {
-			logger.Info("Image found. Starting OCR.", "page", pageNum, "name", img.Name, "type", img.FileType)
-			err := tesswrap.ImageReaderToTextWriter(img, w)
-			if err != nil {
-				logger.Error("Tesseract failed", "err", err)
-			}
-		})
-	}
-	// ensure there is a newline at the end of every page
-	if _, err := w.Write([]byte{'\n'}); err != nil {
-		logger.Error("Could not write to output", "err", err)
-		return err
+		// ensure there is a newline at the end of every page
+		if _, err := w.Write([]byte{'\n'}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -150,7 +132,7 @@ func PrintMetadataAndTextToStdout(url string) {
 		os.Exit(1)
 	}
 	done, w := RunDehyphenator(os.Stdout)
-	doc.ProcessPages(w, WriteTextOrRunOcrOnPage)
+	WriteTextOrRunOcr(doc, w, "<stdin>")
 	w.Close()
 	<-done
 }
@@ -161,7 +143,7 @@ func LogAndFixConfigIssues() {
 
 	logger.Debug("Info", "buildinfo", buildinfo)
 	if os.Getenv("GOMEMLIMIT") != "" {
-		logger.Info("GOMEMLIMIT", "Bytes", debug.SetMemoryLimit(-1), "MBytes", debug.SetMemoryLimit(-1)/1024/1024)
+		logger.Debug("GOMEMLIMIT", "Bytes", debug.SetMemoryLimit(-1), "MBytes", debug.SetMemoryLimit(-1)/1024/1024)
 	}
 
 	if tesswrap.Initialized {

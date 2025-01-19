@@ -15,7 +15,7 @@ type TesConfig struct {
 	Bucket string `env:"TES_BUCKET" default:"TES_PLAINTEXTS"`
 	// wether to expose embedded NATS server to other clients. Default: false
 	ExposeNats bool `env:"TES_EXPOSE_NATS" default:"false"`
-	// increase log level (debug instead of info). Default: false
+	// Add source info to log statement. Default: false
 	Debug bool `env:"TES_DEBUG" default:"false"`
 	// If true the service will exit with an error if NATS or JetStream can't be connected
 	FailWithoutJetstream bool `env:"TES_FAIL_WITHOUT_JS" default:"true"`

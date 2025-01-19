@@ -1,4 +1,4 @@
-// Package pdfium_purego loads the mupdf shard library and exposes some functions needed for text extraction.
+// Package pdfium_purego loads the PDFium shard library and exposes some functions needed for text extraction.
 package pdfium_purego
 
 import (
@@ -17,12 +17,15 @@ import (
 	"golang.org/x/text/transform"
 )
 
+type page uintptr
+type textPage uintptr
+
 var (
 	FPDF_InitLibrary    func()
 	FPDF_DestroyLibrary func()
 	FPDF_GetLastError   func() uint64
-	
- 	FPDF_LoadMemDocument func(data unsafe.Pointer, length uint64, password unsafe.Pointer) uintptr
+
+	FPDF_LoadMemDocument func(data unsafe.Pointer, length uint64, password unsafe.Pointer) uintptr
 	// document
 	FPDF_GetPageCount  func(docHandle uintptr) int
 	FPDF_CloseDocument func(docHandle uintptr)
@@ -30,17 +33,22 @@ var (
 	FPDF_GetFileVersion func(doc uintptr, version unsafe.Pointer) bool
 
 	// page
-	FPDF_LoadPage  func(docHandle uintptr, index int32) uintptr
-	FPDF_ClosePage func(pageHandle uintptr)
+	FPDF_LoadPage         func(docHandle uintptr, index int32) page
+	FPDF_ClosePage        func(pageHandle page)
+	FPDFPage_CountObjects func(pageHandle page) int32
+	FPDFPage_GetObject    func(pageHandle page, index int32) (pageObjectHandle uintptr)
+	FPDFPageObj_GetType   func(objHandle uintptr) int32
+
+	FPDFImageObj_GetImageDataDecoded func(objHandle uintptr, resultBuffer unsafe.Pointer, bufLength uint64) (length uint64)
 	// text
-	FPDFText_LoadPage   func(pageHandle uintptr) uintptr
-	FPDFText_ClosePage  func(textHandle uintptr)
-	FPDFText_CountChars func(textHandle uintptr) int
+	FPDFText_LoadPage   func(page) textPage
+	FPDFText_ClosePage  func(textPage)
+	FPDFText_CountChars func(textPage) int
 
 	// Extract unicode text string from the page, in UTF-16LE encoding.
 	// Returns Number of characters written into parameter result buffer, excluding the trailing terminator.
-	FPDFText_GetText    func(textHandle uintptr, startIndex int, count int, resultBuf unsafe.Pointer) (charsWritten int)
-	FPDFText_GetUnicode func(textHandle uintptr, index int) rune
+	FPDFText_GetText    func(textHandle textPage, startIndex int, count int, resultBuf unsafe.Pointer) (charsWritten int)
+	FPDFText_GetUnicode func(textHandle textPage, index int) rune
 	/*
 			Get the text string of specific tag from meta data of a PDF document.
 
@@ -57,7 +65,7 @@ var (
 
 type Document struct {
 	handle uintptr
-	data   []byte
+	data   *[]byte
 	pages  int
 }
 
@@ -83,6 +91,12 @@ func InitLib(path string) (string, error) {
 	purego.RegisterLibFunc(&FPDF_GetPageCount, lib, "FPDF_GetPageCount")
 	purego.RegisterLibFunc(&FPDF_LoadPage, lib, "FPDF_LoadPage")
 	purego.RegisterLibFunc(&FPDF_ClosePage, lib, "FPDF_ClosePage")
+
+	purego.RegisterLibFunc(&FPDFPage_CountObjects, lib, "FPDFPage_CountObjects")
+	purego.RegisterLibFunc(&FPDFPage_GetObject, lib, "FPDFPage_GetObject")
+	purego.RegisterLibFunc(&FPDFPageObj_GetType, lib, "FPDFPageObj_GetType")
+	purego.RegisterLibFunc(&FPDFImageObj_GetImageDataDecoded, lib, "FPDFImageObj_GetImageDataDecoded")
+
 	purego.RegisterLibFunc(&FPDFText_LoadPage, lib, "FPDFText_LoadPage")
 	purego.RegisterLibFunc(&FPDFText_ClosePage, lib, "FPDFText_ClosePage")
 	purego.RegisterLibFunc(&FPDFText_CountChars, lib, "FPDFText_CountChars")
@@ -99,7 +113,7 @@ func Load(data []byte) (*Document, error) {
 	if handle == 0 {
 		return nil, errors.New("pdfium: cannot load document")
 	}
-	return &Document{data: data, handle: handle, pages: FPDF_GetPageCount(handle)}, nil
+	return &Document{data: &data, handle: handle, pages: FPDF_GetPageCount(handle)}, nil
 }
 
 func (d *Document) Close() {
@@ -110,44 +124,94 @@ func (d *Document) Close() {
 	d.data = nil
 }
 
-// Text returns page i's text
-func (d *Document) Text(i int) string {
+func (d *Document) Pages() int {
+	return d.pages
+}
+
+func (d *Document) Data() *[]byte {
+	return d.data
+}
+
+func (d *Document) page(i int) page {
 	Lock.Lock()
 	defer Lock.Unlock()
-	pageHandle := FPDF_LoadPage(d.handle, int32(i))
-	defer FPDF_ClosePage(pageHandle)
-	pageTextHandle := FPDFText_LoadPage(pageHandle)
-	defer FPDFText_ClosePage(pageTextHandle)
-	charCount := FPDFText_CountChars(pageTextHandle)
+	p := FPDF_LoadPage(d.handle, int32(i))
+	return p
+}
+
+func (p page) close() {
+	Lock.Lock()
+	defer Lock.Unlock()
+	FPDF_ClosePage(p)
+}
+
+func (d *Document) textPage(pageHandle page) textPage {
+	Lock.Lock()
+	t := FPDFText_LoadPage(pageHandle)
+	defer Lock.Unlock()
+	return t
+}
+
+func (t textPage) close() {
+	Lock.Lock()
+	defer Lock.Unlock()
+	FPDFText_ClosePage(t)
+}
+
+func (t textPage) countChars() int {
+	Lock.Lock()
+	defer Lock.Unlock()
+	chars := FPDFText_CountChars(t)
+	return chars
+}
+
+func (t textPage) utf16Text() []byte {
+	charCount := t.countChars()
 	charData := make([]byte, (charCount+1)*2)
-	charsWritten := FPDFText_GetText(pageTextHandle, 0, charCount, unsafe.Pointer(&charData[0]))
+	Lock.Lock()
+	defer Lock.Unlock()
+	charsWritten := FPDFText_GetText(t, 0, charCount, unsafe.Pointer(&charData[0]))
 	// strip 2 trailing NUL bytes
-	result, _ := transformUtf16LeToUtf8(charData[0 : 2*charsWritten])
-	// PDFium inserts NUL bytes
+	return charData[0 : 2*charsWritten]
+}
+
+func (t textPage) utf8Text() string {
+	charData := t.utf16Text()
+	if len(charData) == 0 {
+		return ""
+	}
+	result, _ := transformUtf16LeToUtf8(charData)
+	// PDFium inserts NUL bytes around headers and footers
 	result = strings.ReplaceAll(result, "\x00", "\n")
 	// PDFium replaces hyphens with `noncharacters`:
 	result = strings.ReplaceAll(result, "\uFFFE", "")
+	result = strings.TrimSpace(result)
 	return result
+}
+
+// Text returns page i's text
+func (d *Document) Text(i int) (string, bool) {
+	p := d.page(i)
+	defer p.close()
+	t := d.textPage(p)
+	defer t.close()
+	text := t.utf8Text()
+	hasImages := false
+	if len(text) == 0 && d.countImages(p) > 0 {
+		hasImages = true
+	}
+	return text, hasImages
 }
 
 func (d *Document) StreamText(w io.Writer) error {
 	for i := range d.pages {
-		pageText := d.Text(i)
+		pageText, _ := d.Text(i)
 		_, err := w.Write([]byte(pageText))
 		if err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func (d *Document) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
-	for i := range d.pages {
-		if err := process(d.Text(i), i, w, &d.data); err != nil {
-			return
-		}
-	}
-	return
 }
 
 func (d *Document) MetadataMap() map[string]string {
@@ -214,3 +278,17 @@ func transformUtf16LeToUtf8(charData []byte) (string, error) {
 	}
 	return string(result), nil
 }
+
+func (d *Document) countImages(pageHandle page) int {
+	Lock.Lock()
+	defer Lock.Unlock()
+	objCount := FPDFPage_CountObjects(pageHandle)
+	imgCount := 0
+	for i := range objCount {
+		if obj := FPDFPage_GetObject(pageHandle, i); FPDFPageObj_GetType(obj) == 3 {
+			imgCount++
+		}
+	}
+	return imgCount
+}
+

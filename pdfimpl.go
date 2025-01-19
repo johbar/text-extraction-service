@@ -26,11 +26,17 @@ type pdfImplementation struct {
 
 // Document represents any kind of document this service can convert to plain text
 type Document interface {
-	// StreamText writes all text w
+	// StreamText writes all text to w
 	StreamText(w io.Writer) error
-	// ProcessPages invokes process for every page of the document
-	ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, docData *[]byte) error)
+	// Pages returns the documents number of pages. Returns -1 if the concept is not applicable to the file type.
+	Pages() int
+	// Text returns a single pages text and true if there is at least one image on the page
+	Text(int) (string, bool)
+	// Data returns the underlying byte array
+	Data() *[]byte
+	// MetadataMap returns a map of Document properties, such as Author, Title etc.
 	MetadataMap() map[string]string
+	// Close releases resources associated with the document
 	Close()
 }
 

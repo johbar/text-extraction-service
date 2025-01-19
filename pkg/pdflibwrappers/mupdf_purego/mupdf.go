@@ -143,26 +143,26 @@ func (f *Document) Close() {
 	f.data = nil
 }
 
-// NumPages returns total number of pages in document.
-func (d *Document) NumPages() int {
+// Pages returns total number of pages in document.
+func (d *Document) Pages() int {
 	return d.pages
 }
 
 // Text returns text for given page number.
-func (d *Document) Text(pageIndex int) (string, error) {
+func (d *Document) Text(pageIndex int) (string, bool) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 	buf := fz_new_buffer_from_page_number(d.ctx, d.doc, pageIndex, 0)
 	if buf == 0 {
-		return "", errors.New("cannot open page")
+		return "", true // we suppose there could be images
 	}
 	txt := fz_string_from_buffer(d.ctx, buf)
 	fz_drop_buffer(d.ctx, buf)
-	return txt, nil
+	return txt, true
 }
 
 func (d *Document) StreamText(w io.Writer) error {
-	for i := 0; i < d.NumPages(); i++ {
+	for i := 0; i < d.pages; i++ {
 		txt, _ := d.Text(i)
 		_, err := w.Write([]byte(txt))
 		if err != nil {
@@ -172,14 +172,10 @@ func (d *Document) StreamText(w io.Writer) error {
 	return nil
 }
 
-func (d *Document) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
-	for i := range d.pages {
-		txt, _ := d.Text(i)
-		if err := process(txt, i, w, d.data); err != nil {
-			return
-		}
-	}
+func (d *Document) Data() *[]byte {
+	return d.data
 }
+
 
 // Metadata returns a map with standard metadata.
 func (d *Document) MetadataMap() map[string]string {
@@ -224,7 +220,7 @@ func (d *Document) MetadataMap() map[string]string {
 	if ok, val := lookup("info:ModDate"); ok {
 		m["x-document-modified"] = pdfdateparser.PdfDateToIso(val)
 	}
-	pages := d.NumPages()
+	pages := d.Pages()
 	m["x-document-pages"] = strconv.Itoa(pages)
 	return m
 }

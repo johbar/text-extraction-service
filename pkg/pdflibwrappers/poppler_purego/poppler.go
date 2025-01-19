@@ -129,7 +129,11 @@ func toStr(stringPtr *byte) string {
 	return str
 }
 
-func (d *Document) NumPages() int {
+func (d *Document) Data() *[]byte {
+	return d.data
+}
+
+func (d *Document) Pages() int {
 	return d.pages
 }
 
@@ -159,19 +163,21 @@ func (p *PopplerPage) Close() {
 	// do nothing if null pointer
 }
 
-func (d *Document) Text(pageIndex int) string {
+func (d *Document) Text(pageIndex int) (string, bool) {
 	page := poppler_document_get_page(d.handle, pageIndex)
 	txtPtr := poppler_page_get_text(page)
 	g_object_unref(page)
-	return toStr(txtPtr)
+	// FIXME: implement image discovery logic to be true about hasImages
+	return toStr(txtPtr), true
 }
 
 // StreamText writes the document's plain text content to an io.Writer
 func (d *Document) StreamText(w io.Writer) error {
 	// logger.Debug("Extracting", "pages", d.GetNPages())
-	for n := 0; n < d.NumPages(); n++ {
+	for n := 0; n < d.pages; n++ {
 		page := d.GetPage(n)
-		_, err := w.Write([]byte(page.Text()))
+		pageText := page.Text()
+		_, err := w.Write([]byte(pageText))
 		if err != nil {
 			page.Close()
 			return err
@@ -179,14 +185,6 @@ func (d *Document) StreamText(w io.Writer) error {
 		page.Close()
 	}
 	return nil
-}
-
-func (d *Document) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
-	for i := range d.pages {
-		if err := process(d.Text(i), i, w, d.data); err != nil {
-			return
-		}
-	}
 }
 
 // Metadata returns some of the PDF metadata as map with keys compatible to HTTP headers

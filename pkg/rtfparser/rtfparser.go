@@ -439,6 +439,18 @@ func NewFromBytes(data []byte) (d *RichTextDoc, err error) {
 	return
 }
 
+func (d *RichTextDoc) Pages() int {
+	return -1
+}
+
+func (d *RichTextDoc) Data() *[]byte {
+	return nil
+}
+
+func (d *RichTextDoc) Text(i int) (string, bool) {
+	return rtf2text(d.rtfContent, charsWithFmt), false
+}
+
 func (d *RichTextDoc) StreamText(w io.Writer) error {
 	return rtf2textWriter(d.rtfContent, charsNoFmt, w)
 }
@@ -461,14 +473,6 @@ func rtf2text(inputRtf string, specialCharacters map[string]string) string {
 	var buf bytes.Buffer
 	rtf2textWriter(inputRtf, specialCharacters, &buf)
 	return buf.String()
-}
-
-func (d *RichTextDoc) Text() string {
-	return rtf2text(d.rtfContent, charsWithFmt)
-}
-
-func (d *RichTextDoc) ProcessPages(w io.Writer, process func(pageText string, pageIndex int, w io.Writer, pdfData *[]byte) error) {
-	process(d.Text(), 0, w, nil)
 }
 
 func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.Writer) error {

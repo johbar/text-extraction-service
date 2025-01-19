@@ -131,6 +131,7 @@ go build -tags nomsgpack -o tes
 ```
 
 If you don't need the NATS based cache additionally supply the build tag `cache_nop`.
+This will also disable the NATS interface as a whole.
 
 ## OCR (experimental)
 
@@ -265,7 +266,9 @@ Configuration happens through environment variables only.
 | `TES_FORK_THRESHOLD`                  | Maximum content length (size in bytes) of a file that is being converted in-process rather than by a subprocess in fork-exec style. Choose a negative value to disable forking. Default: 2 MiB |
 | `TES_HTTP_CLIENT_DISABLE_COMPRESSION` | Disable `Accept-Encoding: gzip` header in outgoing HTTP Requests. Default: `false`                                                                                                             |
 | `TES_TESSERACT_LANGS`                 | Set languages for Tesseract OCR as a list of 3-letter-codes, separated by `+`. Default: `Latin` = all languages with latin script                                                              |
-| `TES_LOG_LEVEL`                       | Sets the log level. Options (case-insensitive) `info` (default), `debug`, `warn`, `error`                                                                                                      |
+| `TES_LOG_LEVEL`                       | Sets the log level. Options (case-insensitive): `info` (default), `debug`, `warn`, `error`                                                                                                     |
+| `TES_DEBUG`                           | Adds source info to each log line. Default: `false`                                                                                                                                            |
+
 
 ## Security considerations
 
