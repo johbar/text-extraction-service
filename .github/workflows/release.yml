@@ -23,8 +23,8 @@ jobs:
           for goos in windows linux; do
             for GOARCH in amd64 arm64; do
               exe="dist/tes-pdfium-${goos}-${GOARCH}"
-              GOOS="${goos} GOARCH="${GOARCH}" pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
-              GOOS="${goos} GOARCH="${GOARCH}" go build -o "${exe}" && \
+              GOOS="${goos}" GOARCH="${GOARCH}" pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+              GOOS="${goos}" GOARCH="${GOARCH}" go build -o "${exe}" && \
               file "${exe}"
             done
           done
