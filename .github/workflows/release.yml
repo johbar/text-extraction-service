@@ -20,14 +20,24 @@ jobs:
       - name: Compile TES for Linux and Windows, arm64 and amd64
         run: |
           mkdir dist
-          for goos in windows linux; do
+          ext=""
+          for GOOS in windows linux; do
             for GOARCH in amd64 arm64; do
-              exe="dist/tes-pdfium-${goos}-${GOARCH}"
-              GOOS="${goos}" GOARCH="${GOARCH}" pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
-              GOOS="${goos}" GOARCH="${GOARCH}" go build -o "${exe}" && \
+              if "${GOOS}" == windows ; then
+                ext='.exe'
+              fi
+              # PDFium embedded
+              exe="dist/tes-pdfium-${GOOS}-${GOARCH}${ext}"
+              GOOS="${GOOS}" GOARCH="${GOARCH}" pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
+              GOOS="${GOOS}" GOARCH="${GOARCH}" go build -o "${exe}"
               file "${exe}"
+              # no PDFium embeded
+              exe="dist/tes-${GOOS}-${GOARCH}${ext}"
+              GOOS="${GOOS}" GOARCH="${GOARCH}" go build -tags nomsgpack -o "${exe}"
+              file ${exe}
             done
           done
+          ls -lah ./dist/
       - name: Save GNU Linux and Windows Artefacts
         uses: actions/upload-artifact@v4
         with:
@@ -47,7 +57,10 @@ jobs:
           for GOARCH in amd64 arm64; do
             exe="dist/tes-pdfium-musl-linux-${GOARCH}"
             GOARCH=$GOARCH pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
-            GOARCH=$GOARCH go build -o "${exe}" && \
+            GOARCH=$GOARCH go build -o "${exe}"
+            # no PDFium embedded
+            exe="dist/tes-musl-linux-${GOARCH}"
+            GOARCH=$GOARCH go build -tags nomsgpack -o "${exe}"
             file "${exe}"
           done
       - name: Save Musl Linux Artefacts
@@ -69,9 +82,13 @@ jobs:
           for GOARCH in amd64 arm64; do
             exe="dist/tes-pdfium-mac-${GOARCH}"
             GOARCH=$GOARCH pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
-            GOARCH=$GOARCH go build -o "${exe}" && \
+            GOARCH=$GOARCH go build -o "${exe}"
             file "${exe}"
+            # no PDFium embedded
+            exe="tes-mac-${GOARCH}"
+            GOARCH=$GOARCH go build -tags nomsgpack -o "${exe}"
           done
+          ls -lah dist/
       - name: Save Darwin Artefacts
         uses: actions/upload-artifact@v4
         with:
@@ -89,6 +106,7 @@ jobs:
         with: 
           merge-multiple: true
       - run: |
+          gzip *
           sha256sum * > sha256sum.txt
           ls -lah && du -h .
       - name: Create Release draft
