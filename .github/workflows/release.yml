@@ -21,12 +21,14 @@ jobs:
         run: |
           mkdir dist
           # empty default for linux
-          export ext=""
+          export ext=''
           for GOOS in windows linux; do
+            if test "${GOOS}" = windows ; then
+              ext='.exe'
+            else
+              ext=''
+            fi
             for GOARCH in amd64 arm64; do
-              if test "${GOOS}" = windows ; then
-                ext='.exe'
-              fi
               # PDFium embedded
               exe="dist/tes-pdfium-${GOOS}-${GOARCH}${ext}"
               GOOS="${GOOS}" GOARCH="${GOARCH}" pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
