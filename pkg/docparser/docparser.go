@@ -166,13 +166,13 @@ func (d *WordDoc) MetadataMap() map[string]string {
 		m["x-document-modified"] = d.metadata.Modified.Format(time.RFC3339)
 	}
 	if d.metadata.PageCount != 0 {
-		m["x-document-page-count"] = strconv.Itoa(int(d.metadata.PageCount))
+		m["x-document-pages"] = strconv.Itoa(int(d.metadata.PageCount))
 	}
 	if d.metadata.CharCount != 0 {
-		m["x-document-char-count"] = strconv.Itoa(int(d.metadata.CharCount))
+		m["x-document-chars"] = strconv.Itoa(int(d.metadata.CharCount))
 	}
 	if d.metadata.WordCount != 0 {
-		m["x-document-word-count"] = strconv.Itoa(int(d.metadata.WordCount))
+		m["x-document-words"] = strconv.Itoa(int(d.metadata.WordCount))
 	}
 	// omit empty
 	for k, v := range m {
@@ -195,6 +195,7 @@ func (d *WordDoc) Text(i int) (string, bool) {
 	cmd.Stdin = buf
 	out, err := cmd.Output()
 	if err != nil {
+		// FIXME
 		println(err)
 		println(cmd.Stderr)
 	}
@@ -212,7 +213,7 @@ func (d *WordDoc) StreamText(w io.Writer) error {
 			return err
 		}
 		s := bufio.NewScanner(stdout)
-		cmd.Stdin = bytes.NewBuffer(*d.data)
+		cmd.Stdin = bytes.NewReader(*d.data)
 		err = cmd.Start()
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok {
