@@ -6,20 +6,27 @@ TES is a simple Go service for extracting and storing textual content from PDF, 
 
 This started as an exercise in using Golang and cgo.
 But it is about to be used in production (at least for PDFs).
-The use case is the fast processing of binary documents for repeated search machine indexation.
+The use case is the fast processing of binary documents for repeated search machine indexation (see blow for details).
 
 The RegEx-based RTF parser is rather inefficient.
+
+The parser for XML-based office formats is not vary sophisticated and might need more testing.
 
 Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mature solution to be considered.
 
 ## Features
 
-- Support for PDFs, RTFs and legacy MS Word (.doc) files
+- Support for common document formats:
+  - PDF
+  - RTF
+  - ODT and ODP
+  - DOCX and PPTX
+  - legacy MS Word (.doc) files
 - Support for three runtime-pluggable C/C++ PDF engines
     - Google Chromium's [PDFium](https://pdfium.googlesource.com/pdfium/)
     - Free Desktops [Poppler](https://poppler.freedesktop.org/)
     - Artifex' [MuPDF](https://mupdf.com/)
-- Optional Dehyphenation of extracted text, specifically for German
+- Optional dehyphenation of extracted text, specifically for German
 - Extraction of document metadata (title, author, creation date etc)
 - Store extracted text and metadata in NATS for faster retrieval
 - NATS can be embedded or run externally (e.g. as a cluster)
@@ -31,8 +38,7 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 - Processing local files with the `file:` transport
 - Processing password protected files
 - Processing files from web servers that require authentication of any kind (cookie, header, referral, user agent etc)
-- A lot of common document formats, including odt, docx, html, xml
-
+- a lot of file formats, e.g. ppt, markdown, ods/xlsx
 ## License
 
 This service inherits the Open Source license of the PDF lib used at runtime:
@@ -46,14 +52,14 @@ There is an unresolved debate about the consequences of linking against GPL libr
 With the current `purego`-based implementation there is not even a compile-time dependency on Poppler or MuPDF.
 But these libraries can still be loaded at runtime and will run in the same address space, just like any other dynamically linked library.
 
-I'm not an OSS license expert but considering these issues putting TES under GPL by default seems the safest approach to be compliant, even if, with Apache/2-licensed PDFium being the default implementation, there is no actual integration with GPL libs by default.
+I'm not an OSS license expert but considering these issues putting TES under GPL by default seems the safest approach to be compliant, even if, with Apache-2-licensed PDFium being the default implementation, there is no actual integration with GPL libs by default.
 
 Nevertheless, if you intend to fork this project and remove the GPL-related code in favor of PDFium only, feel free to put it under Apache-2 license.
 
 ## Design Goals (and some words on the development of TES)
 
 Coming from a Java stack I wanted to build a solution for PDF to text conversion that offered better quality and performance than Apache PDFBox and Tika.
-Poppler and MuPDF were well-established PDF libs with a C interface I examined and included in this service first.
+Poppler and MuPDF were well-established PDF libs with a C interface I examined and included in this service at first.
 Later I discovered PDFium as an additional FOSS solution.
 
 Initially I used `cgo` to integrate these libs with Go (using open source wrappers like [go-pdfium](https://github.com/klippa-app/go-pdfium) and [go-fitz](https://github.com/gen2brain/go-fitz) or even writing my own for Poppler).
@@ -67,7 +73,7 @@ The other is the integration of an optional cache and the algorithm used when se
 
 1. Ask the cache for metadata about the requested document.
 2. If metadata is available, do an "optional" HTTP request using `If-Non-Match` and/or `If-Modified-Since` headers with entity tags/timestamps. If not, just fetch the doc.
-3. If the webserver sends the document (instead of status `304 Not Modified`) do text-extraction. Otherwise read the text from cache.
+3. If the webserver sends the document (instead of status `304 Not Modified`) do text extraction. Otherwise read the text from cache.
 4. Send the metadata as HTTP headers and the text as plain UTF-8 body. No JSON serialization needed.
 5. If indicated, do the cache update after serving the request, so the client can proceed with what ever they wanted to do with the text.
 
@@ -82,7 +88,19 @@ Additional design considerations and assumptions:
 
 ## Quick start
 
-On the [releases page](https://github.com/johbar/text-extraction-service/releases/) you find binaries that have libpdfium.so/.dylib embedded.
+On the [releases page](https://github.com/johbar/text-extraction-service/releases/) you find binaries that have `libpdfium.so`/`libpdfium.dylib`/`pdfium.dll` embedded.
+See latest releases below.
+
+| OS      | Variant | Architecture  | PDFium embedded                                                                                                             | Solo                                                                                                                                      |
+| ------- | ------- | ------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux   | glibc   | amd64         | [tes-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-linux-amd64.gz)            | [tes-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-linux-amd64.gz)                   |
+| Linux   | glibc   | arm64         | [tes-linux-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-linux-arm64.gz)            | [tes-pdfium-linux-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-linux-arm64.gz)            |
+| Linux   | musl    | amd64         | [tes-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-musl-linux-amd64.gz)  | [tes-pdfium-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-musl-linux-amd64.gz)  |
+| Linux   | musl    | arm64         | [tes-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-musl-linux-amd64.gz)  | [tes-pdfium-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-musl-linux-amd64.gz)  |
+| MacOs   |         | arm64         | [tes-mac-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-mac-amd64.gz)                | [tes-pdfium-mac-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-mac-amd64.gz)                |
+| MacOs   |         | amd64         | [tes-mac-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-mac-arm64.gz)                | [tes-pdfium-mac-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-mac-arm64.gz)                |
+| Windows |         | amd64         | [tes-windows-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-windows-amd64.gz)        | [tes-pdfium-windows-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-windows-amd64.exe.gz)    |
+| Windows |         | arm64         | [tes-windows-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-windows-arm64.exe.gz)    | [tes-pdfium-windows-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-windows-arm64.exe.gz)    |
 
 ## Dev Setup - Building TES
 
@@ -166,7 +184,7 @@ Some other aspects:
 
 |                              | PDFium                    | Poppler             | MuPDF                    |
 |------------------------------|---------------------------|---------------------|--------------------------|
-| License                      | ✅ permissive             | ⚠️ Copyleft          | ⚠️ Copyleft or commercial |
+| License                      | ✅ permissive             | ⚠️ Copyleft          | ⚠️ Copyleft or payed license |
 | Performance with small files | ✅ good                   | ❌ bad              | ✅ good                  |
 | Performance with large files | ✅ good                   | 🚀 best             | ❌ bad                   |
 | Memory consumption           | ❌ high with large files¹ | ✅ consistently low | ❌ high with large files |
