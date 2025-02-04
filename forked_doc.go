@@ -3,18 +3,19 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"io"
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/bytedance/sonic"
 )
 
 // ForkedDoc represents a Document processed by forked subprocess of this service
 type ForkedDoc struct {
 	cmd        *exec.Cmd
 	metadata   map[string]string
-	textStream io.ReadCloser
+	textStream io.Reader
 	cancel     context.CancelFunc
 	origin     *string
 }
@@ -26,7 +27,7 @@ func NewDocFromForkedProcess(r io.Reader, origin *string) (*ForkedDoc, error) {
 		logger.Error("Could not find out who I am", "err", err, "origin", origin)
 		return nil, err
 	}
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Minute))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	cmd := exec.CommandContext(ctx, me, "-")
 	cmd.Stdin = r
 	cmd.Stderr = os.Stderr
@@ -35,7 +36,7 @@ func NewDocFromForkedProcess(r io.Reader, origin *string) (*ForkedDoc, error) {
 		cancel()
 		return nil, err
 	}
-	scanner := bufio.NewScanner(stdout)
+	buf := bufio.NewReader(stdout)
 	logger.Debug("Starting subprocess", "origin", origin)
 	cmd.WaitDelay = time.Minute
 	err = cmd.Start()
@@ -44,19 +45,22 @@ func NewDocFromForkedProcess(r io.Reader, origin *string) (*ForkedDoc, error) {
 		return nil, err
 	}
 	logger.Info("Subprocess started", "pid", cmd.Process.Pid, "origin", origin)
-	doc := &ForkedDoc{cmd: cmd, textStream: stdout, cancel: cancel, origin: origin}
+	doc := &ForkedDoc{cmd: cmd, textStream: buf, cancel: cancel, origin: origin}
 	// Read one line to get the metadata
-	if scanner.Scan() {
-		metadataJson := scanner.Text()
-		metadata := make(map[string]string)
-		if err := json.Unmarshal([]byte(metadataJson), &metadata); err != nil {
-			logger.Error("Malformed input encountered when reading metadata")
-			return nil, err
-		}
-		doc.metadata = metadata
+	firstLine := readFirstLine(buf)
+	metadata := make(map[string]string)
+	if err := sonic.Unmarshal(firstLine, &metadata); err != nil {
+		logger.Error("Malformed input encountered when reading metadata", "origin", origin, "input", firstLine)
+		return nil, err
 	}
+	doc.metadata = metadata
 	logger.Debug("Finished reading metadata from subprocess", "origin", origin)
 	return doc, err
+}
+
+func readFirstLine(r *bufio.Reader) []byte {
+	result, _ := r.ReadBytes('\n')
+	return result
 }
 
 func (d *ForkedDoc) Pages() int {
@@ -86,14 +90,11 @@ func (d *ForkedDoc) StreamText(w io.Writer) error {
 	return nil
 }
 
-
 func (d *ForkedDoc) MetadataMap() map[string]string {
 	return d.metadata
 }
 
 func (d *ForkedDoc) Close() {
-	// the subprocesses stdout should already be closed...
-	d.textStream.Close()
 	d.cancel()
 	_ = d.cmd.Cancel()
 }
