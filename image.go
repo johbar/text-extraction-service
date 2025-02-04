@@ -3,17 +3,18 @@ package main
 import (
 	"bytes"
 	"io"
+	"strings"
 
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 )
 
 type ImageDoc struct {
-	data     *[]byte
-	mimetype string
+	data *[]byte
+	typ  string
 }
 
-func NewDocFromImage(data []byte, mimetype string) *ImageDoc {
-	return &ImageDoc{data: &data, mimetype: mimetype}
+func NewDocFromImage(data []byte, ext string) *ImageDoc {
+	return &ImageDoc{data: &data, typ: strings.TrimPrefix(ext, ".")}
 }
 
 func (d *ImageDoc) StreamText(w io.Writer) error {
@@ -46,7 +47,7 @@ func (d *ImageDoc) Text(i int) (string, bool) {
 
 func (d *ImageDoc) MetadataMap() map[string]string {
 	meta := make(map[string]string)
-	meta["x-doctype"] = d.mimetype
+	meta["x-doctype"] = d.typ
 	// this isn't really useful and may even be expensive in terms of cpu/memory and new deps
 	// so omitting it for now...
 

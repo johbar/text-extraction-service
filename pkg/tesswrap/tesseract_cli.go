@@ -16,8 +16,7 @@ import (
 var LangsAvailable []string
 
 func init() {
-	_, err := exec.LookPath("tesseract")
-	if err != nil {
+	if _, err := exec.LookPath("tesseract"); err != nil {
 		Initialized = false
 	} else {
 		LangsAvailable = listLangs()

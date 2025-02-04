@@ -30,7 +30,7 @@ type Document interface {
 	StreamText(w io.Writer) error
 	// Pages returns the documents number of pages. Returns -1 if the concept is not applicable to the file type.
 	Pages() int
-	// Text returns a single pages text and true if there is at least one image on the page
+	// Text returns a single page's text and true if there is at least one image on the page
 	Text(int) (string, bool)
 	// Data returns the underlying byte array
 	Data() *[]byte

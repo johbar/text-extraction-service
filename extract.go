@@ -64,7 +64,7 @@ func ExtractBody(c *gin.Context) {
 	metadata := doc.MetadataMap()
 	addMetadataAsHeaders(c.Writer.Header(), &metadata)
 	done, pw := RunDehyphenator(c.Writer)
-	WriteTextOrRunOcr(doc, pw, "<POST req>")
+	_ = WriteTextOrRunOcr(doc, pw, "<POST req>")
 	pw.Close()
 	<-done
 }
