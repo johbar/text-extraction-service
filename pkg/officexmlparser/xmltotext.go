@@ -27,7 +27,6 @@ func XmlToText(r io.Reader, w io.Writer, startWith string, breakElements []strin
 			return err
 		}
 		if t, ok := token.(xml.StartElement); ok {
-
 			if t.Name.Local == startWith {
 				break
 			}
