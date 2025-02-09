@@ -14,7 +14,6 @@ package rtfparser
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"io"
 	"strconv"
@@ -429,11 +428,6 @@ func newStackEntry(numberOfCharactersToSkip int, ignorable bool) stackEntry {
 
 func NewFromBytes(data []byte) (d *RichTextDoc, err error) {
 	inputRtf := string(data)
-
-	if !IsFileRTF(data) {
-		err = ErrNoRtf
-		return
-	}
 	info, err := GetRtfInfo(inputRtf)
 	d = &RichTextDoc{rtfContent: inputRtf, metadata: info}
 	return
@@ -447,7 +441,7 @@ func (d *RichTextDoc) Data() *[]byte {
 	return nil
 }
 
-func (d *RichTextDoc) Text(i int) (string, bool) {
+func (d *RichTextDoc) Text(_ int) (string, bool) {
 	return rtf2text(d.rtfContent, charsWithFmt), false
 }
 
@@ -470,7 +464,7 @@ func Rtf2Text(inputRtf string) string {
 }
 
 func rtf2text(inputRtf string, specialCharacters map[string]string) string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	rtf2textWriter(inputRtf, specialCharacters, &buf)
 	return buf.String()
 }
@@ -592,16 +586,12 @@ func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.W
 			}
 		}
 		match, _ = rtfRegex.FindNextMatch(match)
-		out.Flush()
+		if err := out.Flush(); err != nil {
+			return err
+		}
 	}
 	// log.Printf("Number of matches: %v", numMatches)
 	return nil
-}
-
-// IsFileRTF checks if the data indicates a RTF file
-// RTF has a signature of 7B 5C 72 74 66 31, or in string "{\rtf1"
-func IsFileRTF(data []byte) bool {
-	return bytes.HasPrefix(data, []byte{0x7B, 0x5C, 0x72, 0x74, 0x66, 0x31})
 }
 
 func (d *RichTextDoc) MetadataMap() map[string]string {
