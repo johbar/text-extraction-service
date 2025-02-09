@@ -1,9 +1,13 @@
 name: Build and test
 env:
-  TES_REMOVE_NEWLINES: '0'  
+  TES_REMOVE_NEWLINES: '0'
 on:
   push:
     tags-ignore: "*"
+    branches: "*"
+    paths-ignore: 
+      - "README.md"
+      - "Containerfile.*"
   pull_request:
     branches: [ "main" ]
 
