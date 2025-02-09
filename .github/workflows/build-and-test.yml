@@ -99,7 +99,7 @@ jobs:
         - name: Install some tools
           run: apk update && apk add --no-cache file binutils
         - name: Download libpdfium
-          run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh && cp pkg/pdflibwrappers/pdfium_purego/lib/libpdium.so /usr/local/lib/
+          run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh && cp pkg/pdflibwrappers/pdfium_purego/lib/libpdfium.so /usr/local/lib/
         - name: Build service
           run: go build -tags nomsgpack,embed_pdfium
         - name: Run basic test - PDFium
