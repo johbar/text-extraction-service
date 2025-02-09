@@ -54,6 +54,14 @@ func XmlToText(r io.Reader, w io.Writer, startWith string, breakElements []strin
 					return err
 				}
 			}
+		case xml.StartElement:
+			if t.Name.Local == "tableStyleId" {
+				// the next CDATA in pptx is an UUID, not to be printed
+				// so we just skip it
+				if _, err := d.RawToken(); err != nil {
+					return err
+				}
+			}
 		case xml.EndElement:
 			if slices.Contains(breakElements, t.Name.Local) {
 				if _, err := w.Write([]byte{'\n'}); err != nil {

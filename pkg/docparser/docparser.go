@@ -183,7 +183,7 @@ func (d *WordDoc) MetadataMap() map[string]string {
 	return m
 }
 
-func (d *WordDoc) Text(i int) (string, bool) {
+func (d *WordDoc) Text(_ int) (string, bool) {
 	panic("not allowed")
 }
 
