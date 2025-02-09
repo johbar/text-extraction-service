@@ -184,23 +184,7 @@ func (d *WordDoc) MetadataMap() map[string]string {
 }
 
 func (d *WordDoc) Text(i int) (string, bool) {
-	if i != 1 {
-		return "", false
-	}
-	if len(d.text) > 0 {
-		return d.text, false
-	}
-	buf := bytes.NewBuffer(*d.data)
-	cmd := exec.Command("wvWare", "-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8", "/dev/stdin")
-	cmd.Stdin = buf
-	out, err := cmd.Output()
-	if err != nil {
-		// FIXME
-		println(err)
-		println(cmd.Stderr)
-	}
-	result := reCleaner.ReplaceAllLiteral(out, []byte(" "))
-	return string(result), false
+	panic("not allowed")
 }
 
 func (d *WordDoc) StreamText(w io.Writer) error {
