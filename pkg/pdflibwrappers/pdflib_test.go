@@ -57,7 +57,7 @@ func TestPoppler(t *testing.T) {
 func TestMuPdf(t *testing.T) {
 	_, err := mupdfpure.InitLib("")
 	if err != nil {
-		t.Fatalf("poppler could not be loaded: %v", err)
+		t.Fatalf("mupdf could not be loaded: %v", err)
 	}
 	d, err := poppler_purego.Load(pdfFile)
 	if err != nil {
