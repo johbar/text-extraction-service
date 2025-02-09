@@ -1,6 +1,6 @@
 # text-extraction-service
 
-TES is a simple Go service for extracting and storing textual content from PDF, RTF and legacy MS Word (.doc) documents.
+TES is a simple Go service for extracting and storing textual content from PDF and office documents.
 
 ## Status
 
@@ -10,7 +10,7 @@ The use case is the fast processing of binary documents for repeated search mach
 
 The RegEx-based RTF parser is rather inefficient.
 
-The parser for XML-based office formats is not vary sophisticated and might need more testing.
+The parser for XML-based office formats is not very sophisticated and might need more testing.
 
 Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mature solution to be considered.
 
@@ -91,16 +91,16 @@ Additional design considerations and assumptions:
 On the [releases page](https://github.com/johbar/text-extraction-service/releases/) you find binaries that have `libpdfium.so`/`libpdfium.dylib`/`pdfium.dll` embedded.
 See latest releases below.
 
-| OS      | Variant | Architecture  | PDFium embedded                                                                                                             | Solo                                                                                                                                      |
-| ------- | ------- | ------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux   | glibc   | amd64         | [tes-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-linux-amd64.gz)            | [tes-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-linux-amd64.gz)                   |
-| Linux   | glibc   | arm64         | [tes-linux-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-linux-arm64.gz)            | [tes-pdfium-linux-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-linux-arm64.gz)            |
-| Linux   | musl    | amd64         | [tes-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-musl-linux-amd64.gz)  | [tes-pdfium-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-musl-linux-amd64.gz)  |
-| Linux   | musl    | arm64         | [tes-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-musl-linux-amd64.gz)  | [tes-pdfium-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-musl-linux-amd64.gz)  |
-| MacOs   |         | arm64         | [tes-mac-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-mac-amd64.gz)                | [tes-pdfium-mac-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-mac-amd64.gz)                |
-| MacOs   |         | amd64         | [tes-mac-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-mac-arm64.gz)                | [tes-pdfium-mac-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-mac-arm64.gz)                |
-| Windows |         | amd64         | [tes-windows-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-windows-amd64.gz)        | [tes-pdfium-windows-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-windows-amd64.exe.gz)    |
-| Windows |         | arm64         | [tes-windows-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-windows-arm64.exe.gz)    | [tes-pdfium-windows-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-windows-arm64.exe.gz)    |
+| OS      | Variant | Architecture | PDFium embedded                                                                                                            | Solo                                                                                                                                     |
+|---------|---------|--------------|----------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| Linux   | glibc   | amd64        | [tes-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-linux-amd64.gz)           | [tes-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-linux-amd64.gz)                  |
+| Linux   | glibc   | arm64        | [tes-linux-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-linux-arm64.gz)           | [tes-pdfium-linux-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-linux-arm64.gz)           |
+| Linux   | musl    | amd64        | [tes-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-musl-linux-amd64.gz) | [tes-pdfium-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-musl-linux-amd64.gz) |
+| Linux   | musl    | arm64        | [tes-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-musl-linux-amd64.gz) | [tes-pdfium-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-musl-linux-amd64.gz) |
+| MacOs   |         | arm64        | [tes-mac-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-mac-amd64.gz)               | [tes-pdfium-mac-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-mac-amd64.gz)               |
+| MacOs   |         | amd64        | [tes-mac-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-mac-arm64.gz)               | [tes-pdfium-mac-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-mac-arm64.gz)               |
+| Windows |         | amd64        | [tes-windows-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-windows-amd64.gz)       | [tes-pdfium-windows-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-windows-amd64.exe.gz)   |
+| Windows |         | arm64        | [tes-windows-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-windows-arm64.exe.gz)   | [tes-pdfium-windows-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-windows-arm64.exe.gz)   |
 
 ## Dev Setup - Building TES
 
@@ -182,15 +182,14 @@ Regarding speed with ordinary (rather small) files *PDFium* and *MuPDF* are most
 
 Some other aspects:
 
-|                              | PDFium                    | Poppler             | MuPDF                    |
-|------------------------------|---------------------------|---------------------|--------------------------|
-| License                      | ✅ permissive             | ⚠️ Copyleft          | ⚠️ Copyleft or payed license |
-| Performance with small files | ✅ good                   | ❌ bad              | ✅ good                  |
-| Performance with large files | ✅ good                   | 🚀 best             | ❌ bad                   |
-| Memory consumption           | ❌ high with large files¹ | ✅ consistently low | ❌ high with large files |
-| Available from Linux sources
-(deb, rpm, apk)                | ❌ no, but...¹            | ✅ yes             | ✔️ partially²              |
-| Multi-threaded               | ❌ no³                    | ✅ yes             | ✅ yes                    |
+|                                             | PDFium                   | Poppler              | MuPDF                        |
+|---------------------------------------------|--------------------------|----------------------|------------------------------|
+| License                                     | ✅ permissive             | ⚠️ Copyleft          | ⚠️ Copyleft or payed license  |
+| Performance with small files                | ✅ good                   | ❌ bad              | ✅ good                      |
+| Performance with large files                | ✅ good                   | 🚀 best             | ❌ bad                       |
+| Memory consumption                          | ❌ high with large files¹ | ✅ consistently low | ❌ high with large files     |
+| Available from Linux sources(deb, rpm, apk) | ❌ no, but...¹            | ✅ yes              | ✔️ partially²                 |
+| Multi-threaded                              | ❌ no³                    | ✅ yes              | ✅ yes                       |
 
 ¹ At runtime you can use the LibreOffice build of *PDFium*, `libpdfiumlo.so` from the Debian/Ubuntu package `libreoffice-core-nogui`.
 Using this lib instead of [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) performance drops a bit (maybe 10%), but in turn memory consumption with large files decreases a lot.
