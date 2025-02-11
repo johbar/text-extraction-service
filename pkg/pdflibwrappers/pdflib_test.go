@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	mupdfpure "github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/mupdf_purego"
+	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/mupdf_purego"
 	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/pdfium_purego"
 	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/poppler_purego"
 )
@@ -55,11 +55,11 @@ func TestPoppler(t *testing.T) {
 }
 
 func TestMuPdf(t *testing.T) {
-	_, err := mupdfpure.InitLib("")
+	_, err := mupdf_purego.InitLib("")
 	if err != nil {
 		t.Fatalf("mupdf could not be loaded: %v", err)
 	}
-	d, err := poppler_purego.Load(pdfFile)
+	d, err := mupdf_purego.Load(pdfFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,5 +92,8 @@ func checkMetadataEntries(t *testing.T, meta map[string]string) {
 	metaLen := len(meta)
 	if metaLen != 10 {
 		t.Errorf("Not enough entries in metadata map: %d. Expected: 10", metaLen)
+	}
+	if meta["x-document-title"] != "Drucksache 20/1" {
+		t.Errorf("expected document title to be 'Drucksache 20/1, but was '%s'", meta["x-document-title"])
 	}
 }

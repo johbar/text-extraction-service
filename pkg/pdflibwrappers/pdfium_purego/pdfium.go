@@ -21,6 +21,8 @@ type page uintptr
 type textPage uintptr
 
 var (
+	lib uintptr
+
 	FPDF_InitLibrary    func()
 	FPDF_DestroyLibrary func()
 	FPDF_GetLastError   func() uint64
@@ -70,7 +72,6 @@ type Document struct {
 }
 
 func InitLib(path string) (string, error) {
-	var lib uintptr
 	var err error
 	if len(path) > 0 {
 		lib, path, err = pdflibwrappers.TryLoadLib(path)

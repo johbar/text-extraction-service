@@ -41,6 +41,7 @@ type Document struct {
 }
 
 var (
+	lib uintptr
 	free           func(unsafe.Pointer)
 	g_bytes_new    func(bytes unsafe.Pointer, length uint64) uintptr
 	g_bytes_unref  func(uintptr)
@@ -68,7 +69,6 @@ var (
 )
 
 func InitLib(path string) (string, error) {
-	var lib uintptr
 	var err error
 	if len(path) > 0 {
 		lib, path, err = pdflibwrappers.TryLoadLib(path)

@@ -37,6 +37,7 @@ const (
 )
 
 var (
+	lib uintptr
 	MuPdfVersion = "1.25.2"
 
 	fz_new_context_imp func(alloc uintptr, locks uintptr, maxStore uint64, version string) fzContext
@@ -68,29 +69,28 @@ var (
 )
 
 func InitLib(path string) (string, error) {
-	var libmupdf uintptr
 	var err error
 	if len(path) > 0 {
-		libmupdf, path, err = pdflibwrappers.TryLoadLib(path)
+		lib, path, err = pdflibwrappers.TryLoadLib(path)
 	} else {
-		libmupdf, path, err = pdflibwrappers.TryLoadLib(defaultLibNames...)
+		lib, path, err = pdflibwrappers.TryLoadLib(defaultLibNames...)
 	}
 
 	if err != nil {
 		return "", err
 	}
-	purego.RegisterLibFunc(&fz_new_context_imp, libmupdf, "fz_new_context_imp")
-	purego.RegisterLibFunc(&fz_drop_context, libmupdf, "fz_drop_context")
-	purego.RegisterLibFunc(&fz_drop_document, libmupdf, "fz_drop_document")
-	purego.RegisterLibFunc(&fz_drop_stream, libmupdf, "fz_drop_stream")
-	purego.RegisterLibFunc(&fz_open_document_with_stream, libmupdf, "fz_open_document_with_stream")
-	purego.RegisterLibFunc(&fz_open_memory, libmupdf, "fz_open_memory")
-	purego.RegisterLibFunc(&fz_register_document_handlers, libmupdf, "fz_register_document_handlers")
-	purego.RegisterLibFunc(&fz_count_pages, libmupdf, "fz_count_pages")
-	purego.RegisterLibFunc(&fz_new_buffer_from_page_number, libmupdf, "fz_new_buffer_from_page_number")
-	purego.RegisterLibFunc(&fz_string_from_buffer, libmupdf, "fz_string_from_buffer")
-	purego.RegisterLibFunc(&fz_lookup_metadata, libmupdf, "fz_lookup_metadata")
-	purego.RegisterLibFunc(&fz_drop_buffer, libmupdf, "fz_drop_buffer")
+	purego.RegisterLibFunc(&fz_new_context_imp, lib, "fz_new_context_imp")
+	purego.RegisterLibFunc(&fz_drop_context, lib, "fz_drop_context")
+	purego.RegisterLibFunc(&fz_drop_document, lib, "fz_drop_document")
+	purego.RegisterLibFunc(&fz_drop_stream, lib, "fz_drop_stream")
+	purego.RegisterLibFunc(&fz_open_document_with_stream, lib, "fz_open_document_with_stream")
+	purego.RegisterLibFunc(&fz_open_memory, lib, "fz_open_memory")
+	purego.RegisterLibFunc(&fz_register_document_handlers, lib, "fz_register_document_handlers")
+	purego.RegisterLibFunc(&fz_count_pages, lib, "fz_count_pages")
+	purego.RegisterLibFunc(&fz_new_buffer_from_page_number, lib, "fz_new_buffer_from_page_number")
+	purego.RegisterLibFunc(&fz_string_from_buffer, lib, "fz_string_from_buffer")
+	purego.RegisterLibFunc(&fz_lookup_metadata, lib, "fz_lookup_metadata")
+	purego.RegisterLibFunc(&fz_drop_buffer, lib, "fz_drop_buffer")
 	ver := version()
 	if ver != "" {
 		MuPdfVersion = ver
@@ -175,7 +175,6 @@ func (d *Document) StreamText(w io.Writer) error {
 func (d *Document) Data() *[]byte {
 	return d.data
 }
-
 
 // Metadata returns a map with standard metadata.
 func (d *Document) MetadataMap() map[string]string {
