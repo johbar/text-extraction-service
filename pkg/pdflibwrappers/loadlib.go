@@ -22,7 +22,7 @@ func TryLoadLib(paths ...string) (uintptr, string, error) {
 		if lib != 0 {
 			return lib, path, nil
 		}
-		CloseLib = func() { purego.Dlclose(lib) }
+		// CloseLib = func() { purego.Dlclose(lib) }
 	}
 	return 0, "", err
 }
