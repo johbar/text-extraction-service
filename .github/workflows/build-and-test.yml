@@ -99,13 +99,16 @@ jobs:
         - name: Install some tools
           run: apk update && apk add --no-cache file binutils
         - name: Download libpdfium
-          run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh && cp pkg/pdflibwrappers/pdfium_purego/lib/libpdfium.so /usr/local/lib/
+          run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
         - name: Build service
           run: go build -tags nomsgpack,embed_pdfium
         - name: Run basic test - PDFium
           run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-        - name: Install MuPDF and Poppler
-          run: apk add --no-cache mupdf-libs poppler-glib wv icu-libs tesseract-ocr-data-eng && ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so
+        - name: Install MuPDF, Poppler, wv, tesseract
+          run: | 
+                apk add --no-cache mupdf-libs poppler-glib wv icu-libs tesseract-ocr-data-eng
+                ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so
+                cp pkg/pdflibwrappers/pdfium_purego/lib/libpdfium.so /usr/local/lib/
         - name: Run unit tests
           env:
             MUPDF_VERSION: "1.24.10"

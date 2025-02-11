@@ -10,6 +10,7 @@ func TestImageToText(t *testing.T) {
 		t.Log("Tesseract not available")
 		return
 	}
+	Languages = "eng"
 	f, err := os.Open("testdata/readme.png")
 	if err != nil {
 		t.Fatal(err)
