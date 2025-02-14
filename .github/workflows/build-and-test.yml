@@ -100,7 +100,7 @@ jobs:
       steps:
         - uses: actions/checkout@v4
         - name: Install some tools
-          run: apk update && apk add --no-cache file binutils
+          run: apk update && apk add --no-cache file binutils tzdata
         - name: Download libpdfium
           run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
         - name: Build service
