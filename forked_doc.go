@@ -17,11 +17,11 @@ type ForkedDoc struct {
 	metadata   map[string]string
 	textStream io.Reader
 	cancel     context.CancelFunc
-	origin     *string
+	origin     string
 }
 
 // NewDocFromForkedProcess creates a Document whose content and metadata is being extracted by a forked subprocess
-func NewDocFromForkedProcess(r io.Reader, origin *string) (*ForkedDoc, error) {
+func NewDocFromForkedProcess(r io.Reader, origin string) (*ForkedDoc, error) {
 	me, err := os.Executable()
 	if err != nil {
 		logger.Error("Could not find out who I am", "err", err, "origin", origin)

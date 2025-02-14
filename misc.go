@@ -115,7 +115,7 @@ func PrintMetadataAndTextToStdout(url string) {
 			stream = f
 		}
 	}
-	doc, err := NewDocFromStream(stream, &url)
+	doc, err := NewDocFromStream(stream, url)
 	if err != nil {
 		logger.Error("Could not process document", "url", url, "err", err)
 		os.Exit(2)

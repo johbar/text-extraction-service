@@ -82,7 +82,7 @@ func LoadPdfLib(libName string, libPath string) error {
 }
 
 // NewFromBytes returns a PDF Document parsed by the particular PDF lib that was loaded before
-func NewFromBytes(data []byte, origin *string) (doc Document, err error) {
+func NewFromBytes(data []byte, origin string) (doc Document, err error) {
 	switch pdfImpl.libShort {
 	case "pdfium":
 		if pdfium.Lock.TryLock() {

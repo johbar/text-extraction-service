@@ -14,7 +14,7 @@ import (
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 )
 
-func NewDocFromStream(r io.Reader, origin *string) (Document, error) {
+func NewDocFromStream(r io.Reader, origin string) (Document, error) {
 	// FIXME make configurable
 	r = io.LimitReader(r, 200*1024*1024)
 	data, err := io.ReadAll(r)
