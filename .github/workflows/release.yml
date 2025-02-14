@@ -3,8 +3,9 @@ on:
   push: 
     tags: "v*"
 env:
-  GOFLAGS: |
-            "-ldflags=-s -w" -tags=nomsgpack,embed_pdfium
+  GOFLAGS: "-trimpath -ldflags=-w -tags=nomsgpack,embed_pdfium"
+  GOARM64: v8.0
+  GOAMD64: v2
 jobs:
   compile-linux:
     name: Build glibc Linux Release Artefacts
@@ -34,7 +35,7 @@ jobs:
               GOOS="${GOOS}" GOARCH="${GOARCH}" pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
               GOOS="${GOOS}" GOARCH="${GOARCH}" go build -o "${exe}"
               file "${exe}"
-              # no PDFium embeded
+              # no PDFium embedded
               exe="dist/tes-${GOOS}-${GOARCH}${ext}"
               GOOS="${GOOS}" GOARCH="${GOARCH}" go build -tags nomsgpack -o "${exe}"
               file ${exe}
