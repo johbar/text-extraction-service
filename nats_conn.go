@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -48,28 +47,9 @@ func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 			}
 		}
 	} else {
-		ns, err := server.NewServer(
-			&server.Options{
-				JetStream:  true,
-				MaxPayload: conf.NatsMaxPayload,
-				TLS:        false,
-				DontListen: !conf.ExposeNats,
-				Host:       conf.NatsHost,
-				Port:       conf.NatsPort,
-				StoreDir:   conf.NatsStoreDir,
-			})
+		nc, err = connectToEmbeddedNatsServer(conf)
 		if err != nil {
-			panic(err)
-		}
-		ns.ConfigureLogger()
-		ns.Start()
-		if !ns.ReadyForConnections(5 * time.Second) {
-			panic("NATS not ready!")
-		}
-
-		nc, err = nats.Connect(ns.ClientURL(), nats.InProcessServer(ns))
-		if err != nil {
-			panic(err)
+			return nil, nil
 		}
 	}
 
@@ -79,7 +59,7 @@ func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 		os.Exit(1)
 	}
 	// test if JetStream is available
-	// we re-use the retry attempt counter from above
+	// we reuse the retry attempt counter from above
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()

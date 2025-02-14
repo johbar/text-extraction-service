@@ -43,9 +43,9 @@ type TesConfig struct {
 	NatsConnectRetries int `env:"TES_NATS_CONNECT_RETRIES" default:"10"`
 	// if true, disable HTTP Server in favor of NATS Microservice interface
 	NoHttp bool `env:"TES_NO_HTTP" default:"false"`
-	// name of the PDF implementation to load; either "pdfium" or "poppler"
+	// name of the PDF implementation to load; either "pdfium", "poppler" or "mupdf"
 	PdfLibName string `env:"TES_PDF_LIB_NAME" default:"pdfium"`
-	// Path of the shared object file; can be empty or just the basename
+	// Path of the shared object file; can be empty (to use defaults) or just the basename (e.g. "libmupdf.so")
 	PdfLibPath string `env:"TES_PDF_LIB_PATH"`
 	// if true, extracted text will be compacted by replacing newlines with whitespace
 	RemoveNewlines bool `env:"TES_REMOVE_NEWLINES" default:"true"`
