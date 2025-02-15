@@ -94,7 +94,7 @@ jobs:
             GOARCH=$GOARCH go build -tags nomsgpack -o "${exe}"
           done
           ls -lah dist/
-      - name: Save Darwin Artefacts
+      - name: Save Darwin Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: "tes-darwin-pdfium-embedded"

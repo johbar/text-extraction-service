@@ -2,7 +2,7 @@
 
 ## 
 # Loads the latest pdfium shared lib from Github.
-# In honors GOOS and GOARCH but only for combinations of linux and darwin with arm64 and am64
+# In honors GOOS and GOARCH but only for combinations of linux and darwin with arm64 and amd64
 # This scripts aims to be platform independent and should work on MacOS and Linux (glibc or musl).
 ##
 
