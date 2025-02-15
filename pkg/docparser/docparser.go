@@ -21,12 +21,20 @@ import (
 	"github.com/richardlehane/msoleps/types"
 )
 
-// RegExp matching ugly control characters (possibly surrounded by whitespace)
-// and duplicate whitespace
-var reCleaner = regexp.MustCompile(`\s*?\pC\pS*?|\s{2,}`)
+var (
+	// RegExp matching ugly control characters (possibly surrounded by whitespace)
+	// and duplicate whitespace
+	reCleaner = regexp.MustCompile(`\s*?\pC\pS*?|\s{2,}`)
 
-// Initialized indicates if the package is usable (depending on the presence of the WV tool)
-var Initialized bool
+	// Initialized indicates if the package is usable (depending on the presence of the wv and/or antiword)
+	Initialized bool = false
+
+	wvWare   = progAndArgs{cmd: "wvWare", args: []string{"-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8", "/dev/stdin"}}
+	antiword = progAndArgs{cmd: "antiword", args: []string{"-w", "0", "-m", "UTF-8", "-"}}
+	catdoc = progAndArgs{cmd: "catdoc", args: []string{"-w", "-d", "utf-8", "-"}}
+
+	wordProcessor progAndArgs
+)
 
 type DocMetadata struct {
 	Author   string `json:"author,omitempty"`
@@ -48,16 +56,21 @@ type DocMetadata struct {
 type WordDoc struct {
 	metadata DocMetadata
 	data     *[]byte
-	text     string
+}
+
+type progAndArgs struct {
+	cmd  string
+	args []string
 }
 
 func init() {
-	_, err := exec.LookPath("wvWare")
-	if err != nil {
-		Initialized = false
-		return
+	for _, prog := range []progAndArgs{antiword, wvWare, catdoc} {
+		if _, err := exec.LookPath(prog.cmd); err == nil {
+			wordProcessor = prog
+			Initialized = true
+			return
+		}
 	}
-	Initialized = true
 }
 
 func NewFromBytes(data []byte) (doc *WordDoc, err error) {
@@ -188,37 +201,37 @@ func (d *WordDoc) Text(_ int) (string, bool) {
 }
 
 func (d *WordDoc) StreamText(w io.Writer) error {
-	if d.text != "" {
-		w.Write([]byte(d.text))
-	} else {
-		cmd := exec.Command("wvWare", "-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8", "/dev/stdin")
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			return err
-		}
-		s := bufio.NewScanner(stdout)
-		cmd.Stdin = bytes.NewReader(*d.data)
-		err = cmd.Start()
-		if err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				err = errors.Join(err, errors.New(string(exitErr.Stderr)))
-			}
-			return err
-		}
+	return d.runExternalWordProcessor(w, wordProcessor)
+}
 
-		for s.Scan() {
-			line := s.Text() + " "
-			line = reCleaner.ReplaceAllLiteralString(line, " ")
-			// don't add empty lines
-			if line != "" && line != " " {
-				w.Write([]byte(line))
-			}
+func (d *WordDoc) runExternalWordProcessor(w io.Writer, wordProg progAndArgs) error {
+	cmd := exec.Command(wordProg.cmd, wordProg.args...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	s := bufio.NewScanner(stdout)
+	cmd.Stdin = bytes.NewReader(*d.data)
+	err = cmd.Start()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			err = errors.Join(err, errors.New(string(exitErr.Stderr)))
 		}
-		err = cmd.Wait()
-		if err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				return exitErr
-			}
+		return err
+	}
+
+	for s.Scan() {
+		line := s.Text() + " "
+		line = reCleaner.ReplaceAllLiteralString(line, " ")
+		// don't add empty lines
+		if line != "" && line != " " {
+			w.Write([]byte(line))
+		}
+	}
+	err = cmd.Wait()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return exitErr
 		}
 	}
 	return nil
