@@ -12,7 +12,7 @@ require (
 	github.com/gabriel-vasile/mimetype v1.4.8
 	github.com/gin-contrib/expvar v1.0.2
 	github.com/gin-gonic/gin v1.10.0
-	github.com/go-playground/validator/v10 v10.24.0
+	github.com/go-playground/validator/v10 v10.25.0
 	github.com/goccy/go-json v0.10.5
 	github.com/klauspost/compress v1.17.11
 	github.com/nats-io/nats-server/v2 v2.10.25
