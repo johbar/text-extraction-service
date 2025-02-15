@@ -24,7 +24,7 @@ COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-s
 
 # MuPDF is being installed as /usr/lib/libmupdf.so.24.10 (when version is 1.24.10)
 # Symlink it to /usr/lib/libmupdf.so as this is a stable path
-RUN apk update && apk add --no-cache mupdf-libs poppler-glib wv icu-libs && \
+RUN apk update && apk add --no-cache mupdf-libs poppler-glib antiword icu-libs && \
     ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so && \
     apk fetch --stdout libreoffice-common | tar xz usr/lib/libreoffice/program/libpdfiumlo.so && \
     rm /var/cache/apk/*

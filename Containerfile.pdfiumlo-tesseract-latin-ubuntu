@@ -31,7 +31,7 @@ RUN apt-get update && \
     dpkg --fsys-tarfile libreoffice-core-nogui_*.deb | tar -x ./usr/lib/libreoffice/program/libpdfiumlo.so && \
     rm libreoffice-core-nogui_*.deb && \
     apt-get -y --no-install-recommends --no-install-suggests install \
-    ca-certificates wv libopenjp2-7 liblcms2-2 libabsl-dev tesseract-ocr tesseract-ocr-script-latn tesseract-ocr-osd && \
+    ca-certificates ca-certificates libfreetype6 libicu70 libjpeg8 antiword  libopenjp2-7 liblcms2-2 libabsl-dev tesseract-ocr tesseract-ocr-script-latn tesseract-ocr-osd && \
     rm -rf /var/lib/apt
     
 USER nobody

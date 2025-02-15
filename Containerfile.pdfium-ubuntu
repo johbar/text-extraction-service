@@ -26,7 +26,7 @@ COPY --from=builder /usr/src/app/pkg/pdflibwrappers/pdfium_purego/lib/libpdfium.
 
 
 RUN apt-get update && \
-    apt-get --no-install-recommends --no-install-suggests -y install ca-certificates wv && \
+    apt-get --no-install-recommends --no-install-suggests -y install ca-certificates antiword && \
     rm -rf /var/lib/apt
 
 USER nobody

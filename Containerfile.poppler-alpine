@@ -21,7 +21,7 @@ FROM docker.io/alpine:latest
 
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
-RUN apk update && apk add poppler-glib wv
+RUN apk update && apk add poppler-glib antiword
 
 USER nobody
 

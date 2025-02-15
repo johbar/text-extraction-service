@@ -29,8 +29,9 @@ RUN apt-get update && \
     apt-get download libreoffice-core-nogui &&\
     dpkg --fsys-tarfile libreoffice-core-nogui_*.deb | tar -x ./usr/lib/libreoffice/program/libpdfiumlo.so && \
     rm libreoffice-core-nogui_*.deb && \
-    apt-get --no-install-recommends --no-install-suggests install ca-certificates wv libopenjp2-7 liblcms2-2 libabsl-dev -y && \
-    rm -rf /var/lib/apt
+    apt-get --no-install-recommends --no-install-suggests install ca-certificates libfreetype6 libicu70 libjpeg8 antiword libopenjp2-7 liblcms2-2 libabsl-dev -y && \
+    rm -rf /var/lib/apt && \
+    ldd /usr/lib/libreoffice/program/libpdfiumlo.so
 
 USER nobody
 

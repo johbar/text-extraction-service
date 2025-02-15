@@ -19,7 +19,7 @@ RUN go build -trimpath -ldflags=-w -buildvcs=false -tags nomsgpack -o /go/text-e
 FROM docker.io/alpine:latest
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
-RUN apk update && apk add --no-cache mupdf-libs wv
+RUN apk update && apk add --no-cache mupdf-libs antiword
 
 USER nobody
 
