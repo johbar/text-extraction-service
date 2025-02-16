@@ -21,12 +21,12 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
   - RTF
   - ODT and ODP
   - DOCX and PPTX
-  - legacy MS Word (.doc) files
+  - legacy MS Word (.doc) files (with external helper)
 - Support for three runtime-pluggable C/C++ PDF engines
     - Google Chromium's [PDFium](https://pdfium.googlesource.com/pdfium/)
     - Free Desktops [Poppler](https://poppler.freedesktop.org/)
     - Artifex' [MuPDF](https://mupdf.com/)
-- Optional dehyphenation of extracted text, specifically for German
+- Dehyphenation of extracted text, specifically for German (only an issue with PDFs)
 - Extraction of document metadata (title, author, creation date etc)
 - Store extracted text and metadata in NATS for faster retrieval
 - NATS can be embedded or run externally (e.g. as a cluster)
@@ -38,7 +38,8 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 - Processing local files with the `file:` transport
 - Processing password protected files
 - Processing files from web servers that require authentication of any kind (cookie, header, referral, user agent etc)
-- a lot of file formats, e.g. ppt, markdown, ods/xlsx
+- a lot of file formats, e.g. ppt, markdown, ods/xlsx, html
+
 ## License
 
 This service inherits the Open Source license of the PDF lib used at runtime:
@@ -79,7 +80,7 @@ The other is the integration of an optional cache and the algorithm used when se
 
 Additional design considerations and assumptions:
 
-- Do everything in-memory and in-process, whenever you can. No disk I/O, no invocation of external programs (except for `wvWare`).
+- Do everything in-memory and in-process, whenever you can. No disk I/O, no invocation of external programs in most cases (exceptions being `wvWare`/`antword`/`catdoc` for DOCs and `tesseract` for OCR).
 - The web service client does not care that much about, say, the PDF itself, but rather the textual content and some metadata.
   They don't want to download it to post it to TES, but they know the URL, so that's all TES needs to do the job.
 - The client does not care that much about the PDFs layout as they do about its textual content.
@@ -108,6 +109,8 @@ Building only requires a recent Go SDK (v1.21+) thanks to `purego`.
 But testing and running TES requires additional shared libs.
 Depending on the PDF engine you choose (see below for comparison) you need it installed in your dev/build environment.
 
+The docparser (for legacy MS Word files) can work either of the CLI tools `wvWare`, `antiword` or `catdoc`.
+
 All instructions supplied here suppose a Linux environment.
 
 ### PDFium
@@ -132,7 +135,7 @@ Otherwise or if you prefer a current version of the upstream lib:
 
 ### MuPDF
 
-- Have look at [this Containerfile](Containerfile.mupdf-ubuntu) to get an idea how to build MuPDF as a shared lib for Debian or Ubuntu.
+- Have look at [this Containerfile](Containerfile.mupdf-ubuntu) to get an idea of how to build MuPDF as a shared lib for Debian or Ubuntu.
   You can also build that image, run it and then copy the lib to your host system via `podman cp`.
 - Put `libmupdf.so` in `/usr/local/lib/`.
 - Set the config env variable in your shell via `export TES_PDF_LIB_PATH=/path/to/libmupdf.so` if you put elsewhere.
@@ -151,12 +154,14 @@ go build -tags nomsgpack -o tes
 If you don't need the NATS based cache additionally supply the build tag `cache_nop`.
 This will also disable the NATS interface as a whole.
 
+If you want no embedded NATS server but the possibility to connect to an external server at run time use the build tag `no_embedded_nats`.
+
 ## OCR (experimental)
 
 If you want to process image files or scanned PDFs TES got you covered.
 All you need to do is:
 
-1. Install Tesseract, on Debian/Ubuntu run `apt install tesseract-ocr`
+1. Install Tesseract, e.g. on Debian/Ubuntu run `apt install tesseract-ocr`
 2. Install any language model file you need. English is included by default.
     1. Run `apt install tesseract-ocr-script-latn` for a model that supports multiple languages with latin script (rather large)
     2. Or run `apt install tesseract-ocr-deu` for the german model (smaller but specific)
@@ -166,6 +171,7 @@ All you need to do is:
 If there is no text found on a PDF page and Tesseract is available TES will look for images on that page.
 It will then extract these images in-memory and pipe them to the Tesseract CLI.
 The output is then streamed back to TES or rather the client (after dehyphenation and compaction).
+
 This means: If there is a mixture of text and images on a page, no OCR at all is being performed.
 
 NOTE: OCR is an expensive process and can take a lot of time and resources.
@@ -285,7 +291,6 @@ Configuration happens through environment variables only.
 | `TES_TESSERACT_LANGS`                 | Set languages for Tesseract OCR as a list of 3-letter-codes, separated by `+`. Default: `Latin` = all languages with latin script                                                              |
 | `TES_LOG_LEVEL`                       | Sets the log level. Options (case-insensitive): `info` (default), `debug`, `warn`, `error`                                                                                                     |
 | `TES_DEBUG`                           | Adds source info to each log line. Default: `false`                                                                                                                                            |
-
 
 ## Security considerations
 
