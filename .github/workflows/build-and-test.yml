@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies
         run: | 
           sudo apt-get update -qq
-          sudo apt-get install -q -y ca-certificates wv curl libpoppler-glib8
+          sudo apt-get install -q -y ca-certificates antiword catdoc wv curl libpoppler-glib8
       - name: Install libpdfium
         run: curl -sS --location https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz | sudo tar -xz -C /usr lib/libpdfium.so
       - name: Run basic test
@@ -107,9 +107,9 @@ jobs:
           run: go build -tags nomsgpack,embed_pdfium
         - name: Run basic test - PDFium
           run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
-        - name: Install MuPDF, Poppler, wv, tesseract
+        - name: Install MuPDF, Poppler, antiword catdoc wv, tesseract
           run: | 
-                apk add --no-cache mupdf-libs poppler-glib wv icu-libs tesseract-ocr-data-eng
+                apk add --no-cache mupdf-libs poppler-glib antiword catdoc wv icu-libs tesseract-ocr-data-eng
                 ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so
                 cp pkg/pdflibwrappers/pdfium_purego/lib/libpdfium.so /usr/local/lib/
         - name: Run unit tests
