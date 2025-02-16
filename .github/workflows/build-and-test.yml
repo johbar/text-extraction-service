@@ -109,7 +109,7 @@ jobs:
           run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
         - name: Install MuPDF, Poppler, antiword catdoc wv, tesseract
           run: | 
-                apk add --no-cache mupdf-libs poppler-glib antiword catdoc wv icu-libs tesseract-ocr-data-eng
+                apk add --no-cache mupdf-libs poppler-glib antiword wv icu-libs tesseract-ocr-data-eng
                 ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so
                 cp pkg/pdflibwrappers/pdfium_purego/lib/libpdfium.so /usr/local/lib/
         - name: Run unit tests
