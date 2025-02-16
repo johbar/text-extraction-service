@@ -33,14 +33,19 @@ func NewDocFromStream(r io.Reader, origin string) (Document, error) {
 	switch mtype.Extension() {
 	case ".pdf":
 		return NewFromBytes(data, origin)
-	case ".doc":
-		if docparser.Initialized {
-			return docparser.NewFromBytes(data)
-		}
 	case ".rtf":
 		return rtfparser.NewFromBytes(data)
 	}
-
+	
+	// there is no extension (like .doc) associated with these types
+	if docparser.Initialized {
+		switch mtype.String() {
+		case "application/msword":
+			fallthrough
+		case "application/x-ole-storage":
+			return docparser.NewFromBytes(data)
+		}
+	}
 	if tesswrap.Initialized && strings.HasPrefix(mtype.String(), "image/") {
 		return NewDocFromImage(data, mtype.Extension()), nil
 	}
