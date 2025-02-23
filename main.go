@@ -74,7 +74,7 @@ func main() {
 	} else {
 		RegisterNatsService(nc)
 		defer nc.Drain()
-		cache = InitCache(js, tesConfig)
+		cache = InitCache(js, tesConfig, *logger)
 	}
 
 	if tesConfig.NoHttp {

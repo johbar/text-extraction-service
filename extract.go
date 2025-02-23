@@ -40,9 +40,13 @@ func saveAndCloseExtracedDocs() {
 	for doc := range postprocessDocChan {
 		doc.Doc.Close()
 		logger.Debug("Document closed.", "url", doc.Url)
+		if cacheNop {
+			continue
+		}
 		for i := 0; i <= 5; i++ {
-			err := cache.Save(doc)
+			info, err := cache.Save(doc)
 			if err == nil {
+				logger.Info("Saved text and metadata in NATS object store bucket", "url", *doc.Url, "chunks", info.Chunks, "size", info.Size)
 				break
 			}
 			logger.Warn("Could not save text to cache", "retries", i, "url", doc.Url)
@@ -87,7 +91,10 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	}
 
 	if !noCache {
-		metadata = cache.GetMetadata(url)
+		metadata, err = cache.GetMetadata(url)
+		if err != nil {
+			logger.Error("Could not get metadata from NATS object store", "url", url, "err", err)
+		}
 		if metadata != nil {
 			if etag, ok := metadata["etag"]; ok {
 				req.Header.Add("If-None-Match", etag)
@@ -118,6 +125,8 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 
 		if err = cache.StreamText(url, w); err == nil {
 			return http.StatusOK, nil
+		} else {
+			logger.Error("Could not receive text from NATS object store or write to output stream", "url", url, "err", err)
 		}
 		// We could not provide the client with cached text
 		// Resume with parsing the file (again)
@@ -163,9 +172,9 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		doc.StreamText(mWriter)
 	} else {
 		done, pw := RunDehyphenator(mWriter)
-		if err := WriteTextOrRunOcr(doc, pw, url); err != nil{
+		if err := WriteTextOrRunOcr(doc, pw, url); err != nil {
 			pw.Close()
-			<-done 
+			<-done
 			doc.Close()
 			// Client might have closed connection, so text couldn't be written
 			// and is not complete. We don't want to save incomplete docs.

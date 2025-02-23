@@ -3,6 +3,8 @@
 package main
 
 import (
+	"log/slog"
+
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -11,7 +13,7 @@ func init() {
 	cacheNop = true
 }
 
-func InitCache(js jetstream.JetStream, conf TesConfig) Cache {
+func InitCache(js jetstream.JetStream, conf TesConfig, _ slog.Logger) Cache {
 	return NopCache{}
 }
 
