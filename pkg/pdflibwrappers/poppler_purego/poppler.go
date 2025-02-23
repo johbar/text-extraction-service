@@ -16,22 +16,14 @@ import (
 	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers"
 )
 
-type DocumentInfo struct {
-	PdfVersion, Title, Author, Subject, KeyWords, Creator, Producer, Metadata string
-	CreationDate, ModificationDate                                            int64
-	Pages                                                                     int
-}
-
 type GError struct {
 	_       uint32
 	_       int32
 	message *byte
 }
 
-// PopplerPage represents a PDF page opened by Poppler
-type PopplerPage struct {
-	uintptr
-}
+// Page represents a PDF page opened by Poppler
+type Page uintptr
 
 // Document represents a PDF opened by Poppler
 type Document struct {
@@ -41,7 +33,7 @@ type Document struct {
 }
 
 var (
-	lib uintptr
+	lib            uintptr
 	free           func(unsafe.Pointer)
 	g_bytes_new    func(bytes unsafe.Pointer, length uint64) uintptr
 	g_bytes_unref  func(uintptr)
@@ -51,7 +43,7 @@ var (
 	poppler_document_new_from_bytes func(gbytes uintptr, password uintptr, err unsafe.Pointer) uintptr
 
 	poppler_document_get_n_pages func(uintptr) int
-	poppler_document_get_page    func(uintptr, int) uintptr
+	poppler_document_get_page    func(uintptr, int) Page
 
 	poppler_document_get_pdf_version_string func(uintptr) *byte
 	poppler_document_get_title              func(uintptr) *byte
@@ -63,8 +55,12 @@ var (
 	// poppler_document_get_metadata           func(uintptr) *byte
 	poppler_document_get_creation_date     func(uintptr) int64
 	poppler_document_get_modification_date func(uintptr) int64
+	// image related
+	g_list_length                   func(glist uintptr) uint32
+	poppler_page_get_image_mapping  func(page Page) uintptr
+	poppler_page_free_image_mapping func(glist uintptr)
 
-	poppler_page_get_text func(uintptr) *byte
+	poppler_page_get_text func(Page) *byte
 	defaultLibNames       = []string{"libpoppler-glib.so", "libpoppler-glib.so.8", "/opt/homebrew/lib/libpoppler-glib.8.dylib", "/opt/homebrew/lib/libpoppler-glib.dylib", "libpoppler-glib.8.dylib"}
 )
 
@@ -99,6 +95,9 @@ func InitLib(path string) (string, error) {
 	// purego.RegisterLibFunc(&poppler_document_get_metadata, lib, "poppler_document_get_metadata")
 	purego.RegisterLibFunc(&poppler_document_get_creation_date, lib, "poppler_document_get_creation_date")
 	purego.RegisterLibFunc(&poppler_document_get_modification_date, lib, "poppler_document_get_modification_date")
+	purego.RegisterLibFunc(&g_list_length, lib, "g_list_length")
+	purego.RegisterLibFunc(&poppler_page_get_image_mapping, lib, "poppler_page_get_image_mapping")
+	purego.RegisterLibFunc(&poppler_page_free_image_mapping, lib, "poppler_page_free_image_mapping")
 
 	return path, nil
 }
@@ -138,8 +137,8 @@ func (d *Document) Pages() int {
 }
 
 // GetPage opens a PDF page by index (zero-based)
-func (d *Document) GetPage(i int) *PopplerPage {
-	p := &PopplerPage{poppler_document_get_page(d.handle, i)}
+func (d *Document) GetPage(i int) Page {
+	p := poppler_document_get_page(d.handle, i)
 	return p
 }
 
@@ -148,32 +147,19 @@ func (d *Document) Close() {
 	d.handle = 0
 }
 
-// Text returns the pages textual content
-func (p *PopplerPage) Text() string {
-	txtPtr := poppler_page_get_text(p.uintptr)
-	return toStr(txtPtr)
-}
-
-// Close closes the page, freeing up resources allocated when the page was opened
-func (p *PopplerPage) Close() {
-	if p.uintptr != 0 {
-		g_object_unref(p.uintptr)
-		p.uintptr = 0
-	}
-	// do nothing if null pointer
-}
-
 func (d *Document) Text(pageIndex int) (string, bool) {
-	page := poppler_document_get_page(d.handle, pageIndex)
-	txtPtr := poppler_page_get_text(page)
-	g_object_unref(page)
-	// FIXME: implement image discovery logic to be true about hasImages
-	return toStr(txtPtr), true
+	p := d.GetPage(pageIndex)
+	txt := p.Text()
+	var images uint32 = 0
+	if len(txt) == 0 {
+		images = p.countImages()
+	}
+	p.Close()
+	return txt, images > 0
 }
 
 // StreamText writes the document's plain text content to an io.Writer
 func (d *Document) StreamText(w io.Writer) error {
-	// logger.Debug("Extracting", "pages", d.GetNPages())
 	for n := 0; n < d.pages; n++ {
 		page := d.GetPage(n)
 		pageText := page.Text()
@@ -227,4 +213,26 @@ func (d *Document) MetadataMap() map[string]string {
 	}
 
 	return m
+}
+
+// Text returns the pages textual content
+func (p Page) Text() string {
+	txtPtr := poppler_page_get_text(p)
+	return toStr(txtPtr)
+}
+
+// countImages returns the number of images on page
+func (p Page) countImages() uint32 {
+	list := poppler_page_get_image_mapping(p)
+	defer poppler_page_free_image_mapping(list)
+	length := g_list_length(list)
+	return length
+}
+
+// Close closes the page, freeing up resources allocated when the page was opened
+func (p Page) Close() {
+	if p != 0 {
+		g_object_unref(uintptr(p))
+	}
+	// do nothing if null pointer
 }

@@ -1,7 +1,6 @@
 package pdflibwrappers_test
 
 import (
-	"io"
 	"os"
 	"testing"
 
@@ -28,12 +27,18 @@ func TestPdfium(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	txt, _ := d.Text(0)
+	txt, hasImages := d.Text(0)
+	if hasImages {
+		t.Errorf("expected not to find images on page")
+	}
 	checkTextLength(t, txt)
 	t.Log(txt)
 	meta := d.MetadataMap()
 	checkMetadataEntries(t, meta)
 	t.Log(meta)
+	if d.Pages() != 2 {
+		t.Errorf("expected to find 2 pages but were %d", d.Pages())
+	}
 }
 
 func TestPoppler(t *testing.T) {
@@ -46,12 +51,18 @@ func TestPoppler(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	txt, _:= d.Text(0)
+	txt, hasImages := d.Text(0)
+	if hasImages {
+		t.Errorf("expected not to find images on page")
+	}
 	checkTextLength(t, txt)
 	t.Log(txt)
 	meta := d.MetadataMap()
 	checkMetadataEntries(t, meta)
 	t.Log(meta)
+	if d.Pages() != 2 {
+		t.Errorf("expected to find 2 pages but were %d", d.Pages())
+	}
 }
 
 func TestMuPdf(t *testing.T) {
@@ -64,21 +75,22 @@ func TestMuPdf(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	txt, _:= d.Text(0)
+	txt, _ := d.Text(0)
 	checkTextLength(t, txt)
 	t.Log(txt)
 	meta := d.MetadataMap()
 	checkMetadataEntries(t, meta)
 	t.Log(meta)
+	if d.Pages() != 2 {
+		t.Errorf("expected to find 2 pages but were %d", d.Pages())
+	}
 }
 
 func readFile() []byte {
-	f, err := os.Open("testdata/2000001.pdf")
+	data, err := os.ReadFile("testdata/2000001.pdf")
 	if err != nil {
 		panic(err)
 	}
-	data, _ := io.ReadAll(f)
-	f.Close()
 	return data
 }
 
@@ -91,9 +103,9 @@ func checkTextLength(t *testing.T, txt string) {
 func checkMetadataEntries(t *testing.T, meta map[string]string) {
 	metaLen := len(meta)
 	if metaLen != 10 {
-		t.Errorf("Not enough entries in metadata map: %d. Expected: 10", metaLen)
+		t.Errorf("expected to find 10 entries in metadata map, but were %d", metaLen)
 	}
 	if meta["x-document-title"] != "Drucksache 20/1" {
-		t.Errorf("expected document title to be 'Drucksache 20/1, but was '%s'", meta["x-document-title"])
+		t.Errorf("expected document title to be 'Drucksache 20/1', but was '%s'", meta["x-document-title"])
 	}
 }
