@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/poppler_purego"
+	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 )
 
 func TestWriteTextOrRunOcr(t *testing.T) {
@@ -15,6 +16,8 @@ func TestWriteTextOrRunOcr(t *testing.T) {
 	if _, err := poppler_purego.InitLib(""); err != nil {
 		return
 	}
+
+	tesswrap.Languages = "eng"
 
 	data, err := os.ReadFile("pkg/pdflibwrappers/testdata/readme.pdf")
 	if err != nil {
