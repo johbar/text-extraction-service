@@ -7,7 +7,7 @@ import (
 
 func TestImageToText(t *testing.T) {
 	if !Initialized {
-		t.Log("Tesseract not available")
+		t.Skipf("Tesseract not available")
 		return
 	}
 	Languages = "eng"

@@ -20,7 +20,7 @@ func init() {
 func TestPdfium(t *testing.T) {
 	_, err := pdfium_purego.InitLib("")
 	if err != nil {
-		t.Fatalf("pdfium could not be loaded: %v", err)
+		t.Skipf("pdfium could not be loaded: %v", err)
 	}
 	d, err := pdfium_purego.Load(pdfFile)
 	if err != nil {
@@ -44,7 +44,7 @@ func TestPdfium(t *testing.T) {
 func TestPoppler(t *testing.T) {
 	_, err := poppler_purego.InitLib("")
 	if err != nil {
-		t.Fatalf("poppler could not be loaded: %v", err)
+		t.Skipf("poppler could not be loaded: %v", err)
 	}
 	d, err := poppler_purego.Load(pdfFile)
 	if err != nil {
@@ -68,7 +68,7 @@ func TestPoppler(t *testing.T) {
 func TestMuPdf(t *testing.T) {
 	_, err := mupdf_purego.InitLib("")
 	if err != nil {
-		t.Fatalf("mupdf could not be loaded: %v", err)
+		t.Skipf("mupdf could not be loaded: %v", err)
 	}
 	d, err := mupdf_purego.Load(pdfFile)
 	if err != nil {
@@ -76,6 +76,7 @@ func TestMuPdf(t *testing.T) {
 	}
 	defer d.Close()
 	txt, _ := d.Text(0)
+	// determining images on page is not implemented, so second return value is always true
 	checkTextLength(t, txt)
 	t.Log(txt)
 	meta := d.MetadataMap()
