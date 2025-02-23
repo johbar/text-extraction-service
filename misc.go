@@ -39,7 +39,7 @@ func WriteTextOrRunOcr(d Document, w io.Writer, origin string) error {
 				continue
 			}
 			if len(images) < 1 {
-				logger.Warn("No Image found.", "origin", origin, "page", i)
+				logger.Warn("No image found.", "origin", origin, "page", i)
 			}
 			for _, img := range images {
 				logger.Info("Image found. Starting OCR", "origin", origin, "page", i, "type", img.FileType, "name", img.Name)
@@ -157,7 +157,7 @@ func LogAndFixConfigIssues() {
 	}
 
 	if !docparser.Initialized {
-		logger.Info("wvWare is not available in PATH. We will not be able to extract legacy MS Word documents.")
+		logger.Info("Neither wvWare, antiword nor catdoc found in PATH. We will not be able to extract legacy MS Word documents.")
 	}
 
 	logger.Info("PDF implementation", "lib", pdfImpl)
