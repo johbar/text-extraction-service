@@ -38,6 +38,9 @@ func WriteTextOrRunOcr(d Document, w io.Writer, origin string) error {
 				logger.Error("Extracting images failed", "err", err, "origin", origin)
 				continue
 			}
+			if len(images) < 1 {
+				logger.Warn("No Image found.", "origin", origin, "page", i)
+			}
 			for _, img := range images {
 				logger.Info("Image found. Starting OCR", "origin", origin, "page", i, "type", img.FileType, "name", img.Name)
 				ocrText, err := tesswrap.ImageReaderToText(img)

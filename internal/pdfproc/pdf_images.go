@@ -4,7 +4,6 @@ package pdfproc
 import (
 	"bytes"
 	"io"
-	"strconv"
 	"time"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
@@ -41,8 +40,8 @@ func ParseForImageExtraction(pdfData []byte) (*model.Context, error) {
 }
 
 func GetImages(ctx *model.Context, page int) ([]model.Image, error) {
-	images, err := pdfcpu.ExtractPageImages(ctx, page, false)
-	println("len: ", len(images))
+	// pdfcpu page numbers start at 1, ours at 0
+	images, err := pdfcpu.ExtractPageImages(ctx, page+1, false)
 	if err != nil {
 		return nil, err
 	}
@@ -52,16 +51,6 @@ func GetImages(ctx *model.Context, page int) ([]model.Image, error) {
 		imgSlice = append(imgSlice, img)
 	}
 	return imgSlice, nil
-}
-
-// ProcessImages applies readFunc to every image found on the page with the specified zero-based page number
-func ProcessImages(rs io.ReadSeeker, pageIndex int, readFunc func(model.Image)) {
-	pageStr := []string{strconv.Itoa(pageIndex + 1)}
-	pdfcpuapi.ExtractImages(rs, pageStr, func(img model.Image, singleImgPerPage bool, maxPageDigits int) error {
-		readFunc(img)
-		return nil
-	}, pdfConf)
-
 }
 
 // GetPdfInfos returns a PDF file's Metadata
