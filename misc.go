@@ -135,9 +135,12 @@ func PrintMetadataAndTextToStdout(url string) {
 		os.Exit(1)
 	}
 	done, w := RunDehyphenator(os.Stdout)
-	WriteTextOrRunOcr(doc, w, "<stdin>")
+	err = WriteTextOrRunOcr(doc, w, "<stdin>")
 	w.Close()
 	<-done
+	if err != nil {
+		os.Exit(1)
+	}
 }
 
 // LogAndFixConfigIssues logs warnings regarding configuration and fixes any issues of this kind
