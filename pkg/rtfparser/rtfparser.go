@@ -465,7 +465,7 @@ func Rtf2Text(inputRtf string) string {
 
 func rtf2text(inputRtf string, specialCharacters map[string]string) string {
 	var buf strings.Builder
-	rtf2textWriter(inputRtf, specialCharacters, &buf)
+	_= rtf2textWriter(inputRtf, specialCharacters, &buf)
 	return buf.String()
 }
 

@@ -177,15 +177,19 @@ func mapOpenDocumentMetadata(metadata map[string]string, data []byte) {
 }
 
 func (d *XmlBasedDocument) StreamText(w io.Writer) error {
+	var errs error
 	for _, f := range d.contentFile {
 		r, err := f.Open()
+		errs = errors.Join(errs, err)
+		// we don't want to abort when processing one of the contentFiles fails, 
+		// but still inform the caller of all errors
 		if err != nil {
-			return err
+			continue
 		}
-		XmlToText(r, w, d.bodyTag, breaks)
+		errs = errors.Join(errs, XmlToText(r, w, d.bodyTag, breaks))
 		r.Close()
 	}
-	return nil
+	return errs
 }
 
 func (d *XmlBasedDocument) Pages() int {
@@ -209,4 +213,3 @@ func (d *XmlBasedDocument) Text(_ int) (string, bool) {
 func (d *XmlBasedDocument) Close() {
 	//noop
 }
-

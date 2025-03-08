@@ -15,8 +15,8 @@ const (
 )
 
 func TestDocParser(t *testing.T) {
-	if Initialized == false {
-		return
+	if !Initialized {
+		t.Skip("no doc parser tool found")
 	}
 	data, _ := os.ReadFile(filePath)
 	d, err := NewFromBytes(data)

@@ -36,7 +36,10 @@ func TestOdt(t *testing.T) {
 		t.Fatal(err)
 	}
 	var sb strings.Builder
-	d.StreamText(&sb)
+	err = d.StreamText(&sb)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result := sb.String()
 	t.Log(result)
 	t.Logf("%v", d.MetadataMap())
@@ -59,7 +62,10 @@ func TestOdp(t *testing.T) {
 		t.Fatal(err)
 	}
 	var sb strings.Builder
-	d.StreamText(&sb)
+	err = d.StreamText(&sb)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result := sb.String()
 	t.Log(result)
 	t.Logf("%v", d.MetadataMap())
@@ -82,7 +88,10 @@ func TestDocx(t *testing.T) {
 		t.Fatal(err)
 	}
 	var sb strings.Builder
-	d.StreamText(&sb)
+	err = d.StreamText(&sb)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result := sb.String()
 	t.Log(result)
 	t.Logf("%v", d.MetadataMap())
@@ -105,7 +114,10 @@ func TestPptx(t *testing.T) {
 		t.Fatal(err)
 	}
 	var sb strings.Builder
-	d.StreamText(&sb)
+	err = d.StreamText(&sb)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result := sb.String()
 	t.Log(result)
 	t.Logf("%v", d.MetadataMap())

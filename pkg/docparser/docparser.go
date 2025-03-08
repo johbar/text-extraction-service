@@ -225,7 +225,10 @@ func (d *WordDoc) runExternalWordProcessor(w io.Writer, wordProg progAndArgs) er
 		line = reCleaner.ReplaceAllLiteralString(line, " ")
 		// don't add empty lines
 		if line != "" && line != " " {
-			w.Write([]byte(line))
+			_, err := w.Write([]byte(line))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	err = cmd.Wait()

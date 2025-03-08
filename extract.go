@@ -146,7 +146,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		doc, err = NewDocFromStream(response.Body, url)
 	}
 	if err != nil {
-		logger.Error("Error when parsing", "err", err, "url", url, "headers", response.Header)
+		logger.Error("Parsing failed", "err", err, "url", url, "headers", response.Header)
 		return http.StatusUnprocessableEntity, err
 	}
 	metadata = doc.MetadataMap()
@@ -169,7 +169,12 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		mWriter = io.MultiWriter(w, &text)
 	}
 	if skipDehyphenator {
-		doc.StreamText(mWriter)
+		err = doc.StreamText(mWriter)
+
+		if err != nil {
+			logger.Error("Could not extract text from file or write to output stream", "url", url, "err", err)
+			return 499, err
+		}
 	} else {
 		done, pw := RunDehyphenator(mWriter)
 		if err := WriteTextOrRunOcr(doc, pw, url); err != nil {
@@ -200,8 +205,10 @@ func ExtractRemote(c *gin.Context) {
 	var params RequestParams
 	bindErr := c.BindQuery(&params)
 	if bindErr != nil {
-		c.AbortWithError(http.StatusBadRequest, bindErr)
-		logger.Warn("Invalid request", "err", c.Errors.JSON())
+		logger.Warn("Invalid request", "requestURL", c.Request.URL, "err", c.Errors.JSON())
+		if err := c.AbortWithError(http.StatusBadRequest, bindErr); err != nil {
+			logger.Error("Returning error to HTTP client failed", "err", err)
+		}
 		return
 	}
 	valErr := validate.Struct(params)
