@@ -31,6 +31,6 @@ func TestRtf(t *testing.T) {
 		t.Errorf("Extracted content did not start as expected")
 	}
 	if !strings.HasSuffix(txt, lastLine) {
-		t.Errorf("Extracted content dit not end as expected")
+		t.Errorf("Extracted content did not end as expected")
 	}
 }
