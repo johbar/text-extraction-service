@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/bytedance/sonic"
+	"github.com/go-json-experiment/json"
 )
 
 // ForkedDoc represents a Document processed by forked subprocess of this service
@@ -49,7 +49,7 @@ func NewDocFromForkedProcess(r io.Reader, origin string) (*ForkedDoc, error) {
 	// Read one line to get the metadata
 	firstLine := readFirstLine(buf)
 	metadata := make(map[string]string)
-	if err := sonic.Unmarshal(firstLine, &metadata); err != nil {
+	if err := json.Unmarshal(firstLine, &metadata); err != nil {
 		logger.Error("Malformed input encountered when reading metadata", "origin", origin, "input", firstLine)
 		return nil, err
 	}

@@ -67,10 +67,9 @@ func ExtractBody(c *gin.Context) {
 	defer doc.Close()
 	metadata := doc.MetadataMap()
 	addMetadataAsHeaders(c.Writer.Header(), &metadata)
-	done, pw := RunDehyphenator(c.Writer)
+	pw := RunDehyphenator(c.Writer)
 	_ = WriteTextOrRunOcr(doc, pw, "<POST req>")
 	pw.Close()
-	<-done
 }
 
 func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status int, err error) {
@@ -176,17 +175,15 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 			return 499, err
 		}
 	} else {
-		done, pw := RunDehyphenator(mWriter)
+		pw := RunDehyphenator(mWriter)
 		if err := WriteTextOrRunOcr(doc, pw, url); err != nil {
 			pw.Close()
-			<-done
 			doc.Close()
 			// Client might have closed connection, so text couldn't be written
 			// and is not complete. We don't want to save incomplete docs.
 			return 499, err
 		}
 		pw.Close()
-		<-done
 	}
 	if !silent {
 		logger.Debug("Streaming response done", "url", url)

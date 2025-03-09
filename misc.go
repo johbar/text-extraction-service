@@ -1,13 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"os"
 	"runtime/debug"
 	"strings"
 
+	"github.com/go-json-experiment/json"
 	"github.com/johbar/text-extraction-service/v2/internal/pdfproc"
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
@@ -68,8 +68,7 @@ func WriteTextOrRunOcr(d Document, w io.Writer, origin string) error {
 
 // RunDehyphenator starts the dehyphenator process on another Go routine.
 // It returns a channel that spawns a bool value, when all reading is done, and a pipewriter to write the input to
-func RunDehyphenator(w io.Writer) (done chan bool, pw *io.PipeWriter) {
-	finished := make(chan bool)
+func RunDehyphenator(w io.Writer) (pw *io.PipeWriter) {
 	pr, pw := io.Pipe()
 	go func() {
 		err := dehyphenator.DehyphenateReaderToWriter(pr, w)
@@ -83,10 +82,8 @@ func RunDehyphenator(w io.Writer) (done chan bool, pw *io.PipeWriter) {
 		if err := pr.Close(); err != nil {
 			logger.Error("RunDehyphenator: Could not close PipeReader in go routine")
 		}
-		finished <- true
-		close(finished)
 	}()
-	return finished, pw
+	return pw
 }
 
 // PrintMetadataAndTextToStdout prints a file's metadata (as JSON) on the first line, followed by the file's text content.
@@ -134,10 +131,9 @@ func PrintMetadataAndTextToStdout(url string) {
 		logger.Error("Could not write to output", "err", err)
 		os.Exit(1)
 	}
-	done, w := RunDehyphenator(os.Stdout)
+	w := RunDehyphenator(os.Stdout)
 	err = WriteTextOrRunOcr(doc, w, "<stdin>")
 	w.Close()
-	<-done
 	if err != nil {
 		os.Exit(1)
 	}

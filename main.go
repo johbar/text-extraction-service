@@ -8,9 +8,12 @@ import (
 
 	"github.com/gin-contrib/expvar"
 	"github.com/gin-gonic/gin"
+	"github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 	sloggin "github.com/samber/slog-gin"
+	slogjson "github.com/veqryn/slog-json"
 )
 
 var (
@@ -25,7 +28,22 @@ var (
 
 func main() {
 	tesConfig = NewTesConfigFromEnv()
-	logger = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: tesConfig.logLevel, AddSource: tesConfig.Debug}))
+	h := slogjson.NewHandler(os.Stdout, &slogjson.HandlerOptions{
+		AddSource:   tesConfig.Debug,
+		Level:       tesConfig.logLevel,
+		ReplaceAttr: nil, // Same signature and behavior as stdlib JSONHandler
+		JSONOptions: json.JoinOptions(
+			// Options from the json v2 library (these are the defaults)
+			json.Deterministic(true),
+			jsontext.AllowDuplicateNames(true),
+			jsontext.AllowInvalidUTF8(true),
+			jsontext.EscapeForJS(true),
+			jsontext.SpaceAfterColon(false),
+			jsontext.SpaceAfterComma(true),
+		),
+	})
+
+	logger = slog.New(h)
 	// set static/global config of submodules
 	tesswrap.Languages = tesConfig.TesseractLangs
 	dehyphenator.RemoveNewlines = tesConfig.RemoveNewlines
@@ -35,7 +53,8 @@ func main() {
 	}
 	if pdfImpl.delete {
 		// Delete the extracted file before process is terminated.
-		// We could also delete it earlier, after it has been loaded but then a forked process couldn't use the same file.
+		// We could (at least on *nix OSes) also delete it earlier, after it has been loaded
+		// but then a forked process couldn't use the same file.
 		go func() {
 			sigint := make(chan os.Signal, 1)
 			signal.Notify(sigint, os.Interrupt)
@@ -52,7 +71,7 @@ func main() {
 		PrintMetadataAndTextToStdout(os.Args[1])
 		return
 	}
-	
+
 	logger.Debug("Starting Text Extraction Service with config", "conf", tesConfig)
 	LogAndFixConfigIssues()
 	postprocessDocChan = make(chan *ExtractedDocument, 100)
