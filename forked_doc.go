@@ -50,7 +50,7 @@ func NewDocFromForkedProcess(r io.Reader, origin string) (*ForkedDoc, error) {
 	firstLine := readFirstLine(buf)
 	metadata := make(map[string]string)
 	if err := json.Unmarshal(firstLine, &metadata); err != nil {
-		logger.Error("Malformed input encountered when reading metadata", "origin", origin, "input", firstLine)
+		logger.Error("Malformed input encountered when reading metadata from subprocess", "err", err, "origin", origin, "input", firstLine)
 		return nil, err
 	}
 	doc.metadata = metadata

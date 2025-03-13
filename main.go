@@ -28,7 +28,7 @@ var (
 
 func main() {
 	tesConfig = NewTesConfigFromEnv()
-	h := slogjson.NewHandler(os.Stdout, &slogjson.HandlerOptions{
+	h := slogjson.NewHandler(os.Stderr, &slogjson.HandlerOptions{
 		AddSource:   tesConfig.Debug,
 		Level:       tesConfig.logLevel,
 		ReplaceAttr: nil, // Same signature and behavior as stdlib JSONHandler
