@@ -18,7 +18,7 @@ require (
 	github.com/pdfcpu/pdfcpu v0.9.1
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.4
-	github.com/samber/slog-gin v1.14.1
+	github.com/samber/slog-gin v1.15.0
 	github.com/veqryn/slog-json v0.4.0
 	go-simpler.org/env v0.12.0
 	golang.org/x/text v0.23.0
