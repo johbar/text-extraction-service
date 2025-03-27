@@ -107,7 +107,7 @@ func main() {
 	}
 
 	httpClient = &http.Client{
-		Transport: &http.Transport{DisableCompression: tesConfig.HttpClientDisableCompression},
+		Transport: &http.Transport{DisableCompression: tesConfig.HttpClientDisableCompression, MaxIdleConnsPerHost: 100},
 	}
 	logger.Info("Service started", "address", srv.Addr)
 	defer logger.Info("HTTP Server stopped.")
