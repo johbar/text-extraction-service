@@ -58,7 +58,7 @@ func saveAndCloseExtracedDocs() {
 // Returns a JSON encoded error message if the body is not parsable.
 func ExtractBody(c *gin.Context) {
 	origin := "POST request"
-	doc, err := NewDocFromStream(c.Request.Body, origin)
+	doc, err := NewDocFromStream(c.Request.Body, c.Request.ContentLength, origin)
 	if err != nil {
 		logger.Error("Error parsing response body", "err", err)
 		c.AbortWithStatus(http.StatusUnprocessableEntity)
@@ -142,7 +142,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		// and the dehyphenator fails with input not containing newlines
 		skipDehyphenator = true
 	} else {
-		doc, err = NewDocFromStream(response.Body, url)
+		doc, err = NewDocFromStream(response.Body, response.ContentLength, url)
 	}
 	if err != nil {
 		logger.Error("Parsing failed", "err", err, "url", url, "headers", response.Header)

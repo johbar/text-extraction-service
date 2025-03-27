@@ -9,6 +9,8 @@ import (
 	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/poppler_purego"
 )
 
+const shortPdf = "testdata/2000001.pdf"
+
 var (
 	pdfFile []byte
 )
@@ -27,18 +29,33 @@ func TestPdfium(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	txt, hasImages := d.Text(0)
-	if hasImages {
-		t.Errorf("expected not to find images on page")
+	if d.Path() != "" {
+		t.Errorf("expected PDF path to be empty, but was '%s'", d.Path())
 	}
-	checkTextLength(t, txt)
-	t.Log(txt)
-	meta := d.MetadataMap()
-	checkMetadataEntries(t, meta)
-	t.Log(meta)
-	if d.Pages() != 2 {
-		t.Errorf("expected to find 2 pages but were %d", d.Pages())
+	runt := func() {
+		txt, hasImages := d.Text(0)
+		if hasImages {
+			t.Errorf("expected not to find images on page")
+		}
+		checkTextLength(t, txt)
+		t.Log(txt)
+		meta := d.MetadataMap()
+		checkMetadataEntries(t, meta)
+		t.Log(meta)
+		if d.Pages() != 2 {
+			t.Errorf("expected to find 2 pages but were %d", d.Pages())
+		}
 	}
+	runt()
+	d.Close()
+	d, err = pdfium_purego.Open(shortPdf)
+	if err != nil {
+		t.Fatal("pdfium could not load file from path")
+	}
+	if d.Path() != shortPdf {
+		t.Errorf("expected PDF path to be '%s', but was '%s'", shortPdf, d.Path())
+	}
+	runt()
 }
 
 func TestPoppler(t *testing.T) {
@@ -88,7 +105,7 @@ func TestMuPdf(t *testing.T) {
 }
 
 func readFile() []byte {
-	data, err := os.ReadFile("testdata/2000001.pdf")
+	data, err := os.ReadFile(shortPdf)
 	if err != nil {
 		panic(err)
 	}

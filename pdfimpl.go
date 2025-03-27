@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"os"
 	"strings"
 
 	mupdf "github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/mupdf_purego"
@@ -32,8 +33,10 @@ type Document interface {
 	Pages() int
 	// Text returns a single page's text and true if there is at least one image on the page
 	Text(int) (string, bool)
-	// Data returns the underlying byte array
+	// Data returns the underlying byte array or nil if the document was loaded from disk
 	Data() *[]byte
+	// Path returns the filesystem path a document was loaded from or an empty string if the was not loaded from disk
+	// Path()
 	// MetadataMap returns a map of Document properties, such as Author, Title etc.
 	MetadataMap() map[string]string
 	// Close releases resources associated with the document
@@ -81,8 +84,8 @@ func LoadPdfLib(libName string, libPath string) error {
 	return errors.New("not a supported PDF library: " + libName)
 }
 
-// NewFromBytes returns a PDF Document parsed by the particular PDF lib that was loaded before
-func NewFromBytes(data []byte, origin string) (doc Document, err error) {
+// NewPdfFromBytes returns a PDF Document parsed by the particular PDF lib that was loaded before
+func NewPdfFromBytes(data []byte, origin string) (doc Document, err error) {
 	switch pdfImpl.libShort {
 	case "pdfium":
 		if pdfium.Lock.TryLock() {
@@ -100,5 +103,27 @@ func NewFromBytes(data []byte, origin string) (doc Document, err error) {
 
 	}
 	// this should never happen as startup fails when no lib can be loaded:
-	return nil, errors.New("no pdf implementation available")
+	return nil, errors.New("no PDF implementation available")
+}
+
+// NewPdfFromPath returns a PDF Document parsed by the particular PDF lib that was loaded before
+func NewPdfFromPath(path, origin string) (doc Document, err error) {
+	switch pdfImpl.libShort {
+	case "pdfium":
+		if pdfium.Lock.TryLock() {
+			d, err := pdfium.Open(path)
+			pdfium.Lock.Unlock()
+			return d, err
+		} else {
+			r, err := os.Open(path)
+			if err != nil {
+				return nil, err
+			}
+			// FIXME where to close the os.File?
+			return NewDocFromForkedProcess(r, origin)
+		}
+		// FIXME: add Poppler and MuPDF
+	}
+	return nil, errors.New("no PDF implementation available")
+
 }

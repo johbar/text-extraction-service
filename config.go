@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"go-simpler.org/env"
 )
 
@@ -27,6 +28,13 @@ type TesConfig struct {
 	// Log level (DEBUG, INFO, WARN, ERROR)
 	LogLevel string `env:"TES_LOG_LEVEL" default:"INFO"`
 	logLevel slog.Level
+	// FIXME: this is not honored yet
+	// Maximum size a file may have; processing is aborted if a requested file is bigger
+	MaxFileSize string `env:"TES_MAX_FILE_SIZE" default:"300Mib"`
+	maxFileSizeBytes uint64
+	// maximum size of a file fetched from a web server to be processed solely in-memory instead of being downloaded
+	MaxInMemory      string `env:"TES_MAX_IN_MEMORY" default:"2MiB"`
+	maxInMemoryBytes uint64
 	// NATS max msg size (embedded server only)
 	NatsMaxPayload int32 `env:"TES_MAX_PAYLOAD" default:"8388608"`
 	// embedded NATS server storage location. Default: /tmp/nats
@@ -68,7 +76,20 @@ func NewTesConfigFromEnv() TesConfig {
 	}
 
 	if err := cfg.logLevel.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
+		logger.Warn("invalid loglevel", "val", cfg.LogLevel)
 		cfg.logLevel = slog.LevelInfo
+	}
+	if maxbytes, err := humanize.ParseBytes(cfg.MaxInMemory); err == nil {
+		cfg.maxInMemoryBytes = maxbytes
+	} else {
+		logger.Warn("invalid value for TES_MAX_IN_MEMORY; falling back to default: 2 MiB", "err", err)
+		cfg.maxInMemoryBytes = 2 * 1024 * 1024
+	}
+	if maxSize, err := humanize.ParseBytes(cfg.MaxFileSize); err == nil {
+		cfg.maxFileSizeBytes = maxSize
+	} else {
+		logger.Warn("invalid value for TES_MAX_FILE_SIZE; falling back to default: 300 MiB", "err", err)
+		cfg.maxFileSizeBytes = 300 * 1024 * 1024
 	}
 	return cfg
 }

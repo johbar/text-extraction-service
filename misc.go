@@ -91,6 +91,7 @@ func RunDehyphenator(w io.Writer) (pw *io.PipeWriter) {
 func PrintMetadataAndTextToStdout(url string) {
 	var doc Document
 	var stream io.ReadCloser
+	var size int64 = -1
 	if strings.HasPrefix(url, "http") {
 		resp, err := http.Get(url)
 		if err != nil {
@@ -102,6 +103,7 @@ func PrintMetadataAndTextToStdout(url string) {
 			os.Exit(1)
 		}
 		stream = resp.Body
+		size = resp.ContentLength
 	} else {
 		if url == "-" {
 			stream = os.Stdin
@@ -113,9 +115,15 @@ func PrintMetadataAndTextToStdout(url string) {
 			}
 			defer f.Close()
 			stream = f
+			stat, err := f.Stat()
+			if err !=nil {
+				logger.Error("Could not get file stat", "err", err)
+				os.Exit(1)
+			}
+			size = stat.Size()
 		}
 	}
-	doc, err := NewDocFromStream(stream, url)
+	doc, err := NewDocFromStream(stream, size, url)
 	if err != nil {
 		logger.Error("Could not process document", "url", url, "err", err)
 		os.Exit(2)

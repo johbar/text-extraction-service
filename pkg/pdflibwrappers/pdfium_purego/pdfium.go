@@ -17,6 +17,7 @@ import (
 	"golang.org/x/text/transform"
 )
 
+type document uintptr
 type page uintptr
 type textPage uintptr
 
@@ -25,17 +26,17 @@ var (
 
 	FPDF_InitLibrary    func()
 	FPDF_DestroyLibrary func()
-	FPDF_GetLastError   func() uint64
 
-	FPDF_LoadMemDocument func(data unsafe.Pointer, length uint64, password unsafe.Pointer) uintptr
+	FPDF_LoadMemDocument func(data unsafe.Pointer, length uint64, password unsafe.Pointer) document
+	FPDF_LoadDocument    func(path string, password uintptr) document
 	// document
-	FPDF_GetPageCount  func(docHandle uintptr) int
-	FPDF_CloseDocument func(docHandle uintptr)
+	FPDF_GetPageCount  func(docHandle document) int
+	FPDF_CloseDocument func(docHandle document)
 	//Get the file version of the specific PDF document.
-	FPDF_GetFileVersion func(doc uintptr, version unsafe.Pointer) bool
+	FPDF_GetFileVersion func(docHandle document, version unsafe.Pointer) bool
 
 	// page
-	FPDF_LoadPage         func(docHandle uintptr, index int32) page
+	FPDF_LoadPage         func(docHandle document, index int32) page
 	FPDF_ClosePage        func(pageHandle page)
 	FPDFPage_CountObjects func(pageHandle page) int32
 	FPDFPage_GetObject    func(pageHandle page, index int32) (pageObjectHandle uintptr)
@@ -59,14 +60,15 @@ var (
 		each WORD representing the Unicode of a character(some special Unicode may take 2 WORDs).
 		The string is followed by two bytes of zero indicating the end of the string.
 	*/
-	FPDF_GetMetaText func(documenthandle uintptr, tag string, resultBuf unsafe.Pointer, bufLength uint64) (bytesNeeded uint64)
+	FPDF_GetMetaText func(documenthandle document, tag string, resultBuf unsafe.Pointer, bufLength uint64) (bytesNeeded uint64)
 
 	// PDFium is not thread-safe. This lock guards the lib against concurrent access in places where this is known to be necessary
 	Lock sync.Mutex
 )
 
 type Document struct {
-	handle uintptr
+	handle document
+	path   string
 	data   *[]byte
 	pages  int
 }
@@ -83,10 +85,11 @@ func InitLib(path string) (string, error) {
 		return "", err
 	}
 	purego.RegisterLibFunc(&FPDF_InitLibrary, lib, "FPDF_InitLibrary")
-	purego.RegisterLibFunc(&FPDF_GetLastError, lib, "FPDF_GetLastError")
 
 	purego.RegisterLibFunc(&FPDF_DestroyLibrary, lib, "FPDF_DestroyLibrary")
 	purego.RegisterLibFunc(&FPDF_LoadMemDocument, lib, "FPDF_LoadMemDocument")
+	purego.RegisterLibFunc(&FPDF_LoadDocument, lib, "FPDF_LoadDocument")
+
 	purego.RegisterLibFunc(&FPDF_CloseDocument, lib, "FPDF_CloseDocument")
 	purego.RegisterLibFunc(&FPDF_GetFileVersion, lib, "FPDF_GetFileVersion")
 	purego.RegisterLibFunc(&FPDF_GetPageCount, lib, "FPDF_GetPageCount")
@@ -117,6 +120,14 @@ func Load(data []byte) (*Document, error) {
 	return &Document{data: &data, handle: handle, pages: FPDF_GetPageCount(handle)}, nil
 }
 
+func Open(path string) (*Document, error) {
+	handle := FPDF_LoadDocument(path, 0)
+	if handle == 0 {
+		return nil, errors.New("pdfium: cannot load document")
+	}
+	return &Document{data: nil, path: path, handle: handle, pages: FPDF_GetPageCount(handle)}, nil
+}
+
 func (d *Document) Close() {
 	if d.handle != 0 {
 		FPDF_CloseDocument(d.handle)
@@ -131,6 +142,10 @@ func (d *Document) Pages() int {
 
 func (d *Document) Data() *[]byte {
 	return d.data
+}
+
+func (d *Document) Path() string {
+	return d.path
 }
 
 func (d *Document) page(i int) page {
@@ -292,4 +307,3 @@ func (d *Document) countImages(pageHandle page) int {
 	}
 	return imgCount
 }
-
