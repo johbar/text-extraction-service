@@ -5,7 +5,7 @@ TES is a simple Go service for extracting and storing textual content from PDF a
 ## Status
 
 This started as an exercise in using Golang and cgo.
-But it is about to be used in production (at least for PDFs).
+But it is being used in production (at least for PDFs).
 The use case is the fast processing of binary documents for repeated search machine indexation (see blow for details).
 
 The RegEx-based RTF parser is rather inefficient.
@@ -80,12 +80,12 @@ The other is the integration of an optional cache and the algorithm used when se
 
 Additional design considerations and assumptions:
 
-- Do everything in-memory and in-process, whenever you can. No disk I/O, no invocation of external programs in most cases (exceptions being `wvWare`/`antword`/`catdoc` for DOCs and `tesseract` for OCR).
+- Do everything in-memory and in-process, whenever you can. No disk I/O for small files, no invocation of external programs in most cases (exceptions being `wvWare`/`antword`/`catdoc` for DOCs and `tesseract` for OCR).
 - The web service client does not care that much about, say, the PDF itself, but rather the textual content and some metadata.
   They don't want to download it to post it to TES, but they know the URL, so that's all TES needs to do the job.
 - The client does not care that much about the PDFs layout as they do about its textual content.
   So text returned by TES should only be semantically correct concerning the order of words on pages etc. but not accurate in presentation.
-  ➡️ Join words split up by hyphens on line endings, remove newlines in order to save bandwidth etc.
+  ➡️> Join words that have been split up by hyphens on line endings, remove newlines in order to save bandwidth etc.
 
 ## Quick start
 
@@ -97,15 +97,17 @@ See latest releases below.
 | Linux   | glibc   | amd64        | [tes-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-linux-amd64.gz)           | [tes-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-linux-amd64.gz)                  |
 | Linux   | glibc   | arm64        | [tes-linux-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-linux-arm64.gz)           | [tes-pdfium-linux-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-linux-arm64.gz)           |
 | Linux   | musl    | amd64        | [tes-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-musl-linux-amd64.gz) | [tes-pdfium-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-musl-linux-amd64.gz) |
-| Linux   | musl    | arm64        | [tes-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-musl-linux-amd64.gz) | [tes-pdfium-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-musl-linux-amd64.gz) |
+| Linux   | musl    | arm64        | [tes-musl-linux-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-musl-linux-arm64.gz) | [tes-pdfium-musl-linux-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-musl-linux-arm64.gz) |
 | MacOs   |         | arm64        | [tes-mac-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-mac-amd64.gz)               | [tes-pdfium-mac-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-mac-amd64.gz)               |
 | MacOs   |         | amd64        | [tes-mac-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-mac-arm64.gz)               | [tes-pdfium-mac-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-mac-arm64.gz)               |
 | Windows |         | amd64        | [tes-windows-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-windows-amd64.gz)       | [tes-pdfium-windows-amd64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-windows-amd64.exe.gz)   |
 | Windows |         | arm64        | [tes-windows-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-windows-arm64.exe.gz)   | [tes-pdfium-windows-arm64](https://github.com/johbar/text-extraction-service/releases/latest/download/tes-pdfium-windows-arm64.exe.gz)   |
 
+On *nix systems you need to `chmod +x` the binary after `gunzip`ing it.
+
 ## Dev Setup - Building TES
 
-Building only requires a recent Go SDK (v1.21+) thanks to `purego`.
+Building only requires a recent Go SDK (v1.24.1) thanks to `purego`.
 But testing and running TES requires additional shared libs.
 Depending on the PDF engine you choose (see below for comparison) you need it installed in your dev/build environment.
 
@@ -287,6 +289,8 @@ Configuration happens through environment variables only.
 | `TES_PDF_LIB_PATH`                    | Path or basename of the shared lib (`.so`, `.dylib`, `.dll`); if empty some default names and paths are tried                                                                                  |
 | `TES_REMOVE_NEWLINES`                 | If true, extracted text will be compacted by replacing newlines with whitespace. Default: `true`                                                                                               |
 | `TES_FORK_THRESHOLD`                  | Maximum content length (size in bytes) of a file that is being converted in-process rather than by a subprocess in fork-exec style. Choose a negative value to disable forking. Default: 2 MiB |
+| `TES_MAX_IN_MEMORY`                   | Maximum size a file may have to be processed in-memory. Is a file larger, it will be downloaded to `$TMP`. Default: `2MiB`                                                                     |
+| `TES_MAX_FILE_SIZE`                   | Maximum size a file may have to be processed. Larger files will be discarded. Default `300MiB`                                                                                                 |
 | `TES_HTTP_CLIENT_DISABLE_COMPRESSION` | Disable `Accept-Encoding: gzip` header in outgoing HTTP Requests. Default: `false`                                                                                                             |
 | `TES_TESSERACT_LANGS`                 | Set languages for Tesseract OCR as a list of 3-letter-codes, separated by `+`. Default: `Latin` = all languages with latin script                                                              |
 | `TES_LOG_LEVEL`                       | Sets the log level. Options (case-insensitive): `info` (default), `debug`, `warn`, `error`                                                                                                     |
