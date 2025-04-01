@@ -28,7 +28,6 @@ type TesConfig struct {
 	// Log level (DEBUG, INFO, WARN, ERROR)
 	LogLevel string `env:"TES_LOG_LEVEL" default:"INFO"`
 	logLevel slog.Level
-	// FIXME: this is not honored yet
 	// Maximum size a file may have; processing is aborted if a requested file is bigger
 	MaxFileSize string `env:"TES_MAX_FILE_SIZE" default:"300Mib"`
 	maxFileSizeBytes uint64

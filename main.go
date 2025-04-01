@@ -75,7 +75,7 @@ func main() {
 	logger.Debug("Starting Text Extraction Service with config", "conf", tesConfig)
 	LogAndFixConfigIssues()
 	postprocessDocChan = make(chan *ExtractedDocument, 100)
-	go saveAndCloseExtracedDocs()
+	go saveCloseAndDeleteExtracedDocs()
 
 	router := gin.New()
 	router.Use(sloggin.New(logger), gin.Recovery())

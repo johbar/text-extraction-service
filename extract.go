@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -36,10 +37,19 @@ func init() {
 	validate = validator.New()
 }
 
-func saveAndCloseExtracedDocs() {
+func saveCloseAndDeleteExtracedDocs() {
 	for doc := range postprocessDocChan {
 		doc.Doc.Close()
 		logger.Debug("Document closed.", "url", doc.Url)
+		if len(doc.Doc.Path()) > 0 {
+			// we can assume every file in this channel is a temporary file
+			// created by ourself
+			if err := os.Remove(doc.Doc.Path()); err != nil {
+				logger.Error("could not remove temporary file", "err", err)
+			} else {
+				logger.Debug("temporary file removed", "path", doc.Doc.Path())
+			}
+		}
 		if cacheNop {
 			continue
 		}

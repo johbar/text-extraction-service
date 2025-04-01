@@ -7,6 +7,7 @@ package poppler_purego
 import (
 	"errors"
 	"io"
+	"path/filepath"
 	"strconv"
 	"time"
 	"unsafe"
@@ -25,9 +26,12 @@ type GError struct {
 // Page represents a PDF page opened by Poppler
 type Page uintptr
 
+type doc uintptr
+
 // Document represents a PDF opened by Poppler
 type Document struct {
-	handle uintptr
+	handle doc
+	path   string
 	data   *[]byte
 	pages  int
 }
@@ -40,21 +44,22 @@ var (
 	g_object_unref func(uintptr)
 
 	poppler_get_version             func() string
-	poppler_document_new_from_bytes func(gbytes uintptr, password uintptr, err unsafe.Pointer) uintptr
+	poppler_document_new_from_bytes func(gbytes uintptr, password uintptr, err uintptr) doc
+	poppler_document_new_from_file  func(uri *byte, password uintptr, err uintptr) doc
 
-	poppler_document_get_n_pages func(uintptr) int
-	poppler_document_get_page    func(uintptr, int) Page
+	poppler_document_get_n_pages func(doc) int
+	poppler_document_get_page    func(doc, int) Page
 
-	poppler_document_get_pdf_version_string func(uintptr) *byte
-	poppler_document_get_title              func(uintptr) *byte
-	poppler_document_get_author             func(uintptr) *byte
-	poppler_document_get_subject            func(uintptr) *byte
-	poppler_document_get_keywords           func(uintptr) *byte
-	poppler_document_get_creator            func(uintptr) *byte
-	poppler_document_get_producer           func(uintptr) *byte
+	poppler_document_get_pdf_version_string func(doc) *byte
+	poppler_document_get_title              func(doc) *byte
+	poppler_document_get_author             func(doc) *byte
+	poppler_document_get_subject            func(doc) *byte
+	poppler_document_get_keywords           func(doc) *byte
+	poppler_document_get_creator            func(doc) *byte
+	poppler_document_get_producer           func(doc) *byte
 	// poppler_document_get_metadata           func(uintptr) *byte
-	poppler_document_get_creation_date     func(uintptr) int64
-	poppler_document_get_modification_date func(uintptr) int64
+	poppler_document_get_creation_date     func(doc) int64
+	poppler_document_get_modification_date func(doc) int64
 	// image related
 	g_list_length                   func(glist uintptr) uint32
 	poppler_page_get_image_mapping  func(page Page) uintptr
@@ -82,6 +87,7 @@ func InitLib(path string) (string, error) {
 
 	purego.RegisterLibFunc(&poppler_get_version, lib, "poppler_get_version")
 	purego.RegisterLibFunc(&poppler_document_new_from_bytes, lib, "poppler_document_new_from_bytes")
+	purego.RegisterLibFunc(&poppler_document_new_from_file, lib, "poppler_document_new_from_file")
 	purego.RegisterLibFunc(&poppler_document_get_n_pages, lib, "poppler_document_get_n_pages")
 	purego.RegisterLibFunc(&poppler_document_get_page, lib, "poppler_document_get_page")
 	purego.RegisterLibFunc(&poppler_page_get_text, lib, "poppler_page_get_text")
@@ -112,12 +118,29 @@ func Load(data []byte) (*Document, error) {
 	ptr := unsafe.Pointer(&data[0])
 	gbytes := g_bytes_new(ptr, uint64(len(data)))
 	defer g_bytes_unref(gbytes)
-	var err *GError
-	handle := poppler_document_new_from_bytes(gbytes, 0, unsafe.Pointer(&err))
+	handle := poppler_document_new_from_bytes(gbytes, 0, 0)
 	if handle == 0 {
-		return nil, errors.New("poppler: " + toStr(err.message))
+		return nil, errors.New("poppler: could not load PDF")
 	}
 	d := &Document{handle: handle, data: &data, pages: poppler_document_get_n_pages(handle)}
+	return d, nil
+}
+
+func Open(path string) (*Document, error) {
+	// Poppler needs a file URI which does not support relative local paths
+	abPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	ptr, err := unix.BytePtrFromString("file:" + abPath)
+	if err != nil {
+		return nil, err
+	}
+	handle := poppler_document_new_from_file(ptr, 0, 0)
+	if handle == 0 {
+		return nil, errors.New("poppler: could not load PDF at " + path)
+	}
+	d := &Document{handle: handle, path: path, pages: poppler_document_get_n_pages(handle)}
 	return d, nil
 }
 
@@ -136,6 +159,10 @@ func (d *Document) Pages() int {
 	return d.pages
 }
 
+func (d *Document) Path() string {
+	return d.path
+}
+
 // GetPage opens a PDF page by index (zero-based)
 func (d *Document) GetPage(i int) Page {
 	p := poppler_document_get_page(d.handle, i)
@@ -143,7 +170,7 @@ func (d *Document) GetPage(i int) Page {
 }
 
 func (d *Document) Close() {
-	g_object_unref(d.handle)
+	g_object_unref((uintptr(d.handle)))
 	d.handle = 0
 }
 

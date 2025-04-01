@@ -90,9 +90,12 @@ func RunDehyphenator(w io.Writer) (pw *io.PipeWriter) {
 // The file can be local or remote (http/https). When url is "-", the file will be read from Stdin
 func PrintMetadataAndTextToStdout(url string) {
 	var doc Document
-	var stream io.ReadCloser
 	var size int64 = -1
-	if strings.HasPrefix(url, "http") {
+	var err error
+
+	isHttp := strings.HasPrefix(url, "http")
+	isStdIn := url == "-"
+	if isHttp {
 		resp, err := http.Get(url)
 		if err != nil {
 			logger.Error("HTTP error", "url", url, "err", err)
@@ -102,36 +105,32 @@ func PrintMetadataAndTextToStdout(url string) {
 			logger.Error("HTTP error", "url", url, "status", resp.Status)
 			os.Exit(1)
 		}
-		stream = resp.Body
-		size = resp.ContentLength
+		doc, err = NewDocFromStream(resp.Body, resp.ContentLength, url)
+		resp.Body.Close()
+		if err != nil {
+			logger.Error("Could not process document", "url", url, "err", err)
+			os.Exit(2)
+		}
 	} else {
-		if url == "-" {
-			stream = os.Stdin
+		if isStdIn {
+			doc, err = NewDocFromStream(os.Stdin, size, url)
 		} else {
-			f, err := os.Open(url)
-			if err != nil {
-				logger.Error("Could not open file", "err", err)
-				os.Exit(1)
-			}
-			defer f.Close()
-			stream = f
-			stat, err := f.Stat()
-			if err !=nil {
-				logger.Error("Could not get file stat", "err", err)
-				os.Exit(1)
-			}
-			size = stat.Size()
+			doc, err = NewFromPath(url, url)
+		}
+		if err != nil {
+			logger.Error("Could not process document", "url", url, "err", err)
+			os.Exit(2)
 		}
 	}
-	doc, err := NewDocFromStream(stream, size, url)
+
 	if err != nil {
 		logger.Error("Could not process document", "url", url, "err", err)
 		os.Exit(2)
 	}
-	meta, _ := json.Marshal(doc.MetadataMap())
-	_, err = os.Stdout.Write(meta)
+
+	err = json.MarshalWrite(os.Stdout, doc.MetadataMap())
 	if err != nil {
-		logger.Error("Could not write to output", "err", err)
+		logger.Error("Could not print metadata", "err", err)
 		os.Exit(1)
 	}
 	_, err = os.Stdout.WriteString("\n")
@@ -140,8 +139,12 @@ func PrintMetadataAndTextToStdout(url string) {
 		os.Exit(1)
 	}
 	w := RunDehyphenator(os.Stdout)
-	err = WriteTextOrRunOcr(doc, w, "<stdin>")
+	err = WriteTextOrRunOcr(doc, w, url)
 	w.Close()
+	doc.Close()
+	if len (doc.Path()) > 1 && doc.Path() != url {
+		err = os.Remove(doc.Path())
+	}
 	if err != nil {
 		os.Exit(1)
 	}

@@ -74,12 +74,23 @@ func ImageReaderToText(r io.Reader) (string, error) {
 	return string(result), nil
 }
 
-func ImageReaderToTextWriter(r io.Reader, w io.Writer) error {
+func ImageBytesToWriter(data []byte, w io.Writer) error {
+	r := bytes.NewReader(data)
+	return ImageReaderToWriter(r, w)
+}
+
+func ImageReaderToWriter(r io.Reader, w io.Writer) error {
 	if r == nil {
 		return errors.New("reader is nil")
 	}
 	cmd := exec.Command("tesseract", "-l", Languages, "-", "-")
 	cmd.Stdin = r
+	cmd.Stdout = w
+	return cmd.Run()
+}
+
+func ImageToWriter(path string, w io.Writer) error {
+	cmd := exec.Command("tesseract", "-l", Languages, path, "-")
 	cmd.Stdout = w
 	return cmd.Run()
 }

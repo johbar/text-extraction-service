@@ -20,6 +20,7 @@ import (
 type Document struct {
 	ctx    fzContext
 	data   *[]byte
+	path   string
 	doc    fzDocument
 	mtx    sync.Mutex
 	stream fzStream
@@ -37,7 +38,7 @@ const (
 )
 
 var (
-	lib uintptr
+	lib          uintptr
 	MuPdfVersion = "1.25.2"
 
 	fz_new_context_imp func(alloc uintptr, locks uintptr, maxStore uint64, version string) fzContext
@@ -54,7 +55,8 @@ var (
 	NOTE: The caller retains ownership of 'stream' - the document will take its
 	own reference if required.
 	*/
-	fz_open_document_with_stream   func(ctx fzContext, magic string, stream fzStream) fzDocument
+	pdf_open_document_with_stream  func(ctx fzContext, stream fzStream) fzDocument
+	pdf_open_document              func(ctx fzContext, path *byte) fzDocument
 	fz_drop_document               func(ctx fzContext, doc fzDocument)
 	fz_drop_stream                 func(ctx fzContext, stream fzStream)
 	fz_open_memory                 func(ctx fzContext, data unsafe.Pointer, len uint64) fzStream
@@ -83,7 +85,8 @@ func InitLib(path string) (string, error) {
 	purego.RegisterLibFunc(&fz_drop_context, lib, "fz_drop_context")
 	purego.RegisterLibFunc(&fz_drop_document, lib, "fz_drop_document")
 	purego.RegisterLibFunc(&fz_drop_stream, lib, "fz_drop_stream")
-	purego.RegisterLibFunc(&fz_open_document_with_stream, lib, "fz_open_document_with_stream")
+	purego.RegisterLibFunc(&pdf_open_document_with_stream, lib, "pdf_open_document_with_stream")
+	purego.RegisterLibFunc(&pdf_open_document, lib, "pdf_open_document")
 	purego.RegisterLibFunc(&fz_open_memory, lib, "fz_open_memory")
 	purego.RegisterLibFunc(&fz_register_document_handlers, lib, "fz_register_document_handlers")
 	purego.RegisterLibFunc(&fz_count_pages, lib, "fz_count_pages")
@@ -122,11 +125,31 @@ func Load(b []byte) (f *Document, err error) {
 
 	f.data = &b
 
-	f.doc = fz_open_document_with_stream(f.ctx, "application/pdf", f.stream)
+	f.doc = pdf_open_document_with_stream(f.ctx, f.stream)
 	if f.doc == 0 {
 		fz_drop_stream(f.ctx, f.stream)
 		fz_drop_context(f.ctx)
-		return nil, errors.New("mupdf: cannot open document")
+		return nil, errors.New("mupdf: cannot open document from memory")
+	}
+	f.pages = fz_count_pages(f.ctx, f.doc)
+	return
+}
+
+func Open(path string) (f *Document, err error) {
+	f = &Document{path: path}
+	pathPtr, err := unix.BytePtrFromString(path)
+
+	f.ctx = fz_new_context_imp(0, 0, fzMaxStore, MuPdfVersion)
+	if f.ctx == 0 {
+		return nil, errors.New("mupdf: cannot create fitz context")
+	}
+
+	fz_register_document_handlers(f.ctx)
+
+	f.doc = pdf_open_document(f.ctx, pathPtr)
+	if f.doc == 0 {
+		fz_drop_context(f.ctx)
+		return nil, errors.New("mupdf: cannot open document at " + path)
 	}
 	f.pages = fz_count_pages(f.ctx, f.doc)
 	return
@@ -174,6 +197,10 @@ func (d *Document) StreamText(w io.Writer) error {
 
 func (d *Document) Data() *[]byte {
 	return d.data
+}
+
+func (d *Document) Path() string {
+	return d.path
 }
 
 // Metadata returns a map with standard metadata.

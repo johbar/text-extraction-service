@@ -18,6 +18,43 @@ type ForkedDoc struct {
 	textStream io.Reader
 	cancel     context.CancelFunc
 	origin     string
+	path       string
+}
+
+func NewDocFromForkedProcessPath(path, origin string)(*ForkedDoc, error) {
+	me, err := os.Executable()
+	if err != nil {
+		logger.Error("Could not find out who I am", "err", err, "origin", origin)
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	cmd := exec.CommandContext(ctx, me, path)
+	cmd.Stderr = os.Stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	buf := bufio.NewReader(stdout)
+	logger.Debug("Starting subprocess", "origin", origin)
+	cmd.WaitDelay = time.Minute
+	err = cmd.Start()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	logger.Debug("Subprocess started", "pid", cmd.Process.Pid, "origin", origin, "cmd", cmd.Args)
+	doc := &ForkedDoc{cmd: cmd, textStream: buf, cancel: cancel, origin: origin}
+	// Read one line to get the metadata
+	firstLine := readFirstLine(buf)
+	metadata := make(map[string]string)
+	if err := json.Unmarshal(firstLine, &metadata); err != nil {
+		logger.Error("Malformed input encountered when reading metadata from subprocess", "err", err, "origin", origin, "input", firstLine)
+		return nil, err
+	}
+	doc.metadata = metadata
+	logger.Debug("Finished reading metadata from subprocess", "origin", origin, "pid", cmd.Process.Pid)
+	return doc, err
 }
 
 // NewDocFromForkedProcess creates a Document whose content and metadata is being extracted by a forked subprocess
@@ -44,7 +81,7 @@ func NewDocFromForkedProcess(r io.Reader, origin string) (*ForkedDoc, error) {
 		cancel()
 		return nil, err
 	}
-	logger.Info("Subprocess started", "pid", cmd.Process.Pid, "origin", origin)
+	logger.Info("Subprocess started", "pid", cmd.Process.Pid, "origin", origin, "cmd", cmd.Args)
 	doc := &ForkedDoc{cmd: cmd, textStream: buf, cancel: cancel, origin: origin}
 	// Read one line to get the metadata
 	firstLine := readFirstLine(buf)
@@ -69,6 +106,10 @@ func (d *ForkedDoc) Pages() int {
 
 func (d *ForkedDoc) Data() *[]byte {
 	return nil
+}
+
+func (d *ForkedDoc) Path() string {
+	return d.path
 }
 
 func (d *ForkedDoc) Text(i int) (string, bool) {

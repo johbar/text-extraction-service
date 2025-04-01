@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"strings"
 
@@ -11,14 +12,28 @@ import (
 type ImageDoc struct {
 	data *[]byte
 	typ  string
+	path string
 }
 
 func NewDocFromImage(data []byte, ext string) *ImageDoc {
+	if data == nil {
+		return nil
+	}
 	return &ImageDoc{data: &data, typ: strings.TrimPrefix(ext, ".")}
 }
 
+func OpenImage(path, ext string) *ImageDoc {
+	return &ImageDoc{path: path, typ: strings.TrimPrefix(ext, ".")}
+}
+
 func (d *ImageDoc) StreamText(w io.Writer) error {
-	return tesswrap.ImageReaderToTextWriter(bytes.NewReader(*d.data), w)
+	if d.data != nil {
+		return tesswrap.ImageReaderToWriter(bytes.NewReader(*d.data), w)
+	}
+	if len(d.path) > 0 {
+		return tesswrap.ImageToWriter(d.path, w)
+	}
+	return errors.New("image has neither bytes nor path")
 }
 
 func (d *ImageDoc) Close() {
@@ -27,6 +42,10 @@ func (d *ImageDoc) Close() {
 
 func (d *ImageDoc) Pages() int {
 	return -1
+}
+
+func (d *ImageDoc) Path() string {
+	return d.path
 }
 
 func (d *ImageDoc) Data() *[]byte {

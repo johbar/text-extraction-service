@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	"os"
 	"slices"
 	"strings"
 
@@ -12,11 +13,13 @@ import (
 )
 
 type XmlBasedDocument struct {
-	data        *[]byte
-	contentFile []*zip.File
-	ext         string
-	bodyTag     string
-	metadata    map[string]string
+	data         *[]byte
+	contentFiles []*zip.File
+	ext          string
+	bodyTag      string
+	metadata     map[string]string
+	path         string
+	file         *os.File
 }
 
 var (
@@ -28,20 +31,45 @@ var (
 
 var breaks = []string{"p", "h", "br"}
 
+func Open(path string, ext string) (*XmlBasedDocument, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	d, err := New(f, info.Size(), ext)
+	d.path = path
+	d.file = f
+	return d, err
+}
+
 func NewFromBytes(data []byte, ext string) (*XmlBasedDocument, error) {
-	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	d, err := New(bytes.NewReader(data), int64(len(data)), ext)
+	if err != nil {
+		return nil, err
+	}
+	d.data = &data
+	return d, nil
+}
+
+// New opens the zip file and extracts the relevant files containing text content
+func New(r io.ReaderAt, size int64, ext string) (*XmlBasedDocument, error) {
+	zr, err := zip.NewReader(r, size)
 	if err != nil {
 		return nil, err
 	}
 	md := make(map[string]string)
 	md["x-parsed-by"] = "text-extraction-service"
 	md["x-doctype"] = ext
-	d := &XmlBasedDocument{data: &data, ext: ext, bodyTag: "body", metadata: md}
+	d := &XmlBasedDocument{ext: ext, bodyTag: "body", metadata: md}
 	for _, f := range zr.File {
 		if slices.Contains(contentFileNames, f.Name) {
-			d.contentFile = append(d.contentFile, f)
+			d.contentFiles = append(d.contentFiles, f)
 		}
-		// Open Document
+		// Open Office Document
 		if f.Name == "meta.xml" {
 			if data, err := readFileFromZip(f); err == nil {
 				mapOpenDocumentMetadata(d.metadata, data)
@@ -61,12 +89,12 @@ func NewFromBytes(data []byte, ext string) (*XmlBasedDocument, error) {
 
 		if strings.HasPrefix(f.Name, "ppt/slides/") && strings.HasSuffix(f.Name, ".xml") {
 			// This is a powerpoint file. We need to add all slides.
-			d.contentFile = append(d.contentFile, f)
+			d.contentFiles = append(d.contentFiles, f)
 			// Their structure is different.
 			d.bodyTag = "cSld"
 		}
 	}
-	if len(d.contentFile) == 0 {
+	if len(d.contentFiles) == 0 {
 		return nil, ErrContentNotFound
 	}
 	return d, nil
@@ -78,7 +106,12 @@ func readFileFromZip(f *zip.File) ([]byte, error) {
 		return nil, err
 	}
 	defer r.Close()
-	return io.ReadAll(r)
+	buf := make([]byte, f.UncompressedSize64)
+	_, err = r.Read(buf)
+	if err == io.EOF {
+		return buf, nil
+	}
+	return buf, nil
 }
 
 func mapMsOfficeCoreMetadata(metadata map[string]string, data []byte) {
@@ -178,10 +211,10 @@ func mapOpenDocumentMetadata(metadata map[string]string, data []byte) {
 
 func (d *XmlBasedDocument) StreamText(w io.Writer) error {
 	var errs error
-	for _, f := range d.contentFile {
+	for _, f := range d.contentFiles {
 		r, err := f.Open()
 		errs = errors.Join(errs, err)
-		// we don't want to abort when processing one of the contentFiles fails, 
+		// we don't want to abort when processing one of the contentFiles fails,
 		// but still inform the caller of all errors
 		if err != nil {
 			continue
@@ -198,6 +231,10 @@ func (d *XmlBasedDocument) Pages() int {
 	return -1
 }
 
+func (d *XmlBasedDocument) Path() string {
+	return d.path
+}
+
 func (d *XmlBasedDocument) Data() *[]byte {
 	return d.data
 }
@@ -211,5 +248,8 @@ func (d *XmlBasedDocument) Text(_ int) (string, bool) {
 }
 
 func (d *XmlBasedDocument) Close() {
-	//noop
+	if d.file != nil {
+		d.file.Close()
+	}
+	d.data = nil
 }

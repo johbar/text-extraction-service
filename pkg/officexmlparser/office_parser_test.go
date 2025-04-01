@@ -27,107 +27,23 @@ var metadata = map[string]string{
 }
 
 func TestOdt(t *testing.T) {
-	f, err := os.ReadFile("testdata/readme.odt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	d, err := NewFromBytes(f, "odt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sb strings.Builder
-	err = d.StreamText(&sb)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result := sb.String()
-	t.Log(result)
-	t.Logf("%v", d.MetadataMap())
-	if !strings.HasPrefix(result, beginning) {
-		t.Errorf("Extracted text did not start as expected")
-	}
-	if !strings.HasSuffix(result, lastLine) {
-		t.Errorf("Extracted text did not end as expected")
-	}
-	checkMetaData(d.MetadataMap(), t)
+	testReadmeBytes(t, "odt")
+	testReadmeFile(t, "odt")
 }
 
 func TestOdp(t *testing.T) {
-	f, err := os.ReadFile("testdata/readme.odp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	d, err := NewFromBytes(f, "odp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sb strings.Builder
-	err = d.StreamText(&sb)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result := sb.String()
-	t.Log(result)
-	t.Logf("%v", d.MetadataMap())
-	if !strings.HasPrefix(result, beginning) {
-		t.Errorf("Extracted text did not start as expected")
-	}
-	if !strings.HasSuffix(result, lastLineSlide) {
-		t.Errorf("Extracted text did not end as expected")
-	}
-	checkMetaData(d.MetadataMap(), t)
+	testReadmeBytes(t, "odp")
+	testReadmeFile(t, "odp")
 }
 
 func TestDocx(t *testing.T) {
-	f, err := os.ReadFile("testdata/readme.docx")
-	if err != nil {
-		t.Fatal(err)
-	}
-	d, err := NewFromBytes(f, "docx")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sb strings.Builder
-	err = d.StreamText(&sb)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result := sb.String()
-	t.Log(result)
-	t.Logf("%v", d.MetadataMap())
-	if !strings.HasPrefix(result, beginning) {
-		t.Errorf("Extracted text did not start as expected")
-	}
-	if !strings.HasSuffix(result, lastLine) {
-		t.Errorf("Extracted text did not end as expected")
-	}
-	checkMetaData(d.MetadataMap(), t)
+	testReadmeBytes(t, "docx")
+	testReadmeFile(t, "docx")
 }
 
 func TestPptx(t *testing.T) {
-	f, err := os.ReadFile("testdata/readme.pptx")
-	if err != nil {
-		t.Fatal(err)
-	}
-	d, err := NewFromBytes(f, "pptx")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sb strings.Builder
-	err = d.StreamText(&sb)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result := sb.String()
-	t.Log(result)
-	t.Logf("%v", d.MetadataMap())
-	if !strings.HasPrefix(result, beginning) {
-		t.Errorf("Extracted text did not start as expected")
-	}
-	if !strings.HasSuffix(result, lastLineSlide) {
-		t.Errorf("Extracted text did not end as expected")
-	}
-	checkMetaData(d.MetadataMap(), t)
+	testReadmeBytes(t, "pptx")
+	testReadmeFile(t, "pptx")
 }
 
 func TestOpenTextMetadata(t *testing.T) {
@@ -144,6 +60,57 @@ func TestOpenTextMetadata(t *testing.T) {
 	mapOpenDocumentMetadata(m, data)
 	t.Log(m)
 
+}
+
+func testReadmeFile(t *testing.T, ext string) {
+	d, err := Open("testdata/readme."+ext, ext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testReadme(t, d)
+	if len(d.Path()) < 1 {
+		t.Errorf("expected path to be non-empty")
+	}
+}
+
+func testReadmeBytes(t *testing.T, ext string) {
+	f, err := os.ReadFile("testdata/readme." + ext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := NewFromBytes(f, ext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testReadme(t, d)
+	if len(d.Path()) > 0 {
+		t.Errorf("expected path to be empty")
+	}
+}
+
+func testReadme(t *testing.T, d *XmlBasedDocument) {
+	var sb strings.Builder
+	err := d.StreamText(&sb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := sb.String()
+	t.Log(result)
+	t.Logf("Metadata: %v", d.MetadataMap())
+	if !strings.HasPrefix(result, beginning) {
+		t.Errorf("Extracted text did not start as expected")
+	}
+	if d.ext == "pptx" || d.ext == "odp" {
+		if !strings.HasSuffix(result, lastLineSlide) {
+			t.Errorf("Extracted text did not end as expected")
+		}
+	} else {
+		if !strings.HasSuffix(result, lastLine) {
+			t.Errorf("Extracted text did not end as expected")
+		}
+	}
+	checkMetaData(d.MetadataMap(), t)
+	d.Close()
 }
 
 func extractNamedFile(path string, pathInZip string) ([]byte, error) {

@@ -16,6 +16,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ import (
 type RichTextDoc struct {
 	rtfContent string
 	metadata   RtfMetadata
+	path       string
 }
 
 var destinations = map[string]bool{
@@ -433,8 +435,20 @@ func NewFromBytes(data []byte) (d *RichTextDoc, err error) {
 	return
 }
 
+func Open(path string) (*RichTextDoc, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RichTextDoc{rtfContent: string(data), path: path}, nil
+}
+
 func (d *RichTextDoc) Pages() int {
 	return -1
+}
+func (d *RichTextDoc) Path() string {
+	return d.path
 }
 
 func (d *RichTextDoc) Data() *[]byte {
@@ -465,7 +479,7 @@ func Rtf2Text(inputRtf string) string {
 
 func rtf2text(inputRtf string, specialCharacters map[string]string) string {
 	var buf strings.Builder
-	_= rtf2textWriter(inputRtf, specialCharacters, &buf)
+	_ = rtf2textWriter(inputRtf, specialCharacters, &buf)
 	return buf.String()
 }
 
@@ -476,7 +490,6 @@ func rtf2textWriter(inputRtf string, specialCharacters map[string]string, w io.W
 	var ignorable bool
 	ucskip := 1
 	curskip := 0
-
 	out := bufio.NewWriter(w)
 	match, _ := rtfRegex.FindStringMatch(inputRtf)
 	var numMatches uint64 = 0

@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -29,9 +30,9 @@ var (
 	// Initialized indicates if the package is usable (depending on the presence of the wv and/or antiword)
 	Initialized bool = false
 
-	wvWare   = progAndArgs{cmd: "wvWare", args: []string{"-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8", "/dev/stdin"}}
-	antiword = progAndArgs{cmd: "antiword", args: []string{"-w", "0", "-m", "UTF-8", "-"}}
-	catdoc = progAndArgs{cmd: "catdoc", args: []string{"-w", "-d", "utf-8", "-"}}
+	wvWare   = progAndArgs{cmd: "wvWare", args: []string{"-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8"}, stdin: "/dev/stdin"}
+	antiword = progAndArgs{cmd: "antiword", args: []string{"-w", "0", "-m", "UTF-8"}, stdin: "-"}
+	catdoc   = progAndArgs{cmd: "catdoc", args: []string{"-w", "-d", "utf-8"}, stdin: "-"}
 
 	wordProcessor progAndArgs
 )
@@ -56,11 +57,13 @@ type DocMetadata struct {
 type WordDoc struct {
 	metadata DocMetadata
 	data     *[]byte
+	path     string
 }
 
 type progAndArgs struct {
-	cmd  string
-	args []string
+	cmd   string
+	args  []string
+	stdin string
 }
 
 func init() {
@@ -73,16 +76,30 @@ func init() {
 	}
 }
 
-func NewFromBytes(data []byte) (doc *WordDoc, err error) {
-	doc = &WordDoc{data: &data}
+func NewFromBytes(data []byte) (*WordDoc, error) {
 	buf := bytes.NewReader(data)
-	doc.metadata, err = readMetadata(buf)
+	metadata, err := readMetadata(buf)
+	doc := &WordDoc{data: &data, metadata: metadata}
+	return doc, err
+}
 
-	return
+func Open(path string) (*WordDoc, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	metadata, err := readMetadata(f)
+	doc := &WordDoc{path: path, metadata: metadata}
+	return doc, err
 }
 
 func (d *WordDoc) Pages() int {
 	return -1
+}
+
+func (d *WordDoc) Path() string {
+	return d.path
 }
 
 func (d *WordDoc) Data() *[]byte {
@@ -210,8 +227,14 @@ func (d *WordDoc) runExternalWordProcessor(w io.Writer, wordProg progAndArgs) er
 	if err != nil {
 		return err
 	}
+	if len(d.path) < 1 {
+		cmd.Stdin = bytes.NewReader(*d.data)
+		cmd.Args = append(cmd.Args, wordProg.stdin)
+	} else {
+		cmd.Args = append(cmd.Args, d.path)
+	}
+
 	s := bufio.NewScanner(stdout)
-	cmd.Stdin = bytes.NewReader(*d.data)
 	err = cmd.Start()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

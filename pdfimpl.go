@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"os"
 	"strings"
 
 	mupdf "github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/mupdf_purego"
@@ -36,7 +35,7 @@ type Document interface {
 	// Data returns the underlying byte array or nil if the document was loaded from disk
 	Data() *[]byte
 	// Path returns the filesystem path a document was loaded from or an empty string if the was not loaded from disk
-	// Path()
+	Path() string
 	// MetadataMap returns a map of Document properties, such as Author, Title etc.
 	MetadataMap() map[string]string
 	// Close releases resources associated with the document
@@ -115,15 +114,12 @@ func NewPdfFromPath(path, origin string) (doc Document, err error) {
 			pdfium.Lock.Unlock()
 			return d, err
 		} else {
-			r, err := os.Open(path)
-			if err != nil {
-				return nil, err
-			}
-			// FIXME where to close the os.File?
-			return NewDocFromForkedProcess(r, origin)
+			return NewDocFromForkedProcessPath(path, origin)
 		}
-		// FIXME: add Poppler and MuPDF
+	case "poppler":
+		return poppler.Open(path)
+	case "mupdf":
+		return mupdf.Open(path)
 	}
 	return nil, errors.New("no PDF implementation available")
-
 }

@@ -28,7 +28,6 @@ func TestPdfium(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
 	if d.Path() != "" {
 		t.Errorf("expected PDF path to be empty, but was '%s'", d.Path())
 	}
@@ -50,8 +49,9 @@ func TestPdfium(t *testing.T) {
 	d.Close()
 	d, err = pdfium_purego.Open(shortPdf)
 	if err != nil {
-		t.Fatal("pdfium could not load file from path")
+		t.Fatal("pdfium could not load file from path", err)
 	}
+	defer d.Close()
 	if d.Path() != shortPdf {
 		t.Errorf("expected PDF path to be '%s', but was '%s'", shortPdf, d.Path())
 	}
@@ -67,19 +67,34 @@ func TestPoppler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
-	txt, hasImages := d.Text(0)
-	if hasImages {
-		t.Errorf("expected not to find images on page")
+	if d.Path() != "" {
+		t.Errorf("expected PDF path to be empty, but was '%s'", d.Path())
 	}
-	checkTextLength(t, txt)
-	t.Log(txt)
-	meta := d.MetadataMap()
-	checkMetadataEntries(t, meta)
-	t.Log(meta)
-	if d.Pages() != 2 {
-		t.Errorf("expected to find 2 pages but were %d", d.Pages())
+	runt := func() {
+		txt, hasImages := d.Text(0)
+		if hasImages {
+			t.Errorf("expected not to find images on page")
+		}
+		checkTextLength(t, txt)
+		t.Log(txt)
+		meta := d.MetadataMap()
+		checkMetadataEntries(t, meta)
+		t.Log(meta)
+		if d.Pages() != 2 {
+			t.Errorf("expected to find 2 pages but were %d", d.Pages())
+		}
 	}
+	runt()
+	d.Close()
+	d, err = poppler_purego.Open(shortPdf)
+	if err != nil {
+		t.Fatal("poppler could not load file from path", err)
+	}
+	if d.Path() != shortPdf {
+		t.Errorf("expected PDF path to be '%s', but was '%s'", shortPdf, d.Path())
+	}
+	runt()
+	d.Close()
 }
 
 func TestMuPdf(t *testing.T) {
@@ -91,17 +106,31 @@ func TestMuPdf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
-	txt, _ := d.Text(0)
-	// determining images on page is not implemented, so second return value is always true
-	checkTextLength(t, txt)
-	t.Log(txt)
-	meta := d.MetadataMap()
-	checkMetadataEntries(t, meta)
-	t.Log(meta)
-	if d.Pages() != 2 {
-		t.Errorf("expected to find 2 pages but were %d", d.Pages())
+	if d.Path() != "" {
+		t.Errorf("expected PDF path to be empty, but was '%s'", d.Path())
 	}
+	runt := func() {
+		txt, _ := d.Text(0)
+		checkTextLength(t, txt)
+		t.Log(txt)
+		meta := d.MetadataMap()
+		checkMetadataEntries(t, meta)
+		t.Log(meta)
+		if d.Pages() != 2 {
+			t.Errorf("expected to find 2 pages but were %d", d.Pages())
+		}
+	}
+	runt()
+	d.Close()
+	d, err = mupdf_purego.Open(shortPdf)
+	if err != nil {
+		t.Fatal("mupdf could not load file from path", err)
+	}
+	if d.Path() != shortPdf {
+		t.Errorf("expected PDF path to be '%s', but was '%s'", shortPdf, d.Path())
+	}
+	runt()
+	d.Close()
 }
 
 func readFile() []byte {

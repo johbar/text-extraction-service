@@ -3,10 +3,15 @@ package main
 import (
 	"log/slog"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
+	"github.com/johbar/text-extraction-service/v2/pkg/officexmlparser"
+	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/pdfium_purego"
 	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/poppler_purego"
+	"github.com/johbar/text-extraction-service/v2/pkg/rtfparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 )
 
@@ -38,3 +43,40 @@ func TestWriteTextOrRunOcr(t *testing.T) {
 	}
 }
 
+func TestNewFromPath(t *testing.T) {
+	var xmltyp *officexmlparser.XmlBasedDocument
+	var doctyp *docparser.WordDoc
+	var rtftyp *rtfparser.RichTextDoc
+	var pdfiumtyp *pdfium_purego.Document
+
+	_ = LoadPdfLib("pdfium", "")
+	var cases = []struct {
+		path string
+		typ  reflect.Type
+	}{
+		{"pkg/officexmlparser/testdata/readme.docx", reflect.TypeOf(xmltyp)},
+		{"pkg/officexmlparser/testdata/readme.odt", reflect.TypeOf(xmltyp)},
+		{"pkg/officexmlparser/testdata/readme.pptx", reflect.TypeOf(xmltyp)},
+		{"pkg/officexmlparser/testdata/readme.odp", reflect.TypeOf(xmltyp)},
+		{"pkg/docparser/testdata/readme.doc", reflect.TypeOf(doctyp)},
+		{"pkg/rtfparser/testdata/readme.rtf", reflect.TypeOf(rtftyp)},
+		{"pkg/pdflibwrappers/testdata/readme.pdf", reflect.TypeOf(pdfiumtyp)},
+	}
+	for _, doc := range cases {
+
+		d, err := NewFromPath(doc.path, doc.path)
+		if err != nil {
+			t.Error(err)
+		}
+		if reflect.TypeOf(d) != doc.typ {
+			t.Errorf("expected document to be of type %v, but was %v", doc.typ, reflect.TypeOf(d))
+		}
+		if d.Path() != doc.path {
+			t.Errorf("expected path to be '%s', but was '%s'", doc.path, d.Path())
+		}
+		if d.Data() != nil {
+			t.Error("expected Data() to return nil")
+		}
+		d.Close()
+	}
+}
