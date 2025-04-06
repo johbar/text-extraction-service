@@ -37,7 +37,7 @@ func main() {
 			json.Deterministic(true),
 			jsontext.AllowDuplicateNames(true),
 			jsontext.AllowInvalidUTF8(true),
-			jsontext.EscapeForJS(true),
+			jsontext.EscapeForJS(false),
 			jsontext.SpaceAfterColon(false),
 			jsontext.SpaceAfterComma(true),
 		),

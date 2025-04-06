@@ -1,4 +1,4 @@
-package main
+package imageparser
 
 import (
 	"bytes"
@@ -15,14 +15,14 @@ type ImageDoc struct {
 	path string
 }
 
-func NewDocFromImage(data []byte, ext string) *ImageDoc {
+func NewFromBytes(data []byte, ext string) *ImageDoc {
 	if data == nil {
 		return nil
 	}
 	return &ImageDoc{data: &data, typ: strings.TrimPrefix(ext, ".")}
 }
 
-func OpenImage(path, ext string) *ImageDoc {
+func Open(path, ext string) *ImageDoc {
 	return &ImageDoc{path: path, typ: strings.TrimPrefix(ext, ".")}
 }
 
@@ -56,10 +56,7 @@ func (d *ImageDoc) Text(i int) (string, bool) {
 	if i != 1 {
 		return "", false
 	}
-	text, err := tesswrap.ImageBytesToText(*d.data)
-	if err != nil {
-		logger.Error("Tesseract failed")
-	}
+	text, _ := tesswrap.ImageBytesToText(*d.data)
 	// an image has no image
 	return text, false
 }

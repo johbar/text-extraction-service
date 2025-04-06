@@ -154,7 +154,7 @@ func NewFromData(data []byte, origin string) (Document, error) {
 		}
 	}
 	if tesswrap.Initialized && strings.HasPrefix(mtype.String(), "image/") {
-		return NewDocFromImage(data, mtype.Extension()), nil
+		return imageparser.NewFromBytes(data, mtype.Extension()), nil
 	}
 	// returning a part of the content in case of errors helps with debugging webservers that return 2xx with an error message in the body
 	return nil, fmt.Errorf("no suitable parser available for mimetype %s. content started with: %s", mtype.String(), string(data[:70]))
@@ -166,7 +166,6 @@ func NewFromPath(path, origin string) (Document, error) {
 		return nil, err
 	}
 	logger.Debug("Detected", "mimetype", mtype.String(), "ext", mtype.Extension(), "origin", origin)
-	// FIXME
 	if ext := mtype.Extension(); slices.Contains(xmlBasedFormats, ext) {
 		return officexmlparser.Open(path, strings.TrimPrefix(ext, "."))
 	}
@@ -188,7 +187,7 @@ func NewFromPath(path, origin string) (Document, error) {
 		}
 	}
 	if tesswrap.Initialized && strings.HasPrefix(mtype.String(), "image/") {
-		return OpenImage(path, mtype.Extension()), nil
+		return imageparser.Open(path, mtype.Extension()), nil
 	}
 	// returning a part of the content in case of errors helps with debugging webservers that return 2xx with an error message in the body
 	return nil, fmt.Errorf("no suitable parser available for mimetype %s, detected in %s from %s", mtype.String(), path, origin)

@@ -40,10 +40,10 @@ func listLangs() []string {
 	}
 }
 
-// IsTesseractConfigOk returns true and an empty string, if Tessearct is installed in PATH
+// TesseractConfigOk returns true and an empty string, if Tessearct is installed in PATH
 // and the configured languages have trained data models.
-// If not, false and are reason phrase reporting the first missing language file are returned.
-func IsTesseractConfigOk() (ok bool, reason string) {
+// If not, false and a reason phrase reporting the first missing language file are returned.
+func TesseractConfigOk() (ok bool, reason string) {
 	LangSlice := strings.Split(Languages, "+")
 	for _, elem := range LangSlice {
 		if !slices.Contains(LangsAvailable, elem) {
