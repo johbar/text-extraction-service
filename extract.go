@@ -11,7 +11,9 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-type DocumentMetadata map[string]string
+type DocumentMetadata = map[string]string
+
+const lastModified string = "last-modified"
 
 var (
 	validate *validator.Validate
@@ -76,7 +78,7 @@ func ExtractBody(c *gin.Context) {
 	}
 	defer doc.Close()
 	metadata := doc.MetadataMap()
-	addMetadataAsHeaders(c.Writer.Header(), &metadata)
+	addMetadataAsHeaders(c.Writer.Header(), metadata)
 	pw := RunDehyphenator(c.Writer)
 	_ = WriteTextOrRunOcr(doc, pw, "<POST req>")
 	pw.Close()
@@ -87,7 +89,6 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	silent := params.Silent
 
 	var noCache bool
-	var metadata map[string]string
 
 	if params.NoCache || cacheNop {
 		noCache = true
@@ -99,20 +100,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		return http.StatusInternalServerError, err
 	}
 
-	if !noCache {
-		metadata, err = cache.GetMetadata(url)
-		if err != nil {
-			logger.Error("Could not get metadata from NATS object store", "url", url, "err", err)
-		}
-		if metadata != nil {
-			if etag, ok := metadata["etag"]; ok {
-				req.Header.Add("If-None-Match", etag)
-			}
-			if lastMod, ok := metadata["http-last-modified"]; ok {
-				req.Header.Add("If-Modified-Since", lastMod)
-			}
-		}
-	}
+	metadata := addCacheValidationHeaders(noCache, req, url)
 	logger.Debug("Issuing conditional GET request", "url", url, "headers", req.Header)
 
 	response, err := httpClient.Do(req)
@@ -126,8 +114,8 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 		return response.StatusCode, fmt.Errorf("%s", response.Status)
 	}
 	if response.StatusCode == http.StatusNotModified {
-		logger.Debug("URL has not been modified. Text will be served from cache", "url", url, "etag", response.Header.Get("etag"), "last-modified", response.Header.Get("last-modified"))
-		addMetadataAsHeaders(header, &metadata)
+		logger.Debug("URL has not been modified. Text will be served from cache", "url", url, "etag", response.Header.Get("etag"), lastModified, response.Header.Get(lastModified))
+		addMetadataAsHeaders(header, metadata)
 		if silent {
 			return http.StatusNotModified, nil
 		}
@@ -143,32 +131,13 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	// We have no current version of the document but fetched it
 	// so parse and extract it
 	logger.Debug("Start parsing", "url", url, "content-length", response.ContentLength)
-	var doc Document
-	skipDehyphenator := false
-	if tesConfig.ForkThreshold > -1 && response.ContentLength > tesConfig.ForkThreshold {
-		// file size above threshold - fork a subprocess
-		doc, err = NewDocFromForkedProcess(response.Body, url)
-		// the forked TES process does dehyphenation already
-		// and the dehyphenator fails with input not containing newlines
-		skipDehyphenator = true
-	} else {
-		doc, err = NewDocFromStream(response.Body, response.ContentLength, url)
-	}
+	doc, err, skipDehyphenator := constructDoc(url, response.Body, response.ContentLength)
 	if err != nil {
 		logger.Error("Parsing failed", "err", err, "url", url, "headers", response.Header)
 		return http.StatusUnprocessableEntity, err
 	}
-	metadata = doc.MetadataMap()
-	if etag := response.Header.Get("etag"); etag != "" {
-		metadata["etag"] = etag
-	}
-	if lastmod := response.Header.Get("last-modified"); lastmod != "" {
-		metadata["http-last-modified"] = lastmod
-	}
-	if contentLength := response.ContentLength; contentLength > 0 {
-		metadata["http-content-length"] = fmt.Sprintf("%d", contentLength)
-	}
-	addMetadataAsHeaders(header, &metadata)
+	metadata = addHttpHeadersToMetadata(doc, response)
+	addMetadataAsHeaders(header, metadata)
 	logger.Debug("Finished parsing", "url", url)
 	var text bytes.Buffer
 	var mWriter io.Writer
@@ -179,9 +148,9 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	}
 	if skipDehyphenator {
 		err = doc.StreamText(mWriter)
-
 		if err != nil {
 			logger.Error("Could not extract text from file or write to output stream", "url", url, "err", err)
+			doc.Close()
 			return 499, err
 		}
 	} else {
@@ -198,7 +167,7 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	if !silent {
 		logger.Debug("Streaming response done", "url", url)
 	}
-	extracted := &ExtractedDocument{
+	extracted := ExtractedDocument{
 		Url:      &url,
 		Text:     text.Bytes(),
 		Metadata: &metadata,
@@ -235,8 +204,54 @@ func ExtractRemote(c *gin.Context) {
 	c.Status(status)
 }
 
-func addMetadataAsHeaders(header http.Header, metadata *map[string]string) {
-	for k, v := range *metadata {
+func addMetadataAsHeaders(header http.Header, metadata DocumentMetadata) {
+	for k, v := range metadata {
 		header.Add(k, v)
 	}
+}
+
+func addCacheValidationHeaders(noCache bool, req *http.Request, url string) DocumentMetadata {
+	if !noCache {
+		metadata, err := cache.GetMetadata(url)
+		if err != nil {
+			logger.Error("Could not get metadata from NATS object store", "url", url, "err", err)
+			return make(DocumentMetadata)
+		}
+		if etag, ok := metadata["etag"]; ok {
+			req.Header.Add("If-None-Match", etag)
+		}
+		if lastMod, ok := metadata["http-last-modified"]; ok {
+			req.Header.Add("If-Modified-Since", lastMod)
+		}
+		return metadata
+	}
+	return make(DocumentMetadata)
+}
+
+func constructDoc(url string, r io.Reader, contentLength int64) (d Document, err error, skipDehypenator bool) {
+	if tesConfig.ForkThreshold > -1 && contentLength > tesConfig.ForkThreshold {
+		// file size above threshold - fork a subprocess
+		d, err = NewDocFromForkedProcess(r, url)
+		// the forked TES process does dehyphenation already
+		// and the dehyphenator fails with input not containing newlines
+		skipDehypenator = true
+	} else {
+		d, err = NewDocFromStream(r, contentLength, url)
+		skipDehypenator = false
+	}
+	return
+}
+
+func addHttpHeadersToMetadata(doc Document, response *http.Response) DocumentMetadata {
+	metadata := doc.MetadataMap()
+	if etag := response.Header.Get("etag"); etag != "" {
+		metadata["etag"] = etag
+	}
+	if lastmod := response.Header.Get(lastModified); lastmod != "" {
+		metadata["http-last-modified"] = lastmod
+	}
+	if contentLength := response.ContentLength; contentLength > 0 {
+		metadata["http-content-length"] = fmt.Sprintf("%d", contentLength)
+	}
+	return metadata
 }

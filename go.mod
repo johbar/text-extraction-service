@@ -2,8 +2,6 @@ module github.com/johbar/text-extraction-service/v2
 
 go 1.24
 
-toolchain go1.24.1
-
 require (
 	github.com/dlclark/regexp2 v1.11.5
 	github.com/dustin/go-humanize v1.0.1

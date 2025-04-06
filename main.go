@@ -20,7 +20,7 @@ var (
 	cache              Cache = NopCache{}
 	cacheNop           bool
 	logger             *slog.Logger
-	postprocessDocChan chan *ExtractedDocument
+	postprocessDocChan chan ExtractedDocument
 	srv                http.Server
 	tesConfig          TesConfig
 	httpClient         *http.Client
@@ -74,7 +74,7 @@ func main() {
 
 	logger.Debug("Starting Text Extraction Service with config", "conf", tesConfig)
 	LogAndFixConfigIssues()
-	postprocessDocChan = make(chan *ExtractedDocument, 100)
+	postprocessDocChan = make(chan ExtractedDocument, 100)
 	go saveCloseAndDeleteExtracedDocs()
 
 	router := gin.New()

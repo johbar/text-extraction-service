@@ -65,14 +65,11 @@ func (store ObjectStoreCache) StreamText(url string, w io.Writer) error {
 	return err
 }
 
-func (store ObjectStoreCache) Save(doc *ExtractedDocument) (*jetstream.ObjectInfo, error) {
+func (store ObjectStoreCache) Save(doc ExtractedDocument) (*jetstream.ObjectInfo, error) {
 	m := jetstream.ObjectMeta{Metadata: *doc.Metadata, Name: *doc.Url}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	r := bytes.NewReader(doc.Text)
 	info, err := store.ObjectStore.Put(ctx, m, r)
-	if err != nil {
-		return info, err
-	}
 	return info, err
 }
