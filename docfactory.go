@@ -12,6 +12,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/gabriel-vasile/mimetype"
+	"github.com/johbar/text-extraction-service/v2/internal/imageparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/officexmlparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/rtfparser"
@@ -29,7 +30,7 @@ var (
 	errTooLarge     = errors.New("file too large")
 )
 
-func createTempFile(origin string) (*os.File, error) {
+func newTempFile(origin string) (*os.File, error) {
 	dir := os.TempDir()
 	var fileName string
 	u, err := url.Parse(origin)
@@ -43,7 +44,7 @@ func createTempFile(origin string) (*os.File, error) {
 }
 
 func saveToFs(r io.Reader, origin string) (string, error) {
-	f, err := createTempFile(origin)
+	f, err := newTempFile(origin)
 	if err != nil {
 		return "", err
 	}
@@ -56,16 +57,17 @@ func saveToFs(r io.Reader, origin string) (string, error) {
 func handleUnknownSize(r io.Reader, origin string) (Document, error) {
 	// HTTP chunked encoding or reading from stdin
 	buf := make([]byte, tesConfig.maxInMemoryBytes)
-	logger.Debug("Reading stream with unknown size", "origin", origin, "buf", len(buf))
+
+	logger.Debug("Reading stream of unknown size", "origin", origin, "buf", len(buf))
 	bytesRead := 0
 	n, err := io.ReadFull(r, buf)
 	bytesRead += n
 	isAll := err == io.EOF || err == io.ErrUnexpectedEOF
 	isNotEvenAll := err == nil
-	logger.Debug("Finished reading first chunk from stream with unknown size", "bytes", n, "err", err)
-	if bytesRead >= int(tesConfig.maxInMemoryBytes) && (isAll || isNotEvenAll) {
+	logger.Debug("Finished reading first chunk from stream of unknown size", "bytes", n, "err", err)
+	if bytesRead >= int(tesConfig.maxInMemoryBytes) && (isNotEvenAll) {
 		// file is too large for holding it in memory
-		f, err := createTempFile(origin)
+		f, err := newTempFile(origin)
 		if err != nil {
 			return nil, err
 		}
@@ -78,16 +80,14 @@ func handleUnknownSize(r io.Reader, origin string) (Document, error) {
 		if n, err := io.Copy(f, r); err != nil {
 			return nil, err
 		} else {
-			logger.Debug("Finished reading remaining chunks from stream with unknown size", "bytes", n, "path", f.Name())
+			logger.Debug("Finished reading remaining chunks from stream of unknown size", "bytes", n, "path", f.Name())
 		}
 		return NewFromPath(f.Name(), origin)
-	} else if err != nil {
-		// some other error occurred during reading the remote file or stdin
-		return nil, err
-	} else {
+	} else if isAll {
 		// no error, file read was smaller than buf
-		return NewFromData(buf, origin)
+		return NewFromBytes(buf[:bytesRead], origin)
 	}
+	return nil, err
 }
 
 func handleMediumSize(r io.Reader, size int64, origin string) (Document, error) {
@@ -109,7 +109,7 @@ func handleSmallSize(r io.Reader, size int64, origin string) (Document, error) {
 	if len(data) == 0 {
 		return nil, errZeroSize
 	}
-	return NewFromData(data, origin)
+	return NewFromBytes(data, origin)
 }
 
 func NewDocFromStream(r io.Reader, size int64, origin string) (Document, error) {
@@ -130,7 +130,7 @@ func NewDocFromStream(r io.Reader, size int64, origin string) (Document, error) 
 	return handleSmallSize(r, size, origin)
 }
 
-func NewFromData(data []byte, origin string) (Document, error) {
+func NewFromBytes(data []byte, origin string) (Document, error) {
 	mtype := mimetype.Detect(data)
 	logger.Debug("Detected", "mimetype", mtype.String(), "ext", mtype.Extension(), "origin", origin)
 	if ext := mtype.Extension(); slices.Contains(xmlBasedFormats, ext) {

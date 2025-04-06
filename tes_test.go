@@ -80,3 +80,64 @@ func TestNewFromPath(t *testing.T) {
 		d.Close()
 	}
 }
+
+func TestUnknownSizedStreamEmitsData(t *testing.T) {
+	tesConfig = NewTesConfigFromEnv()
+	if tesConfig.maxInMemoryBytes < 2_000 {
+		t.Fatal("maxInMemoryBytes was", tesConfig.maxInMemoryBytes)
+	}
+	path :="pkg/pdflibwrappers/testdata/readme.pdf"
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	d, err := handleUnknownSize(f, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Path()) > 0 {
+		t.Fatalf("want no path, got %v", d.Path())
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*d.Data()) != int(stat.Size()) {
+		t.Errorf("want %d bytes, got %d", len(*d.Data()), stat.Size())
+	}
+}
+
+func TestUnknownSizedStreamEmitsFile(t *testing.T) {
+	tesConfig = NewTesConfigFromEnv()
+	tesConfig.maxInMemoryBytes = 100
+	path :="pkg/pdflibwrappers/testdata/readme.pdf"
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	d, err := handleUnknownSize(f, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if len(d.Path()) < 1 {
+		t.Fatalf("want path, got %v", d.Path())
+	}
+	defer os.Remove(d.Path())
+	if d.Data() != nil {
+		t.Fatal("want nil, got data")
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stat2, err := os.Stat(d.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stat2.Size() != stat.Size() {
+		t.Errorf("temp file not the same size as original file %d != %d", stat2.Size(), stat.Size())
+	}
+}

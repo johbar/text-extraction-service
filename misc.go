@@ -142,7 +142,7 @@ func PrintMetadataAndTextToStdout(url string) {
 	err = WriteTextOrRunOcr(doc, w, url)
 	w.Close()
 	doc.Close()
-	if len (doc.Path()) > 1 && doc.Path() != url {
+	if len(doc.Path()) > 1 && doc.Path() != url {
 		err = os.Remove(doc.Path())
 	}
 	if err != nil {
@@ -160,7 +160,7 @@ func LogAndFixConfigIssues() {
 	}
 
 	if tesswrap.Initialized {
-		if tessOk, whyNot := tesswrap.IsTesseractConfigOk(); !tessOk {
+		if tessOk, whyNot := tesswrap.TesseractConfigOk(); !tessOk {
 			logger.Warn("Language config is invalid. Tesseract will be disabled.", "reason", whyNot)
 			tesswrap.Initialized = false
 		}
