@@ -1,5 +1,3 @@
-//go:build !cache_nop
-
 package main
 
 import (

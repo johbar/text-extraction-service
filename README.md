@@ -111,7 +111,7 @@ Building only requires a recent Go SDK (v1.24.1) thanks to `purego`.
 But testing and running TES requires additional shared libs.
 Depending on the PDF engine you choose (see below for comparison) you need it installed in your dev/build environment.
 
-The docparser (for legacy MS Word files) can work either of the CLI tools `wvWare`, `antiword` or `catdoc`.
+The `docparser` package (for legacy MS Word files) can work with either of the CLI tools `wvWare`, `antiword` or `catdoc`.
 
 All instructions supplied here suppose a Linux environment.
 
@@ -125,7 +125,7 @@ TES will use `/usr/lib/libreoffice/program/libpdfiumlo.so` which is compatible w
 Otherwise or if you prefer a current version of the upstream lib:
 
 - Download the correct PDFium binary for your platform from [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) or compile the lib yourself.
-  You can also use the [downloader script](https://github.com/johbar/text-extraction-service/blob/main/pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh) to do so.
+  You can also use the [downloader script](./pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh) to do so.
 - Put `libpdfium.so` in `/usr/local/lib/` (my recommendation).
 - Set the config env variable in your shell via `export TES_PDF_LIB_PATH=/path/to/libpdfium.so` if you put elsewhere.
 
@@ -153,10 +153,9 @@ See [Gin docs](https://github.com/gin-gonic/gin/blob/master/docs/doc.md#build-wi
 go build -tags nomsgpack -o tes
 ```
 
-If you don't need the NATS based cache additionally supply the build tag `cache_nop`.
-This will also disable the NATS interface as a whole.
+## Embed NATS
 
-If you want no embedded NATS server but the possibility to connect to an external server at run time use the build tag `no_embedded_nats`.
+If you want to run NATS embedded in TES with zero config use the build tag `embed_nats`.
 
 ## OCR (experimental)
 
@@ -165,8 +164,8 @@ All you need to do is:
 
 1. Install Tesseract, e.g. on Debian/Ubuntu run `apt install tesseract-ocr`
 2. Install any language model file you need. English is included by default.
-    1. Run `apt install tesseract-ocr-script-latn` for a model that supports multiple languages with latin script (rather large)
-    2. Or run `apt install tesseract-ocr-deu` for the german model (smaller but specific)
+    1. Run `apt install tesseract-ocr-script-latn` for a model that supports multiple languages with latin script (rather large and slow).
+    2. Or run `apt install tesseract-ocr-deu` for the german model (smaller but specific, hence faster).
 3. Configure TES to pass on your language preference to Tesseract by setting the environment variable, e.g. `TES_TESSERACT_LANGS=Latin+osd` when running TES.
 4. Optionally set `TESS_PREFIX` if you have installed the language models in a custom path.
 
@@ -292,7 +291,7 @@ Configuration happens through environment variables only.
 | `TES_MAX_IN_MEMORY`                   | Maximum size a file may have to be processed in-memory. Is a file larger, it will be downloaded to `$TMP`. Default: `2MiB`                                                                     |
 | `TES_MAX_FILE_SIZE`                   | Maximum size a file may have to be processed. Larger files will be discarded. Default `300MiB`                                                                                                 |
 | `TES_HTTP_CLIENT_DISABLE_COMPRESSION` | Disable `Accept-Encoding: gzip` header in outgoing HTTP Requests. Default: `false`                                                                                                             |
-| `TES_TESSERACT_LANGS`                 | Set languages for Tesseract OCR as a list of 3-letter-codes, separated by `+`. Default: `Latin` = all languages with latin script                                                              |
+| `TES_TESSERACT_LANGS`                 | Set languages for Tesseract OCR as a list of 3-letter codes or script identifiers, separated by `+`. Default: `Latin` = all languages with latin script                                                              |
 | `TES_LOG_LEVEL`                       | Sets the log level. Options (case-insensitive): `info` (default), `debug`, `warn`, `error`                                                                                                     |
 | `TES_DEBUG`                           | Adds source info to each log line. Default: `false`                                                                                                                                            |
 
@@ -401,7 +400,7 @@ Examples using the NATS CLI:
 
 ```shell
 # Start TES with TES_EXPOSE_NATS=true, embedded NATS will listen on standard port:
-$ TES_EXPOSE_NATS=true ./text-extraction-service &
+$ TES_EXPOSE_NATS=true ./tes &
 # Call NATS CLI:
 $ nats request extract-remote '{"url": "https://assets.avm.de/files/docs/fritzbox/FRITZ!Box%207690/FRITZ!Box%207690_qig_de_DE.pdf", "noCache": true}'
 23:48:23 Sending request on "extract-remote"

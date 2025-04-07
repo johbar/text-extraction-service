@@ -1,4 +1,4 @@
-//go:build !no_embedded_nats
+//go:build embed_nats
 
 package main
 

@@ -1,5 +1,3 @@
-//go:build !cache_nop
-
 package main
 
 import (
@@ -19,7 +17,12 @@ func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 	var nc *nats.Conn
 	var err error
 	var attempts int = 0
-	if conf.NatsUrl != "" {
+	if len(conf.NatsUrl) == 0 {
+		nc, err = connectToEmbeddedNatsServer(conf)
+		if err != nil {
+			return nil, nil
+		}
+	} else {
 		logger.Info("Try connecting to NATS", "url", conf.NatsUrl, "timeoutSecs", conf.NatsTimeout.Seconds(), "count", attempts)
 		for nc == nil {
 			attempts++
@@ -45,11 +48,6 @@ func SetupNatsConnection(conf TesConfig) (*nats.Conn, jetstream.JetStream) {
 			} else {
 				logger.Info("NATS connected")
 			}
-		}
-	} else {
-		nc, err = connectToEmbeddedNatsServer(conf)
-		if err != nil {
-			return nil, nil
 		}
 	}
 
