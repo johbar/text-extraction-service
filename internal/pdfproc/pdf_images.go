@@ -4,6 +4,7 @@ package pdfproc
 import (
 	"bytes"
 	"io"
+	"os"
 	"time"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
@@ -28,11 +29,26 @@ func init() {
 	pdfConf.Cmd = model.EXTRACTIMAGES
 }
 
-// Parses a PDF file in-memory for extracting images
+// ParseForImageExtraction parses a PDF file in-memory for extracting images
 func ParseForImageExtraction(pdfData []byte) (*model.Context, error) {
 	var ctx *model.Context
 	rs := bytes.NewReader(pdfData)
 	ctx, err := api.ReadValidateAndOptimize(rs, pdfConf)
+	if err != nil {
+		return nil, err
+	}
+	return ctx, nil
+}
+
+// ParsePathForImageExtraction parses a PDF file on-disk for extracting images
+func ParsePathForImageExtraction(path string) (*model.Context, error) {
+	var ctx *model.Context
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	ctx, err = api.ReadValidateAndOptimize(f, pdfConf)
 	if err != nil {
 		return nil, err
 	}

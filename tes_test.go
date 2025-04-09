@@ -10,36 +10,44 @@ import (
 	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/officexmlparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/pdfium_purego"
-	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/poppler_purego"
 	"github.com/johbar/text-extraction-service/v2/pkg/rtfparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 )
 
+const readmeOcrPath = "pkg/pdflibwrappers/testdata/readme.pdf"
+
 func TestWriteTextOrRunOcr(t *testing.T) {
+	tesConfig = NewTesConfigFromEnv()
 	// we need to create a logger, otherwise it's a nil pointer
 	logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug, AddSource: true}))
-	if _, err := poppler_purego.InitLib(""); err != nil {
-		return
+	err := LoadPdfLib("pdfium", "")
+	if err != nil {
+		t.Skip(err)
 	}
-
+	pdfImpl = pdfImplementation{libShort: "pdfium"}
 	tesswrap.Languages = "eng"
 
-	data, err := os.ReadFile("pkg/pdflibwrappers/testdata/readme.pdf")
+	f, err := os.Open(readmeOcrPath)
 	if err != nil {
 		panic(err)
 	}
-	doc, err := poppler_purego.Load(data)
+	defer f.Close()
+	doc, err := NewDocFromStream(f, -1, readmeOcrPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var sb strings.Builder
-	err = WriteTextOrRunOcr(doc, &sb, "readme.pdf")
+	err = WriteTextOrRunOcr(doc, &sb, readmeOcrPath)
 	if err != nil {
 		t.Error(err)
 	}
 	t.Log(sb.String())
 	if sb.Len() < 100 {
 		t.Error("expected more text as a result of OCR")
+	}
+	if len(doc.Path()) > 0 {
+		// temp file
+		os.Remove(doc.Path())
 	}
 }
 
@@ -60,7 +68,7 @@ func TestNewFromPath(t *testing.T) {
 		{"pkg/officexmlparser/testdata/readme.odp", reflect.TypeOf(xmltyp)},
 		{"pkg/docparser/testdata/readme.doc", reflect.TypeOf(doctyp)},
 		{"pkg/rtfparser/testdata/readme.rtf", reflect.TypeOf(rtftyp)},
-		{"pkg/pdflibwrappers/testdata/readme.pdf", reflect.TypeOf(pdfiumtyp)},
+		{readmeOcrPath, reflect.TypeOf(pdfiumtyp)},
 	}
 	for _, doc := range cases {
 
@@ -83,10 +91,8 @@ func TestNewFromPath(t *testing.T) {
 
 func TestUnknownSizedStreamEmitsData(t *testing.T) {
 	tesConfig = NewTesConfigFromEnv()
-	if tesConfig.maxInMemoryBytes < 2_000 {
-		t.Fatal("maxInMemoryBytes was", tesConfig.maxInMemoryBytes)
-	}
-	path :="pkg/pdflibwrappers/testdata/readme.pdf"
+	tesConfig.maxInMemoryBytes = 10_000_000
+	path := readmeOcrPath
 	f, err := os.Open(path)
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +117,7 @@ func TestUnknownSizedStreamEmitsData(t *testing.T) {
 func TestUnknownSizedStreamEmitsFile(t *testing.T) {
 	tesConfig = NewTesConfigFromEnv()
 	tesConfig.maxInMemoryBytes = 100
-	path :="pkg/pdflibwrappers/testdata/readme.pdf"
+	path := readmeOcrPath
 	f, err := os.Open(path)
 	if err != nil {
 		t.Fatal(err)

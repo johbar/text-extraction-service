@@ -16,6 +16,19 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
+func parseForOcrOnce(d Document, ctx *model.Context, origin string) (*model.Context, error) {
+	if ctx == nil {
+		if len(d.Path()) == 0 {
+			logger.Debug("Parsing data with pdfcpu for image extraction", "origin", origin)
+			return pdfproc.ParseForImageExtraction(*d.Data())
+		} else {
+			logger.Debug("Parsing file with pdfcpu for image extraction", "origin", origin)
+			return pdfproc.ParsePathForImageExtraction(d.Path())
+		}
+	}
+	return ctx, nil
+}
+
 func WriteTextOrRunOcr(d Document, w io.Writer, origin string) error {
 	var ctx *model.Context
 	var err error
@@ -25,13 +38,10 @@ func WriteTextOrRunOcr(d Document, w io.Writer, origin string) error {
 	for i := range d.Pages() {
 		text, hasImages := d.Text(i)
 		if len(text) == 0 && hasImages && tesswrap.Initialized {
-			if ctx == nil {
-				logger.Debug("Parsing file with pdfcpu for image extraction", "origin", origin)
-				ctx, err = pdfproc.ParseForImageExtraction(*d.Data())
-				if err != nil {
-					logger.Error("pdfcpu failed", "err", err, "origin", origin)
-					continue
-				}
+			ctx, err = parseForOcrOnce(d, ctx, origin)
+			if err != nil {
+				logger.Error("pdfcpu failed", "err", err, "origin", origin)
+				continue
 			}
 			images, err := pdfproc.GetImages(ctx, i)
 			if err != nil {
