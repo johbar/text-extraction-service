@@ -13,7 +13,7 @@ require (
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/klauspost/compress v1.18.0
 	github.com/nats-io/nats-server/v2 v2.11.1
-	github.com/nats-io/nats.go v1.41.0
+	github.com/nats-io/nats.go v1.41.1
 	github.com/pdfcpu/pdfcpu v0.9.1
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.4
