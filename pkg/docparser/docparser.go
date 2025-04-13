@@ -1,6 +1,6 @@
 /*
 Package docparser implements a parser for legacy MS Word documents (.doc).
-It depends on the wvWare tool which must be installed.
+It depends on the one of several tools which must be installed: antiword, wvWare or catdoc.
 
 The metadata parser is mainly taken from https://github.com/sajari/docconv/blob/master/doc.go
 */
@@ -27,7 +27,7 @@ var (
 	// and duplicate whitespace
 	reCleaner = regexp.MustCompile(`\s*?\pC\pS*?|\s{2,}`)
 
-	// Initialized indicates if the package is usable (depending on the presence of the wv and/or antiword)
+	// Initialized indicates if the package is usable (depending on the presence of the wv, antiword or catdoc)
 	Initialized bool = false
 
 	wvWare   = progAndArgs{cmd: "wvWare", args: []string{"-x", "/usr/share/wv/wvText.xml", "-1", "-c", "utf-8"}, stdin: "/dev/stdin"}
