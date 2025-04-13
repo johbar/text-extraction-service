@@ -6,13 +6,13 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/gin-contrib/expvar"
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httplog/v2"
 	"github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/jsontext"
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
-	sloggin "github.com/samber/slog-gin"
 	slogjson "github.com/veqryn/slog-json"
 )
 
@@ -77,12 +77,19 @@ func main() {
 	postprocessDocChan = make(chan ExtractedDocument, 100)
 	go saveCloseAndDeleteExtracedDocs()
 
-	router := gin.New()
-	router.Use(sloggin.New(logger), gin.Recovery())
-	router.POST("/", ExtractBody)
-	router.GET("/", ExtractRemote)
-	router.HEAD("/", ExtractRemote)
-	router.GET("/debug/vars", expvar.Handler())
+	router := chi.NewRouter()
+
+	router.Use(httplog.RequestLogger(&httplog.Logger{
+		Logger: logger,
+		Options: httplog.Options{
+			Concise: true,
+		},
+	}), middleware.Recoverer)
+	router.Post("/", ExtractBody)
+	router.Get("/", ExtractRemote)
+	router.Head("/", ExtractRemote)
+	// FIXME: do we need this?
+	// router.GET("/debug/vars", expvar.Handler())
 
 	srv.Addr = tesConfig.SrvAddr
 	srv.Handler = router

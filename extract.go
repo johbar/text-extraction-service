@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -28,7 +27,7 @@ type ExtractedDocument struct {
 }
 
 type RequestParams struct {
-	Url string `form:"url" binding:"required" json:"url" validate:"http_url"`
+	Url string `form:"url" json:"url" validate:"http_url"`
 	//Ignore cached record
 	NoCache bool `form:"noCache" json:"noCache"`
 	//Send Metadata only, ignoring content
@@ -68,18 +67,19 @@ func saveCloseAndDeleteExtracedDocs() {
 
 // ExtractBody returns the request body's plain text content.
 // Returns a JSON encoded error message if the body is not parsable.
-func ExtractBody(c *gin.Context) {
+func ExtractBody(w http.ResponseWriter, r *http.Request) {
 	origin := "POST request"
-	doc, err := NewDocFromStream(c.Request.Body, c.Request.ContentLength, origin)
+	doc, err := NewDocFromStream(r.Body, r.ContentLength, origin)
 	if err != nil {
 		logger.Error("Error parsing response body", "err", err)
-		c.AbortWithStatus(http.StatusUnprocessableEntity)
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		w.Write([]byte(err.Error()))
 		return
 	}
 	defer doc.Close()
 	metadata := doc.MetadataMap()
-	addMetadataAsHeaders(c.Writer.Header(), metadata)
-	pw := RunDehyphenator(c.Writer)
+	addMetadataAsHeaders(w.Header(), metadata)
+	pw := RunDehyphenator(w)
 	_ = WriteTextOrRunOcr(doc, pw, "<POST req>")
 	pw.Close()
 }
@@ -177,31 +177,28 @@ func DocFromUrl(params RequestParams, w io.Writer, header http.Header) (status i
 	return http.StatusOK, nil
 }
 
-func ExtractRemote(c *gin.Context) {
+func ExtractRemote(w http.ResponseWriter, r *http.Request) {
 	var params RequestParams
-	bindErr := c.BindQuery(&params)
-	if bindErr != nil {
-		logger.Warn("Invalid request", "requestURL", c.Request.URL, "err", c.Errors.JSON())
-		if err := c.AbortWithError(http.StatusBadRequest, bindErr); err != nil {
-			logger.Error("Returning error to HTTP client failed", "err", err)
-		}
-		return
+	q := r.URL.Query()
+	params.NoCache = q.Has("noCache") || q.Has("nocache")
+	params.Silent = q.Has("silent")
+	if r.Method == "HEAD" {
+		params.Silent = true
 	}
+	params.Url = q.Get("url")
 	valErr := validate.Struct(params)
 	if valErr != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"err": fmt.Sprintf("%s is not a valid HTTP(S) URL", params.Url)})
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "%s is not a valid HTTP(S) URL", params.Url)
 		return
 	}
 
-	if c.Request.Method == http.MethodHead {
-		params.Silent = true
-	}
-	status, extractErr := DocFromUrl(params, c.Writer, c.Writer.Header())
+	status, extractErr := DocFromUrl(params, w, w.Header())
 	if extractErr != nil {
-		c.AbortWithStatusJSON(status, gin.H{"code": status, "msg": extractErr.Error()})
+		w.WriteHeader(status)
+		fmt.Print(extractErr)
 		return
 	}
-	c.Status(status)
 }
 
 func addMetadataAsHeaders(header http.Header, metadata DocumentMetadata) {
