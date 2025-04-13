@@ -244,10 +244,10 @@ func (d *WordDoc) runExternalWordProcessor(w io.Writer, wordProg progAndArgs) er
 	}
 
 	for s.Scan() {
-		line := s.Text() + " "
-		line = reCleaner.ReplaceAllLiteralString(line, " ")
+		line := append(s.Bytes(), ' ')
+		line = reCleaner.ReplaceAllLiteral(line, []byte{' '})
 		// don't add empty lines
-		if line != "" && line != " " {
+		if len(line) > 0 && !bytes.Equal(line, []byte{' '}) {
 			_, err := w.Write([]byte(line))
 			if err != nil {
 				return err

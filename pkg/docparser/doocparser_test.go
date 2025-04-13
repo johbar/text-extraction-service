@@ -13,6 +13,7 @@ const (
 	lastLine  = "Nevertheless, if you intend to fork this project and remove the GPL-related code in favor of PDFium only, feel free to put it under Apache-2 license. "
 	filePath  = "testdata/readme.doc"
 )
+
 var readmeBytes []byte
 
 func init() {
@@ -57,7 +58,8 @@ func TestMetadata(t *testing.T) {
 	t.Logf("metadata: %+v", d.metadata)
 	if d.metadata.Title != "README of github.com/johbar/text-extraction-service" {
 		t.Errorf("Expected author to be 'README of github.com/johbar/text-extraction-service', but was %s", d.metadata.Title)
-	}}
+	}
+}
 
 func TestAntiword(t *testing.T) {
 	if _, err := exec.LookPath(antiword.cmd); err != nil {
@@ -73,7 +75,8 @@ func TestAntiword(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-testExternalWordProcessor(t, d, antiword)}
+	testExternalWordProcessor(t, d, antiword)
+}
 
 func TestCatdoc(t *testing.T) {
 	if _, err := exec.LookPath(catdoc.cmd); err != nil {
@@ -115,7 +118,7 @@ func testExternalWordProcessor(t *testing.T, d *WordDoc, p progAndArgs) {
 	txt := buf.String()
 	t.Log(txt)
 	if !strings.HasPrefix(txt, beginning) {
-		t.Errorf("Extracted content did not start as expected")
+		t.Errorf("Extracted content did not start as expected. It was %v", txt)
 	}
 	if !strings.HasSuffix(txt, lastLine) {
 		t.Errorf("Extracted content did not end as expected")
