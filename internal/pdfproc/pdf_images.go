@@ -3,15 +3,12 @@ package pdfproc
 
 import (
 	"bytes"
-	"io"
 	"os"
 	"time"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
-	pdfcpuapi "github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/types"
 )
 
 type PdfMetaData struct {
@@ -67,20 +64,4 @@ func GetImages(ctx *model.Context, page int) ([]model.Image, error) {
 		imgSlice = append(imgSlice, img)
 	}
 	return imgSlice, nil
-}
-
-// GetPdfInfos returns a PDF file's Metadata
-func GetPdfInfos(rs io.ReadSeeker) (PdfMetaData, error) {
-	info, err := pdfcpuapi.PDFInfo(rs, "", nil, nil)
-	if err != nil {
-		return PdfMetaData{}, err
-	}
-	meta := PdfMetaData{Author: info.Author, Title: info.Title, Subject: info.Subject, PageCount: info.PageCount}
-	if mod, ok := types.DateTime(info.ModificationDate, true); ok {
-		meta.Modified = mod
-	}
-	if created, ok := types.DateTime(info.CreationDate, true); ok {
-		meta.Created = created
-	}
-	return meta, nil
 }
