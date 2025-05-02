@@ -12,8 +12,8 @@ require (
 	github.com/go-json-experiment/json v0.0.0-20250417205406-170dfdcf87d1
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/klauspost/compress v1.18.0
-	github.com/nats-io/nats-server/v2 v2.11.2
-	github.com/nats-io/nats.go v1.41.2
+	github.com/nats-io/nats-server/v2 v2.11.3
+	github.com/nats-io/nats.go v1.42.0
 	github.com/pdfcpu/pdfcpu v0.10.2
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.4
@@ -25,7 +25,7 @@ require (
 require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/google/go-tpm v0.9.3 // indirect
+	github.com/google/go-tpm v0.9.4 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/pkcs7 v0.2.0 // indirect
 	github.com/hhrutter/tiff v1.0.2 // indirect
