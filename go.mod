@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/dlclark/regexp2 v1.11.5
 	github.com/dustin/go-humanize v1.0.1
-	github.com/ebitengine/purego v0.8.2
+	github.com/ebitengine/purego v0.8.3
 	github.com/gabriel-vasile/mimetype v1.4.9
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-chi/httplog/v2 v2.1.1
