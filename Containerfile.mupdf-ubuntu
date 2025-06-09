@@ -1,6 +1,6 @@
 ARG BUILD_IMG=docker.io/golang:bookworm
 ARG RUNTIME_IMG=docker.io/ubuntu:jammy
-ARG MUPDF_VERSION=1.25.4
+ARG MUPDF_VERSION=1.26.2
 ARG DEBIAN_FRONTEND=noninteractive
 
 FROM $BUILD_IMG AS builder

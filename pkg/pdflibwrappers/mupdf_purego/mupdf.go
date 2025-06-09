@@ -39,7 +39,7 @@ const (
 
 var (
 	lib          uintptr
-	MuPdfVersion = "1.25.2"
+	MuPdfVersion = "1.25.6"
 
 	fz_new_context_imp func(alloc uintptr, locks uintptr, maxStore uint64, version string) fzContext
 	fz_drop_context    func(ctx fzContext)

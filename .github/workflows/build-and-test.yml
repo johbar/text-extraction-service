@@ -114,7 +114,7 @@ jobs:
                 cp pkg/pdflibwrappers/pdfium_purego/lib/libpdfium.so /usr/local/lib/
         - name: Run unit tests
           env:
-            MUPDF_VERSION: "1.24.10"
+            MUPDF_VERSION: "1.25.6"
           run: go test ./...
         - name: Run basic test - Poppler
           env:
@@ -123,5 +123,5 @@ jobs:
         - name: Run basic test - MuPDF
           env:
             TES_PDF_LIB_NAME: mupdf
-            MUPDF_VERSION: "1.24.10"
+            MUPDF_VERSION: "1.25.6"
           run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf

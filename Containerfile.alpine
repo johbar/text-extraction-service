@@ -36,6 +36,6 @@ EXPOSE 4222 8080
 
 VOLUME /tmp/nats
 
-ENV GIN_MODE=release HOME=/tmp MUPDF_VERSION=1.24.10
+ENV GIN_MODE=release HOME=/tmp MUPDF_VERSION=1.25.6
 
 CMD ["text-extraction-service"]
