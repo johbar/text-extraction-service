@@ -97,7 +97,7 @@ func handleMediumSize(r io.Reader, size int64, origin string) (Document, error) 
 		return nil, err
 	}
 	logger.Info("File saved", "path", path, "origin", origin, "size", humanize.Bytes(uint64(size)))
-	return NewPdfFromPath(path, origin)
+	return NewFromPath(path, origin)
 }
 
 func handleSmallSize(r io.Reader, size int64, origin string) (Document, error) {
