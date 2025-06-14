@@ -4,9 +4,9 @@ package tesswrap
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"sync"
-	"unsafe"
 
 	"github.com/ebitengine/purego"
 	"github.com/johbar/text-extraction-service/v2/internal/unix"
@@ -16,7 +16,7 @@ var (
 	TessVersion       func() *byte
 	TessBaseAPICreate func() uintptr
 	TessBaseAPIDelete func(handle uintptr)
-	TessBaseAPIInit3  func(baseApiHandle uintptr, datapath unsafe.Pointer, lang *byte) int
+	TessBaseAPIInit3  func(baseApiHandle uintptr, datapath *byte, lang *byte) int
 	// This returns a vector, essentially a slice. purego can't deal with that
 	// TessBaseAPIGetAvailableLanguagesAsVector func(baseApiHandle uintptr) *uintptr
 	/*
@@ -34,7 +34,8 @@ var (
 	*/
 	TessBaseAPIClear func(handle uintptr)
 
-	pixReadMem  func(data *byte, lenght uint64) uintptr
+	pixReadMem  func(data []byte, length uint64) uintptr
+	pixRead		func(path string) uintptr
 	pixFreeData func(data uintptr)
 	free        func(*byte)
 	lock        sync.Mutex
@@ -57,7 +58,10 @@ func init() {
 	purego.RegisterLibFunc(&TessBaseAPIGetUTF8Text, lib, "TessBaseAPIGetUTF8Text")
 	purego.RegisterLibFunc(&free, lib, "free")
 	purego.RegisterLibFunc(&pixReadMem, lib, "pixReadMem")
+	purego.RegisterLibFunc(&pixRead, lib, "pixRead")
+
 	purego.RegisterLibFunc(&pixFreeData, lib, "pixFreeData")
+
 	purego.RegisterLibFunc(&TessBaseAPISetPageSegMode, lib, "TessBaseAPISetPageSegMode")
 	purego.RegisterLibFunc(&TessBaseAPIClear, lib, "TessBaseAPIClear")
 
@@ -68,7 +72,7 @@ func init() {
 func initLib() {
 	handle = TessBaseAPICreate()
 	lang, _ := unix.BytePtrFromString(Languages)
-	if ret := TessBaseAPIInit3(handle, unsafe.Pointer(nil), lang); ret != 0 {
+	if ret := TessBaseAPIInit3(handle, nil, lang); ret != 0 {
 		Initialized = false
 	}
 }
@@ -98,7 +102,7 @@ func ImageBytesToText(data []byte) (string, error) {
 	defer TessBaseAPIClear(handle)
 
 	TessBaseAPISetPageSegMode(handle, 1) //PSM_AUTO_OSD
-	_pix := pixReadMem(&data[0], uint64(len(data)))
+	_pix := pixReadMem(data, uint64(len(data)))
 	if _pix == 0 {
 		return "", errors.New("not an image")
 	}
@@ -110,7 +114,7 @@ func ImageBytesToText(data []byte) (string, error) {
 	return result, nil
 }
 
-func ImageReaderToTextWriter(r io.Reader, w io.Writer) error {
+func ImageReaderToWriter(r io.Reader, w io.Writer) error {
 	txt, err := ImageReaderToText(r)
 	if err != nil {
 		return err
@@ -119,6 +123,32 @@ func ImageReaderToTextWriter(r io.Reader, w io.Writer) error {
 	return nil
 }
 
-func IsTesseractConfigOk() (ok bool, reason string) {
+func ImageToWriter(path string, w io.Writer) error {
+	lock.Lock()
+	defer lock.Unlock()
+	if handle == 0 {
+		// start the tesseract lib if it hasn't been already
+		initLib()
+	}
+	if !Initialized {
+		return errors.New("tesseract could not be initialized")
+	}
+	defer TessBaseAPIClear(handle)
+
+	TessBaseAPISetPageSegMode(handle, 1) //PSM_AUTO_OSD
+	_pix := pixRead(path)
+	if _pix == 0 {
+		return fmt.Errorf("not a supported image type: '%s'", path)
+	}
+	defer pixFreeData(_pix)
+	TessBaseAPISetImage2(handle, _pix)
+	text := TessBaseAPIGetUTF8Text(handle)
+	defer free(text)
+	result := unix.BytePtrToString(text)
+	w.Write([]byte(result))
+	return nil
+}
+
+func TesseractConfigOk() (ok bool, reason string) {
 	return true, ""
 }
