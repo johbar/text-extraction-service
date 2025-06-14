@@ -106,9 +106,6 @@ func handleSmallSize(r io.Reader, size int64, origin string) (Document, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(data) == 0 {
-		return nil, errZeroSize
-	}
 	return NewFromBytes(data, origin)
 }
 
