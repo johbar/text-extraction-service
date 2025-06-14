@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
-	"unsafe"
 
 	"github.com/ebitengine/purego"
 	"github.com/johbar/text-extraction-service/v2/internal/unix"
@@ -38,8 +37,8 @@ type Document struct {
 
 var (
 	lib            uintptr
-	free           func(unsafe.Pointer)
-	g_bytes_new    func(bytes unsafe.Pointer, length uint64) uintptr
+	free           func(*byte)
+	g_bytes_new    func(bytes []byte, length uint64) uintptr
 	g_bytes_unref  func(uintptr)
 	g_object_unref func(uintptr)
 
@@ -115,8 +114,7 @@ func Version() string {
 
 // Load opens a PDF from a byte slice
 func Load(data []byte) (*Document, error) {
-	ptr := unsafe.Pointer(&data[0])
-	gbytes := g_bytes_new(ptr, uint64(len(data)))
+	gbytes := g_bytes_new(data, uint64(len(data)))
 	defer g_bytes_unref(gbytes)
 	handle := poppler_document_new_from_bytes(gbytes, 0, 0)
 	if handle == 0 {
@@ -147,7 +145,7 @@ func Open(path string) (*Document, error) {
 // toStr converts a C byte/char* pointer to a Go string and frees the memory allocated
 func toStr(stringPtr *byte) string {
 	str := unix.BytePtrToString(stringPtr)
-	free(unsafe.Pointer(stringPtr))
+	free(stringPtr)
 	return str
 }
 

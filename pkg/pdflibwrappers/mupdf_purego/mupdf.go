@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"unsafe"
 
 	"github.com/ebitengine/purego"
 	"github.com/johbar/text-extraction-service/v2/internal/pdfdateparser"
@@ -59,13 +58,13 @@ var (
 	pdf_open_document              func(ctx fzContext, path *byte) fzDocument
 	fz_drop_document               func(ctx fzContext, doc fzDocument)
 	fz_drop_stream                 func(ctx fzContext, stream fzStream)
-	fz_open_memory                 func(ctx fzContext, data unsafe.Pointer, len uint64) fzStream
+	fz_open_memory                 func(ctx fzContext, data []byte, len uint64) fzStream
 	fz_register_document_handlers  func(ctx fzContext)
 	fz_new_buffer_from_page_number func(ctx fzContext, doc fzDocument, number int, fzSTextOptions fzSTextOptions) fzBuffer
 	fz_string_from_buffer          func(ctx fzContext, buf fzBuffer) string
 	fz_drop_buffer                 func(ctx fzContext, buf fzBuffer)
 	fz_count_pages                 func(ctx fzContext, doc fzDocument) int
-	fz_lookup_metadata             func(ctx fzContext, doc fzDocument, key string, buf unsafe.Pointer, size int) int32
+	fz_lookup_metadata             func(ctx fzContext, doc fzDocument, key string, buf []byte, size int) int32
 
 	defaultLibNames = []string{"libmupdf.so", "libmupdf.dylib", "/usr/local/lib/libmupdf.so"}
 )
@@ -117,7 +116,7 @@ func Load(b []byte) (f *Document, err error) {
 
 	fz_register_document_handlers(f.ctx)
 
-	f.stream = fz_open_memory(f.ctx, unsafe.Pointer(&b[0]), uint64(len(b)))
+	f.stream = fz_open_memory(f.ctx, b, uint64(len(b)))
 	if f.stream == 0 {
 		fz_drop_context(f.ctx)
 		return nil, errors.New("mupdf: cannot read memory buffer")
@@ -211,10 +210,10 @@ func (d *Document) MetadataMap() map[string]string {
 	buf := make([]byte, 256)
 
 	lookup := func(key string) (ok bool, metadata string) {
-		size := fz_lookup_metadata(d.ctx, d.doc, key, unsafe.Pointer(&buf[0]), len(buf))
+		size := fz_lookup_metadata(d.ctx, d.doc, key, buf, len(buf))
 		if size > int32(len(buf)) {
 			buf = make([]byte, size)
-			fz_lookup_metadata(d.ctx, d.doc, key, unsafe.Pointer(&buf[0]), len(buf))
+			fz_lookup_metadata(d.ctx, d.doc, key, buf, len(buf))
 		}
 		return size >= 1, unix.ByteSliceToString(buf)
 	}

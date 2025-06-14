@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"unsafe"
 
 	"github.com/ebitengine/purego"
 	"github.com/johbar/text-extraction-service/v2/internal/pdfdateparser"
@@ -27,13 +26,13 @@ var (
 	FPDF_InitLibrary    func()
 	FPDF_DestroyLibrary func()
 
-	FPDF_LoadMemDocument func(data unsafe.Pointer, length uint64, password unsafe.Pointer) document
+	FPDF_LoadMemDocument func(data []byte, length uint64, password *byte) document
 	FPDF_LoadDocument    func(path string, password uintptr) document
 	// document
 	FPDF_GetPageCount  func(docHandle document) int
 	FPDF_CloseDocument func(docHandle document)
 	//Get the file version of the specific PDF document.
-	FPDF_GetFileVersion func(docHandle document, version unsafe.Pointer) bool
+	FPDF_GetFileVersion func(docHandle document, result *int) bool
 
 	// page
 	FPDF_LoadPage         func(docHandle document, index int32) page
@@ -42,7 +41,7 @@ var (
 	FPDFPage_GetObject    func(pageHandle page, index int32) (pageObjectHandle uintptr)
 	FPDFPageObj_GetType   func(objHandle uintptr) int32
 
-	FPDFImageObj_GetImageDataDecoded func(objHandle uintptr, resultBuffer unsafe.Pointer, bufLength uint64) (length uint64)
+	FPDFImageObj_GetImageDataDecoded func(objHandle uintptr, resultBuffer []byte, bufLength uint64) (length uint64)
 	// text
 	FPDFText_LoadPage   func(page) textPage
 	FPDFText_ClosePage  func(textPage)
@@ -50,7 +49,7 @@ var (
 
 	// Extract unicode text string from the page, in UTF-16LE encoding.
 	// Returns Number of characters written into parameter result buffer, excluding the trailing terminator.
-	FPDFText_GetText    func(textHandle textPage, startIndex int, count int, resultBuf unsafe.Pointer) (charsWritten int)
+	FPDFText_GetText    func(textHandle textPage, startIndex int, count int, resultBuf []byte) (charsWritten int)
 	FPDFText_GetUnicode func(textHandle textPage, index int) rune
 	/*
 			Get the text string of specific tag from meta data of a PDF document.
@@ -60,7 +59,7 @@ var (
 		each WORD representing the Unicode of a character(some special Unicode may take 2 WORDs).
 		The string is followed by two bytes of zero indicating the end of the string.
 	*/
-	FPDF_GetMetaText func(documenthandle document, tag string, resultBuf unsafe.Pointer, bufLength uint64) (bytesNeeded uint64)
+	FPDF_GetMetaText func(documenthandle document, tag string, resultBuf []byte, bufLength uint64) (bytesNeeded uint64)
 
 	// PDFium is not thread-safe. This lock guards the lib against concurrent access in places where this is known to be necessary
 	Lock sync.Mutex
@@ -113,7 +112,7 @@ func InitLib(path string) (string, error) {
 }
 
 func Load(data []byte) (*Document, error) {
-	handle := FPDF_LoadMemDocument(unsafe.Pointer(&(data[0])), uint64(len(data)), nil)
+	handle := FPDF_LoadMemDocument(data, uint64(len(data)), nil)
 	if handle == 0 {
 		return nil, errors.New("pdfium: cannot load document")
 	}
@@ -186,7 +185,7 @@ func (t textPage) utf16Text() []byte {
 	charData := make([]byte, (charCount+1)*2)
 	Lock.Lock()
 	defer Lock.Unlock()
-	charsWritten := FPDFText_GetText(t, 0, charCount, unsafe.Pointer(&charData[0]))
+	charsWritten := FPDFText_GetText(t, 0, charCount, charData)
 	// strip 2 trailing NUL bytes
 	return charData[0 : 2*charsWritten]
 }
@@ -237,7 +236,7 @@ func (d *Document) MetadataMap() map[string]string {
 	m["x-document-pages"] = strconv.Itoa(d.pages)
 
 	var version int
-	if ok := FPDF_GetFileVersion(d.handle, unsafe.Pointer(&version)); ok {
+	if ok := FPDF_GetFileVersion(d.handle, &version); ok {
 		// the result is 18 for version 1.8 etc
 		m["x-document-version"] = fmt.Sprintf("PDF-%.1f", float32(version)/10)
 	}
@@ -246,14 +245,14 @@ func (d *Document) MetadataMap() map[string]string {
 	var defaultSize uint64 = 512
 	buf := make([]byte, defaultSize)
 	lookup := func(key string) (ok bool, value string) {
-		requiredSize := FPDF_GetMetaText(d.handle, key, unsafe.Pointer(&buf[0]), uint64(len(buf)))
+		requiredSize := FPDF_GetMetaText(d.handle, key, buf, uint64(len(buf)))
 		if requiredSize <= 2 {
 			return false, ""
 		}
 		if requiredSize > uint64(len(buf)) {
 			// if the buffer was too small, allocate a bigger one
 			buf = make([]byte, requiredSize)
-			FPDF_GetMetaText(d.handle, key, unsafe.Pointer(&buf[0]), uint64(len(buf)))
+			FPDF_GetMetaText(d.handle, key, buf, uint64(len(buf)))
 		}
 		// Strip the last two bytes (NULs)
 		str, _ := transformUtf16LeToUtf8(buf[0 : requiredSize-2])
