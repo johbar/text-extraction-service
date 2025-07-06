@@ -7,12 +7,12 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/ebitengine/purego v0.8.4
 	github.com/gabriel-vasile/mimetype v1.4.9
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-chi/httplog/v2 v2.1.1
-	github.com/go-json-experiment/json v0.0.0-20250517221953-25912455fbc8
-	github.com/go-playground/validator/v10 v10.26.0
+	github.com/go-json-experiment/json v0.0.0-20250626171732-1a886bd29d1b
+	github.com/go-playground/validator/v10 v10.27.0
 	github.com/klauspost/compress v1.18.0
-	github.com/nats-io/nats-server/v2 v2.11.4
+	github.com/nats-io/nats-server/v2 v2.11.6
 	github.com/nats-io/nats.go v1.43.0
 	github.com/pdfcpu/pdfcpu v0.11.0
 	github.com/richardlehane/mscfb v1.0.4
