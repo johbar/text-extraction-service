@@ -94,7 +94,7 @@ func (store ObjectStoreCache) StreamText(url string, w io.Writer) error {
 	defer cancel()
 	info, err := store.Get(ctx, url)
 	if err != nil {
-		return fmt.Errorf("retrieving object %s from object store: %w", err)
+		return fmt.Errorf("retrieving object %s from object store: %w", url, err)
 	}
 	_, err = io.Copy(w, info)
 	return err
