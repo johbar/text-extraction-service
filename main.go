@@ -4,33 +4,39 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v2"
 	"github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/jsontext"
+	"github.com/johbar/text-extraction-service/v2/internal/cache"
+	tesnats "github.com/johbar/text-extraction-service/v2/internal/cache/nats"
+	"github.com/johbar/text-extraction-service/v2/internal/config"
+	"github.com/johbar/text-extraction-service/v2/internal/docfactory"
+	"github.com/johbar/text-extraction-service/v2/internal/extractor"
+	"github.com/nats-io/nats.go"
+
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 	slogjson "github.com/veqryn/slog-json"
 )
 
 var (
-	cache              Cache = NopCache{}
-	cacheNop           bool
-	logger             *slog.Logger
-	postprocessDocChan chan ExtractedDocument
-	srv                http.Server
-	tesConfig          TesConfig
-	httpClient         *http.Client
+	log *slog.Logger
+	srv http.Server
 )
 
 func main() {
-	tesConfig = NewTesConfigFromEnv()
+	var err error
+	tesConfig, err := config.NewTesConfigFromEnv()
+	if err != nil {
+		slog.Error("FATAL: error when parsing config values", "err", err)
+	}
+
 	h := slogjson.NewHandler(os.Stderr, &slogjson.HandlerOptions{
 		AddSource:   tesConfig.Debug,
-		Level:       tesConfig.logLevel,
+		Level:       tesConfig.LogLevel,
 		ReplaceAttr: nil, // Same signature and behavior as stdlib JSONHandler
 		JSONOptions: json.JoinOptions(
 			// Options from the json v2 library (these are the defaults)
@@ -43,83 +49,92 @@ func main() {
 		),
 	})
 
-	logger = slog.New(h)
+	log = slog.New(h)
 	// set static/global config of submodules
 	tesswrap.Languages = tesConfig.TesseractLangs
 	dehyphenator.RemoveNewlines = tesConfig.RemoveNewlines
-	// Load PDF lib
-	if err := LoadPdfLib(tesConfig.PdfLibName, tesConfig.PdfLibPath); err != nil {
-		panic(err)
+	docFactory := docfactory.New(tesConfig, log)
+
+	var tesCache cache.Cache
+	var objStore *cache.ObjectStoreCache
+	var nc *nats.Conn
+	/*
+		There are 4 cases:
+		1. A NatsUrl is configured. -> connect
+			a. If that fails and FailWithoutJetstream == true, fail the program start.
+			b. If that fails and FailWithoutJetstream == false, continue with NopCache.
+		2. No NatsUrl is configured but NATS is embedded -> connect.
+	*/
+	natsConfigured := len(tesConfig.NatsUrl) > 0
+	if natsConfigured {
+		// case 1
+		nc, err = tesnats.SetupNatsConnection(*tesConfig, log)
+	} else if tesnats.NatsEmbedded {
+		// case 2
+		nc, err = tesnats.ConnectToEmbeddedNatsServer(*tesConfig)
 	}
-	if pdfImpl.delete {
-		// Delete the extracted file before process is terminated.
-		// We could (at least on *nix OSes) also delete it earlier, after it has been loaded
-		// but then a forked process couldn't use the same file.
-		go func() {
-			sigint := make(chan os.Signal, 1)
-			signal.Notify(sigint, os.Interrupt)
-			<-sigint
-			deleteExtractedLib()
-		}()
-		defer deleteExtractedLib()
+	if err != nil {
+		log.Error("connecting to NATS failed", "err", err)
+	} else {
+		objStore, err = cache.New(*tesConfig, log, nc)
+		if err != nil {
+			if tesConfig.FailWithoutJetstream && natsConfigured {
+				// case 1a
+				log.Error("FATAL: could not init NATS based cache and TES_FAIL_WITHOUT_JS is true", "err", err)
+				os.Exit(2)
+			}
+			if tesConfig.NoHttp {
+				log.Error("FATAL: NATS not connected and HTTP disabled.", "err", err)
+				os.Exit(1)
+			}
+		}
 	}
+	if objStore == nil {
+		// case 1b
+		tesCache = &cache.NopCache{}
+	} else {
+		tesCache = objStore
+	}
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{DisableCompression: tesConfig.HttpClientDisableCompression, MaxIdleConnsPerHost: 100},
+	}
+	extr := extractor.New(tesConfig, docFactory, tesCache, log, httpClient)
+	extr.LogAndFixConfigIssues()
 	// one shot mode: don't start a server, just process a single file provided on the command line
 	if len(os.Args) > 1 {
-		// debug.SetGCPercent(-1)
 		// logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
-		LogAndFixConfigIssues()
-		PrintMetadataAndTextToStdout(os.Args[1])
+		extr.PrintMetadataAndTextToStdout(os.Args[1])
 		return
 	}
 
-	logger.Debug("Starting Text Extraction Service with config", "conf", tesConfig)
-	LogAndFixConfigIssues()
-	postprocessDocChan = make(chan ExtractedDocument, 100)
-	go saveCloseAndDeleteExtracedDocs()
-
+	log.Debug("Starting Text Extraction Service with config", "conf", tesConfig)
+	if tesConfig.NoHttp {
+		wait := make(chan struct{})
+		log.Info("Service started with no HTTP endpoints. Waiting for interrupt.")
+		<-wait
+	}
 	router := chi.NewRouter()
 
 	router.Use(httplog.RequestLogger(&httplog.Logger{
-		Logger: logger,
+		Logger: log,
 		Options: httplog.Options{
 			Concise: true,
 		},
 	}), middleware.Recoverer)
-	router.Post("/", ExtractBody)
-	router.Get("/", ExtractRemote)
-	router.Head("/", ExtractRemote)
+	router.Post("/", extr.ExtractBody)
+	router.Get("/", extr.ExtractRemote)
+	router.Head("/", extr.ExtractRemote)
 	// FIXME: do we need this?
 	// router.GET("/debug/vars", expvar.Handler())
 
 	srv.Addr = tesConfig.SrvAddr
 	srv.Handler = router
 
-	nc, js := SetupNatsConnection(tesConfig)
-	if nc == nil {
-		cacheNop = true
-	} else {
-		RegisterNatsService(nc)
-		defer nc.Drain()
-		cache = InitCache(js, tesConfig, *logger)
-	}
-
-	if tesConfig.NoHttp {
-		if nc == nil {
-			logger.Error("Fatal: NATS not connected and HTTP disabled.")
-			os.Exit(1)
-		}
-		wait := make(chan bool, 1)
-		logger.Info("Service started with no HTTP endpoints. Waiting for interrupt.")
-		<-wait
-	}
-
-	httpClient = &http.Client{
-		Transport: &http.Transport{DisableCompression: tesConfig.HttpClientDisableCompression, MaxIdleConnsPerHost: 100},
-	}
-	logger.Info("Service started", "address", srv.Addr)
-	defer logger.Info("HTTP Server stopped.")
+	log.Info("Service started", "address", srv.Addr)
+	defer log.Info("HTTP Server stopped.")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		// Error starting or closing listener:
-		logger.Error("Webserver failed", "err", err)
+		log.Error("Webserver failed", "err", err)
 	}
 }

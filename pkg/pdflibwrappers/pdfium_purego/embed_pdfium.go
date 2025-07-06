@@ -7,12 +7,14 @@ import (
 	"os"
 )
 
+const PdfiumEmbedded = true
+
 func ExtractLibpdfium() (string, error) {
 
 	if len(pdfiumBlob) == 0 {
 		return "", errors.New("extraction of libpdfium has been requested, but it is not embedded in this build")
 	}
-	f, err := os.CreateTemp("", "libpdfium*" + libExtension)
+	f, err := os.CreateTemp("", "libpdfium*"+libExtension)
 	if err != nil {
 		return "", err
 	}

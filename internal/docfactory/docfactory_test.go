@@ -1,78 +1,46 @@
-package main
+package docfactory
 
 import (
-	"log/slog"
 	"os"
 	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/johbar/text-extraction-service/v2/internal/config"
 	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/officexmlparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/pdfium_purego"
 	"github.com/johbar/text-extraction-service/v2/pkg/rtfparser"
-	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 )
 
-const readmeOcrPath = "pkg/pdflibwrappers/testdata/readme.pdf"
+const readmeOcrPath = "../../pkg/pdflibwrappers/testdata/readme.pdf"
 
-func TestWriteTextOrRunOcr(t *testing.T) {
-	tesConfig = NewTesConfigFromEnv()
-	// we need to create a logger, otherwise it's a nil pointer
-	logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug, AddSource: true}))
-	err := LoadPdfLib("pdfium", "")
-	if err != nil {
-		t.Skip(err)
-	}
-	pdfImpl = pdfImplementation{libShort: "pdfium"}
-	tesswrap.Languages = "eng"
-
-	f, err := os.Open(readmeOcrPath)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-	doc, err := NewDocFromStream(f, -1, readmeOcrPath)
+func TestNewFromPath(t *testing.T) {
+	var (
+		xmltyp    *officexmlparser.XmlBasedDocument
+		doctyp    *docparser.WordDoc
+		rtftyp    *rtfparser.RichTextDoc
+		pdfiumtyp *pdfium_purego.Document
+	)
+	conf, err := config.NewTesConfigFromEnv()
 	if err != nil {
 		t.Fatal(err)
 	}
-	var sb strings.Builder
-	err = WriteTextOrRunOcr(doc, &sb, readmeOcrPath)
-	if err != nil {
-		t.Error(err)
-	}
-	t.Log(sb.String())
-	if sb.Len() < 100 {
-		t.Error("expected more text as a result of OCR")
-	}
-	if len(doc.Path()) > 0 {
-		// temp file
-		os.Remove(doc.Path())
-	}
-}
-
-func TestNewFromPath(t *testing.T) {
-	var xmltyp *officexmlparser.XmlBasedDocument
-	var doctyp *docparser.WordDoc
-	var rtftyp *rtfparser.RichTextDoc
-	var pdfiumtyp *pdfium_purego.Document
-
-	_ = LoadPdfLib("pdfium", "")
+	df := New(conf, nil)
 	var cases = []struct {
 		path string
 		typ  reflect.Type
 	}{
-		{"pkg/officexmlparser/testdata/readme.docx", reflect.TypeOf(xmltyp)},
-		{"pkg/officexmlparser/testdata/readme.odt", reflect.TypeOf(xmltyp)},
-		{"pkg/officexmlparser/testdata/readme.pptx", reflect.TypeOf(xmltyp)},
-		{"pkg/officexmlparser/testdata/readme.odp", reflect.TypeOf(xmltyp)},
-		{"pkg/docparser/testdata/readme.doc", reflect.TypeOf(doctyp)},
-		{"pkg/rtfparser/testdata/readme.rtf", reflect.TypeOf(rtftyp)},
+		{"../../pkg/officexmlparser/testdata/readme.docx", reflect.TypeOf(xmltyp)},
+		{"../../pkg/officexmlparser/testdata/readme.odt", reflect.TypeOf(xmltyp)},
+		{"../../pkg/officexmlparser/testdata/readme.pptx", reflect.TypeOf(xmltyp)},
+		{"../../pkg/officexmlparser/testdata/readme.odp", reflect.TypeOf(xmltyp)},
+		{"../../pkg/docparser/testdata/readme.doc", reflect.TypeOf(doctyp)},
+		{"../../pkg/rtfparser/testdata/readme.rtf", reflect.TypeOf(rtftyp)},
 		{readmeOcrPath, reflect.TypeOf(pdfiumtyp)},
 	}
 	for _, doc := range cases {
 
-		d, err := NewFromPath(doc.path, doc.path)
+		d, err := df.NewFromPath(doc.path, doc.path)
 		if err != nil {
 			t.Error(err)
 		}
@@ -90,15 +58,20 @@ func TestNewFromPath(t *testing.T) {
 }
 
 func TestUnknownSizedStreamEmitsData(t *testing.T) {
-	tesConfig = NewTesConfigFromEnv()
-	tesConfig.maxInMemoryBytes = 10_000_000
+	conf, err := config.NewTesConfigFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a large threshold ensures the file is being loaded in memory
+	conf.MaxInMemoryBytes = 10_000_000
+	df := New(conf, nil)
 	path := readmeOcrPath
 	f, err := os.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	d, err := handleUnknownSize(f, path)
+	d, err := df.handleUnknownSize(f, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,15 +88,20 @@ func TestUnknownSizedStreamEmitsData(t *testing.T) {
 }
 
 func TestUnknownSizedStreamEmitsFile(t *testing.T) {
-	tesConfig = NewTesConfigFromEnv()
-	tesConfig.maxInMemoryBytes = 100
+	conf, err := config.NewTesConfigFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a small threshold ensures the file is being loaded on disk
+	conf.MaxInMemoryBytes = 100
+	df := New(conf, nil)
 	path := readmeOcrPath
 	f, err := os.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	d, err := handleUnknownSize(f, path)
+	d, err := df.handleUnknownSize(f, path)
 	if err != nil {
 		t.Fatal(err)
 	}

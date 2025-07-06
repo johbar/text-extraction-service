@@ -33,6 +33,7 @@ type OpenDocumentStats struct {
 	ParagraphCount string `xml:"paragraph-count,attr"`
 	WordCount      string `xml:"word-count,attr"`
 }
+
 // MsOfficeCoreMetadata represents common metadata found in MS Office files
 type MsOfficeCoreMetadata struct {
 	DublinCoreMetadata

@@ -15,7 +15,7 @@ const (
 func TestRtf(t *testing.T) {
 	filePath := "testdata/readme.rtf"
 	f, _ := os.Open(filePath)
-	_, _ =f.Seek(0, 0)
+	_, _ = f.Seek(0, 0)
 	data, _ := io.ReadAll(f)
 	d, err := NewFromBytes(data)
 	t.Log(d.metadata)

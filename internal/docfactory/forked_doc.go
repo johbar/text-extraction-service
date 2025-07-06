@@ -1,15 +1,22 @@
-package main
+package docfactory
 
 import (
 	"bufio"
 	"context"
+	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"time"
 
 	"github.com/go-json-experiment/json"
 )
+
+// AlienationErr indicates that forking a new process is not possible
+// because TES could not find out its own FS path (this is unlikely)
+var AlienationErr error = errors.New("don't know who I am")
 
 // ForkedDoc represents a Document processed by forked subprocess of this service
 type ForkedDoc struct {
@@ -19,16 +26,15 @@ type ForkedDoc struct {
 	cancel     context.CancelFunc
 	origin     string
 	path       string
+	log        *slog.Logger
 }
 
-func NewDocFromForkedProcessPath(path, origin string)(*ForkedDoc, error) {
-	me, err := os.Executable()
-	if err != nil {
-		logger.Error("Could not find out who I am", "err", err, "origin", origin)
-		return nil, err
+func (df *DocFactory) NewDocFromForkedProcessPath(path, origin string) (*ForkedDoc, error) {
+	if len(df.executable) == 0 {
+		return nil, AlienationErr
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
-	cmd := exec.CommandContext(ctx, me, path)
+	cmd := exec.CommandContext(ctx, df.executable, path)
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -36,36 +42,34 @@ func NewDocFromForkedProcessPath(path, origin string)(*ForkedDoc, error) {
 		return nil, err
 	}
 	buf := bufio.NewReader(stdout)
-	logger.Debug("Starting subprocess", "origin", origin)
+	df.log.Debug("Starting subprocess", "origin", origin)
 	cmd.WaitDelay = time.Minute
 	err = cmd.Start()
 	if err != nil {
 		cancel()
 		return nil, err
 	}
-	logger.Debug("Subprocess started", "pid", cmd.Process.Pid, "origin", origin, "cmd", cmd.Args)
-	doc := &ForkedDoc{cmd: cmd, textStream: buf, cancel: cancel, origin: origin}
+	df.log.Debug("Subprocess started", "pid", cmd.Process.Pid, "origin", origin, "cmd", cmd.Args)
+	doc := &ForkedDoc{cmd: cmd, textStream: buf, cancel: cancel, origin: origin, log: df.log}
 	// Read one line to get the metadata
 	firstLine := readFirstLine(buf)
 	metadata := make(map[string]string)
 	if err := json.Unmarshal(firstLine, &metadata); err != nil {
-		logger.Error("Malformed input encountered when reading metadata from subprocess", "err", err, "origin", origin, "input", firstLine)
-		return nil, err
+		df.log.Error("Malformed input encountered when reading metadata from subprocess", "err", err, "origin", origin, "input", firstLine)
+		return nil, fmt.Errorf("when unmarshalling JSON encoded metadata from subprocess: %w", err)
 	}
 	doc.metadata = metadata
-	logger.Debug("Finished reading metadata from subprocess", "origin", origin, "pid", cmd.Process.Pid)
+	df.log.Debug("Finished reading metadata from subprocess", "origin", origin, "pid", cmd.Process.Pid)
 	return doc, err
 }
 
 // NewDocFromForkedProcess creates a Document whose content and metadata is being extracted by a forked subprocess
-func NewDocFromForkedProcess(r io.Reader, origin string) (*ForkedDoc, error) {
-	me, err := os.Executable()
-	if err != nil {
-		logger.Error("Could not find out who I am", "err", err, "origin", origin)
-		return nil, err
+func (df *DocFactory) NewDocFromForkedProcess(r io.Reader, origin string) (*ForkedDoc, error) {
+	if len(df.executable) == 0 {
+		return nil, AlienationErr
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
-	cmd := exec.CommandContext(ctx, me, "-")
+	cmd := exec.CommandContext(ctx, df.executable, "-")
 	cmd.Stdin = r
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.StdoutPipe()
@@ -74,24 +78,24 @@ func NewDocFromForkedProcess(r io.Reader, origin string) (*ForkedDoc, error) {
 		return nil, err
 	}
 	buf := bufio.NewReader(stdout)
-	logger.Debug("Starting subprocess", "origin", origin)
+	df.log.Debug("Starting subprocess", "origin", origin)
 	cmd.WaitDelay = time.Minute
 	err = cmd.Start()
 	if err != nil {
 		cancel()
 		return nil, err
 	}
-	logger.Info("Subprocess started", "pid", cmd.Process.Pid, "origin", origin, "cmd", cmd.Args)
-	doc := &ForkedDoc{cmd: cmd, textStream: buf, cancel: cancel, origin: origin}
+	df.log.Info("Subprocess started", "pid", cmd.Process.Pid, "origin", origin, "cmd", cmd.Args)
+	doc := &ForkedDoc{cmd: cmd, textStream: buf, cancel: cancel, origin: origin, log: df.log}
 	// Read one line to get the metadata
 	firstLine := readFirstLine(buf)
 	metadata := make(map[string]string)
 	if err := json.Unmarshal(firstLine, &metadata); err != nil {
-		logger.Error("Malformed input encountered when reading metadata from subprocess", "err", err, "origin", origin, "input", firstLine)
+		df.log.Error("Malformed input encountered when reading metadata from subprocess", "err", err, "origin", origin, "input", firstLine)
 		return nil, err
 	}
 	doc.metadata = metadata
-	logger.Debug("Finished reading metadata from subprocess", "origin", origin)
+	df.log.Debug("Finished reading metadata from subprocess", "origin", origin)
 	return doc, err
 }
 
@@ -122,12 +126,12 @@ func (d *ForkedDoc) StreamText(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	logger.Debug("Finished reading from subprocess", "bytes", written, "origin", d.origin)
+	d.log.Debug("Finished reading from subprocess", "bytes", written, "origin", d.origin)
 	err = d.cmd.Wait()
 	if err != nil {
 		return err
 	}
-	logger.Info("Subprocess finished", "state", d.cmd.ProcessState.String(), "origin", d.origin)
+	d.log.Info("Subprocess finished", "state", d.cmd.ProcessState.String(), "origin", d.origin)
 	return nil
 }
 

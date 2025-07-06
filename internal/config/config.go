@@ -1,13 +1,15 @@
-package main
+package config
 
 import (
+	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"go-simpler.org/env"
 )
+
+var Log = slog.Default()
 
 // TesConfig represents the configuration of this service
 type TesConfig struct {
@@ -26,14 +28,14 @@ type TesConfig struct {
 	// Disable Accept-Encoding=gzip header in outgoing HTTP Requests
 	HttpClientDisableCompression bool `env:"TES_HTTP_CLIENT_DISABLE_COMPRESSION" default:"false"`
 	// Log level (DEBUG, INFO, WARN, ERROR)
-	LogLevel string `env:"TES_LOG_LEVEL" default:"INFO"`
-	logLevel slog.Level
+	LogLevelStr string `env:"TES_LOG_LEVEL" default:"INFO"`
+	LogLevel    slog.Level
 	// Maximum size a file may have; processing is aborted if a requested file is bigger
-	MaxFileSize string `env:"TES_MAX_FILE_SIZE" default:"300Mib"`
-	maxFileSizeBytes uint64
+	MaxFileSize      string `env:"TES_MAX_FILE_SIZE" default:"300Mib"`
+	MaxFileSizeBytes uint64
 	// maximum size of a file fetched from a web server to be processed solely in-memory instead of being downloaded
 	MaxInMemory      string `env:"TES_MAX_IN_MEMORY" default:"2MiB"`
-	maxInMemoryBytes uint64
+	MaxInMemoryBytes uint64
 	// NATS max msg size (embedded server only)
 	NatsMaxPayload int32 `env:"TES_MAX_PAYLOAD" default:"8388608"`
 	// embedded NATS server storage location. Default: /tmp/nats
@@ -61,34 +63,30 @@ type TesConfig struct {
 	// HTTP listen address and/or port. Default: ':8080'
 	SrvAddr string `env:"TES_HOST_PORT" default:":8080"`
 	// List of 3-letter language codes, separated by `+` to be passed to Tesseract
-	// when doing OCR. Default: eng. NOTE: The languages need to be installed
+	// when doing OCR. Default: eng. NOTE: The languages need to be installed.
 	TesseractLangs string `env:"TES_TESSERACT_LANGS" default:"Latin"`
 }
 
 // NewTesConfigFromEnv returns a service config object
 // populated with defaults and values from environment vars
-func NewTesConfigFromEnv() TesConfig {
+func NewTesConfigFromEnv() (*TesConfig, error) {
 	var cfg TesConfig
 	if err := env.Load(&cfg, nil); err != nil {
-		logger.Error("Loading config failed", "err", err)
-		os.Exit(1)
+		return nil, err
 	}
-
-	if err := cfg.logLevel.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
-		logger.Warn("invalid loglevel", "val", cfg.LogLevel)
-		cfg.logLevel = slog.LevelInfo
+	err := cfg.LogLevel.UnmarshalText([]byte(cfg.LogLevelStr))
+	if err != nil {
+		return nil, fmt.Errorf("parsing log level from env: %w", err)
 	}
-	if maxbytes, err := humanize.ParseBytes(cfg.MaxInMemory); err == nil {
-		cfg.maxInMemoryBytes = maxbytes
-	} else {
-		logger.Warn("invalid value for TES_MAX_IN_MEMORY; falling back to default: 2 MiB", "err", err)
-		cfg.maxInMemoryBytes = 2 * 1024 * 1024
+	maxbytes, err := humanize.ParseBytes(cfg.MaxInMemory)
+	if err != nil {
+		return nil, fmt.Errorf("parsing max in memory file size from env: %w", err)
 	}
-	if maxSize, err := humanize.ParseBytes(cfg.MaxFileSize); err == nil {
-		cfg.maxFileSizeBytes = maxSize
-	} else {
-		logger.Warn("invalid value for TES_MAX_FILE_SIZE; falling back to default: 300 MiB", "err", err)
-		cfg.maxFileSizeBytes = 300 * 1024 * 1024
+	cfg.MaxInMemoryBytes = maxbytes
+	maxSize, err := humanize.ParseBytes(cfg.MaxFileSize)
+	if err != nil {
+		return nil, fmt.Errorf("parsing max file size from env: %w", err)
 	}
-	return cfg
+	cfg.MaxFileSizeBytes = maxSize
+	return &cfg, nil
 }

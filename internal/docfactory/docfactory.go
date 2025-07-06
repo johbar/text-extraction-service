@@ -1,17 +1,21 @@
-package main
+package docfactory
 
 import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/dustin/go-humanize"
 	"github.com/gabriel-vasile/mimetype"
+	"github.com/johbar/text-extraction-service/v2/internal/cache"
+	"github.com/johbar/text-extraction-service/v2/internal/config"
 	"github.com/johbar/text-extraction-service/v2/internal/imageparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
 	"github.com/johbar/text-extraction-service/v2/pkg/officexmlparser"
@@ -19,16 +23,40 @@ import (
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
 )
 
-type docFromWeb struct {
-	Document
-	delete bool
+var (
+	xmlBasedFormats           = []string{".odt", ".odp", ".docx", ".pptx"}
+	errZeroSize               = errors.New("zero-length data can not be parsed")
+	errTooLarge               = errors.New("file too large")
+	bytesPool       sync.Pool = sync.Pool{New: func() any {
+		return make([]byte, 0, 2_000_000)
+	}}
+)
+
+type DocFactory struct {
+	MaxInMemoryBytes uint64
+	MaxFileSizeBytes uint64
+	pdfImpl          pdfImplementation
+	log              *slog.Logger
+	executable       string
 }
 
-var (
-	xmlBasedFormats = []string{".odt", ".odp", ".docx", ".pptx"}
-	errZeroSize     = errors.New("zero-length data can not be parsed")
-	errTooLarge     = errors.New("file too large")
-)
+func New(tesconfig *config.TesConfig, logger *slog.Logger) *DocFactory {
+	exe, _ := os.Executable()
+	df := &DocFactory{
+		MaxInMemoryBytes: tesconfig.MaxInMemoryBytes,
+		MaxFileSizeBytes: tesconfig.MaxFileSizeBytes,
+		log:              logger,
+		executable:       exe,
+	}
+	if logger == nil {
+		df.log = slog.New(slog.DiscardHandler)
+	}
+	err := df.loadPdfLib(tesconfig.PdfLibName, tesconfig.PdfLibPath)
+	if err != nil {
+		df.log.Error("PDF library could not be loaded", "err", err)
+	}
+	return df
+}
 
 func newTempFile(origin string) (*os.File, error) {
 	dir := os.TempDir()
@@ -43,35 +71,35 @@ func newTempFile(origin string) (*os.File, error) {
 	return f, err
 }
 
-func saveToFs(r io.Reader, origin string) (string, error) {
+func (df *DocFactory) saveToFs(r io.Reader, origin string) (string, error) {
 	f, err := newTempFile(origin)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating temp file for origin %s: %w", origin, err)
 	}
 	defer f.Close()
-	logger.Debug("Saving file", "origin", origin, "path", f.Name())
+	df.log.Debug("Saving file", "origin", origin, "path", f.Name())
 	_, err = io.Copy(f, r)
 	return f.Name(), err
 }
 
-func handleUnknownSize(r io.Reader, origin string) (Document, error) {
+func (df *DocFactory) handleUnknownSize(r io.Reader, origin string) (cache.Document, error) {
 	// HTTP chunked encoding or reading from stdin
-	buf := make([]byte, tesConfig.maxInMemoryBytes)
+	buf := make([]byte, df.MaxInMemoryBytes)
 
-	logger.Debug("Reading stream of unknown size", "origin", origin, "buf", len(buf))
+	df.log.Debug("Reading stream of unknown size", "origin", origin, "buf", len(buf))
 	bytesRead := 0
 	n, err := io.ReadFull(r, buf)
 	bytesRead += n
 	isAll := err == io.EOF || err == io.ErrUnexpectedEOF
 	isNotEvenAll := err == nil
-	logger.Debug("Finished reading first chunk from stream of unknown size", "bytes", n, "err", err)
-	if bytesRead >= int(tesConfig.maxInMemoryBytes) && (isNotEvenAll) {
+	df.log.Debug("Finished reading first chunk from stream of unknown size", "bytes", n, "err", err)
+	if bytesRead >= int(df.MaxInMemoryBytes) && (isNotEvenAll) {
 		// file is too large for holding it in memory
 		f, err := newTempFile(origin)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("creating tempfile for origin %s: %w", origin, err)
 		}
-		logger.Info("Saving temporary file", "origin", origin, "path", f.Name())
+		df.log.Info("Saving temporary file", "origin", origin, "path", f.Name())
 
 		defer f.Close()
 		if _, err := f.Write(buf); err != nil {
@@ -80,63 +108,63 @@ func handleUnknownSize(r io.Reader, origin string) (Document, error) {
 		if n, err := io.Copy(f, r); err != nil {
 			return nil, err
 		} else {
-			logger.Debug("Finished reading remaining chunks from stream of unknown size", "bytes", n, "path", f.Name())
+			df.log.Debug("Finished reading remaining chunks from stream of unknown size", "bytes", n, "path", f.Name())
 		}
-		return NewFromPath(f.Name(), origin)
+		return df.NewFromPath(f.Name(), origin)
 	} else if isAll {
 		// no error, file read was smaller than buf
-		return NewFromBytes(buf[:bytesRead], origin)
+		return df.NewFromBytes(buf[:bytesRead], origin)
 	}
 	return nil, err
 }
 
-func handleMediumSize(r io.Reader, size int64, origin string) (Document, error) {
+func (df *DocFactory) handleMediumSize(r io.Reader, size int64, origin string) (cache.Document, error) {
 	// file is too large to handle it in-memory
-	path, err := saveToFs(r, origin)
+	path, err := df.saveToFs(r, origin)
 	if err != nil {
 		return nil, err
 	}
-	logger.Info("File saved", "path", path, "origin", origin, "size", humanize.Bytes(uint64(size)))
-	return NewFromPath(path, origin)
+	df.log.Info("File saved", "path", path, "origin", origin, "size", humanize.Bytes(uint64(size)))
+	return df.NewFromPath(path, origin)
 }
 
-func handleSmallSize(r io.Reader, size int64, origin string) (Document, error) {
+func (df *DocFactory) handleSmallSize(r io.Reader, size int64, origin string) (cache.Document, error) {
 	data := make([]byte, size)
 	_, err := io.ReadFull(r, data)
 	if err != nil {
 		return nil, err
 	}
-	return NewFromBytes(data, origin)
+	return df.NewFromBytes(data, origin)
 }
 
-func NewDocFromStream(r io.Reader, size int64, origin string) (Document, error) {
-	if size > int64(tesConfig.maxFileSizeBytes) {
+func (df *DocFactory) NewDocFromStream(r io.Reader, size int64, origin string) (cache.Document, error) {
+	if size > int64(df.MaxFileSizeBytes) {
 		// file is too large for downloading
 		return nil, errTooLarge
+	}
+	if size < 0 {
+		return df.handleUnknownSize(r, origin)
 	}
 	if size == 0 {
 		return nil, errZeroSize
 	}
-	if size < 0 {
-		return handleUnknownSize(r, origin)
-	}
-	if size > int64(tesConfig.maxInMemoryBytes) {
-		return handleMediumSize(r, size, origin)
+	if size > int64(df.MaxInMemoryBytes) {
+		return df.handleMediumSize(r, size, origin)
 	}
 	// file is small enough to handle it in-memory
-	return handleSmallSize(r, size, origin)
+	return df.handleSmallSize(r, size, origin)
 }
 
-func NewFromBytes(data []byte, origin string) (Document, error) {
+func (df *DocFactory) NewFromBytes(data []byte, origin string) (cache.Document, error) {
 	mtype := mimetype.Detect(data)
-	logger.Debug("Detected", "mimetype", mtype.String(), "ext", mtype.Extension(), "origin", origin)
+	df.log.Debug("Detected", "mimetype", mtype.String(), "ext", mtype.Extension(), "origin", origin)
 	if ext := mtype.Extension(); slices.Contains(xmlBasedFormats, ext) {
 		return officexmlparser.NewFromBytes(data, ext)
 	}
 
 	switch mtype.Extension() {
 	case ".pdf":
-		return NewPdfFromBytes(data, origin)
+		return df.NewPdfFromBytes(data, origin)
 	case ".rtf":
 		return rtfparser.NewFromBytes(data)
 	}
@@ -157,19 +185,19 @@ func NewFromBytes(data []byte, origin string) (Document, error) {
 	return nil, fmt.Errorf("no suitable parser available for mimetype %s. content started with: %s", mtype.String(), string(data[:70]))
 }
 
-func NewFromPath(path, origin string) (Document, error) {
+func (df *DocFactory) NewFromPath(path, origin string) (cache.Document, error) {
 	mtype, err := mimetype.DetectFile(path)
 	if err != nil {
 		return nil, err
 	}
-	logger.Debug("Detected", "mimetype", mtype.String(), "ext", mtype.Extension(), "origin", origin)
+	df.log.Debug("Detected", "mimetype", mtype.String(), "ext", mtype.Extension(), "origin", origin)
 	if ext := mtype.Extension(); slices.Contains(xmlBasedFormats, ext) {
 		return officexmlparser.Open(path, strings.TrimPrefix(ext, "."))
 	}
 
 	switch mtype.Extension() {
 	case ".pdf":
-		return NewPdfFromPath(path, origin)
+		return df.NewPdfFromPath(path, origin)
 	case ".rtf":
 		return rtfparser.Open(path)
 	}

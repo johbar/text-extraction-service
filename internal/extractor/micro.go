@@ -1,4 +1,4 @@
-package main
+package extractor
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"github.com/nats-io/nats.go/micro"
 )
 
-func RegisterNatsService(nc *nats.Conn) {
+func (e *Extractor) RegisterNatsService(nc *nats.Conn) {
 	extractService, err := micro.AddService(nc, micro.Config{
 		Name:        "extract-text",
 		Version:     "1.0.0",
@@ -21,15 +21,15 @@ func RegisterNatsService(nc *nats.Conn) {
 		panic(err)
 	}
 	extractService.AddEndpoint("extract-remote",
-		micro.HandlerFunc(HandleUrl),
+		micro.HandlerFunc(e.handleUrl),
 		micro.WithEndpointQueueGroup("text-extraction-service"))
 	extractService.AddEndpoint("update-cache",
-		micro.HandlerFunc(UpdateCache),
+		micro.HandlerFunc(e.updateCache),
 		micro.WithEndpointQueueGroup("text-extraction-service"))
 }
 
 // HandleUrl replies to a Nats request
-func HandleUrl(req micro.Request) {
+func (e *Extractor) handleUrl(req micro.Request) {
 	d := req.Data()
 	var params RequestParams
 	err := json.Unmarshal(d, &params)
@@ -37,10 +37,10 @@ func HandleUrl(req micro.Request) {
 		req.Error("invalid_params", err.Error(), nil)
 		return
 	}
-	logger.Info("Received Nats request", "params", params)
+	e.log.Info("Received Nats request", "params", params)
 	var b bytes.Buffer
 	header := http.Header{}
-	_, err = DocFromUrl(params, &b, header)
+	_, err = e.DocFromUrl(params, &b, header)
 	if err != nil {
 		req.Error("failed", err.Error(), nil)
 		return
@@ -50,12 +50,12 @@ func HandleUrl(req micro.Request) {
 
 // UpdateCache responds with 'done' once a document has been added
 // or refreshed in the cache
-func UpdateCache(req micro.Request) {
+func (e *Extractor) updateCache(req micro.Request) {
 	url := string(req.Data())
 	params := RequestParams{Url: url, Silent: true}
-	logger.Info("Received Nats request", "params", params)
+	e.log.Info("Received Nats request", "params", params)
 	header := http.Header{}
-	_, err := DocFromUrl(params, io.Discard, header)
+	_, err := e.DocFromUrl(params, io.Discard, header)
 	if err != nil {
 		req.Error("failed", err.Error(), nil)
 		return

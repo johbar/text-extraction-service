@@ -35,7 +35,7 @@ var (
 	TessBaseAPIClear func(handle uintptr)
 
 	pixReadMem  func(data []byte, length uint64) uintptr
-	pixRead		func(path string) uintptr
+	pixRead     func(path string) uintptr
 	pixFreeData func(data uintptr)
 	free        func(*byte)
 	lock        sync.Mutex
