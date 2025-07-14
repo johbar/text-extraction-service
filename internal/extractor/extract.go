@@ -53,6 +53,9 @@ func New(config *config.TesConfig, df *docfactory.DocFactory, tesCache cache.Cac
 		httpClient:          httpClient,
 	}
 
+	if httpClient == nil {
+		extract.httpClient = http.DefaultClient
+	}
 	if logger == nil {
 		extract.log = slog.New(slog.DiscardHandler)
 	}

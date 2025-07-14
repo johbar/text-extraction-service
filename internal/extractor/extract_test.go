@@ -1,7 +1,7 @@
 package extractor
 
 import (
-	"net/http"
+	// "net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -21,7 +21,7 @@ func TestWriteTextOrRunOcr(t *testing.T) {
 	}
 	tesswrap.Languages = "eng"
 	df := docfactory.New(conf, nil)
-	extract := New(conf, df, &cache.NopCache{}, nil, http.DefaultClient)
+	extract := New(conf, df, &cache.NopCache{}, nil, nil)
 	f, err := os.Open(readmeOcrPath)
 	if err != nil {
 		panic(err)
@@ -45,3 +45,7 @@ func TestWriteTextOrRunOcr(t *testing.T) {
 		os.Remove(doc.Path())
 	}
 }
+
+// func TestExtractRemote(t *testing.T) {
+// 	httptest.NewServer()
+// }
