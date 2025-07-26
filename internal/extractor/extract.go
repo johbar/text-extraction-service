@@ -7,15 +7,15 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/johbar/text-extraction-service/v2/internal/cache"
 	"github.com/johbar/text-extraction-service/v2/internal/config"
 	"github.com/johbar/text-extraction-service/v2/internal/docfactory"
 )
 
 type RequestParams struct {
-	Url string `form:"url" json:"url" validate:"http_url"`
+	Url string `form:"url" json:"url"`
 	//Ignore cached record
 	NoCache bool `form:"noCache" json:"noCache"`
 	//Send Metadata only, ignoring content
@@ -33,14 +33,6 @@ type Extractor struct {
 }
 
 const lastModified string = "last-modified"
-
-var (
-	validate *validator.Validate
-)
-
-func init() {
-	validate = validator.New()
-}
 
 func New(config *config.TesConfig, df *docfactory.DocFactory, tesCache cache.Cache, logger *slog.Logger, httpClient *http.Client) *Extractor {
 	postprocessDocsChan := make(chan cache.ExtractedDocument, 100)
@@ -214,13 +206,14 @@ func (e *Extractor) ExtractRemote(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "HEAD" {
 		params.Silent = true
 	}
-	params.Url = q.Get("url")
-	valErr := validate.Struct(params)
-	if valErr != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		http.Error(w, params.Url+" is not a valid HTTP(S) URL", http.StatusBadRequest)
+	url := q.Get("url")
+	var errMsg string
+	if !(strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://")) {
+		errMsg = fmt.Sprintf("not a valid HTTP(S) URL: %s", url)
+		http.Error(w, errMsg, http.StatusBadRequest)
 		return
 	}
+	params.Url =  url
 
 	status, extractErr := e.DocFromUrl(params, w, w.Header())
 	if extractErr != nil {
