@@ -146,16 +146,17 @@ Otherwise or if you prefer a current version of the upstream lib:
 
 ## Build locally
 
-I recommend supplying the tag `nomsgpack` to shrink the build.
-See [Gin docs](https://github.com/gin-gonic/gin/blob/master/docs/doc.md#build-without-msgpack-rendering-feature).
-
 ```sh
-go build -tags nomsgpack -o tes
+go build -o tes
 ```
 
 ## Embed NATS
 
 If you want to run NATS embedded in TES with zero config use the build tag `embed_nats`.
+
+```sh
+go build -tags embed_nats -o tes
+```
 
 ## OCR (experimental)
 
@@ -322,7 +323,7 @@ At the moment there is no elaborated command line interface supporting more cust
 
 ### Run as a service
 
-Build and run the service, e.g. `go run -tags nomsgpack` or use a binary supplied at the [releases page](https://github.com/johbar/text-extraction-service/releases/).
+Build and run the service, e.g. `go run` or use a binary supplied at the [releases page](https://github.com/johbar/text-extraction-service/releases/).
 Use it as follows:
 
 ```shell

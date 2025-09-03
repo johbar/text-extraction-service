@@ -1,7 +1,6 @@
 package extractor
 
 import (
-	// "net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -45,7 +44,3 @@ func TestWriteTextOrRunOcr(t *testing.T) {
 		os.Remove(doc.Path())
 	}
 }
-
-// func TestExtractRemote(t *testing.T) {
-// 	httptest.NewServer()
-// }

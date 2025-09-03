@@ -219,7 +219,6 @@ func (e *Extractor) ExtractRemote(w http.ResponseWriter, r *http.Request) {
 	if extractErr != nil {
 		e.log.Error("DocFromUrl failed", "status", status, "err", extractErr)
 		w.WriteHeader(status)
-		return
 	}
 }
 
