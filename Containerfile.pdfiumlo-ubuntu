@@ -1,4 +1,4 @@
-ARG BUILD_IMG=docker.io/golang:bookworm
+ARG BUILD_IMG=docker.io/golang:trixie
 ARG RUNTIME_IMG=docker.io/ubuntu:jammy
 FROM $BUILD_IMG AS builder
 ARG BUILD_TAGS=
@@ -15,9 +15,9 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-ENV CGO_ENABLED=1 GIN_MODE=release DEBIAN_FRONTEND=noninteractive
+ENV CGO_ENABLED=1 DEBIAN_FRONTEND=noninteractive
 
-RUN go build -trimpath -ldflags="-w" -tags "nomsgpack ${BUILD_TAGS}" -v -o /go/text-extraction-service
+RUN go build -trimpath -ldflags="-w" -tags "goexperiment.jsonv2 ${BUILD_TAGS}" -v -o /go/text-extraction-service
 ## Runtime Image ##
 FROM $RUNTIME_IMG
 ARG DEBIAN_FRONTEND=noninteractive
@@ -35,9 +35,9 @@ RUN apt-get update && \
 
 USER nobody
 
-ENV GIN_MODE=release HOME=/tmp TES_PDF_LIB_NAME=pdfium
+ENV HOME=/tmp TES_PDF_LIB_NAME=pdfium
 
-# Expose the service and Nats (optional)
+# Expose the service and NATS (optional)
 EXPOSE 4222 8080
 
 VOLUME /tmp/nats

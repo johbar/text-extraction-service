@@ -8,8 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v2"
-	"github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/jsontext"
+
 	"github.com/johbar/text-extraction-service/v2/internal/cache"
 	tesnats "github.com/johbar/text-extraction-service/v2/internal/cache/nats"
 	"github.com/johbar/text-extraction-service/v2/internal/config"
@@ -19,7 +18,6 @@ import (
 
 	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
-	slogjson "github.com/veqryn/slog-json"
 )
 
 var (
@@ -34,20 +32,7 @@ func main() {
 		slog.Error("FATAL: error when parsing config values", "err", err)
 	}
 
-	h := slogjson.NewHandler(os.Stderr, &slogjson.HandlerOptions{
-		AddSource:   tesConfig.Debug,
-		Level:       tesConfig.LogLevel,
-		ReplaceAttr: nil, // Same signature and behavior as stdlib JSONHandler
-		JSONOptions: json.JoinOptions(
-			// Options from the json v2 library (these are the defaults)
-			json.Deterministic(true),
-			jsontext.AllowDuplicateNames(true),
-			jsontext.AllowInvalidUTF8(true),
-			jsontext.EscapeForJS(false),
-			jsontext.SpaceAfterColon(false),
-			jsontext.SpaceAfterComma(true),
-		),
-	})
+	h := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{})
 
 	log = slog.New(h)
 	// set static/global config of submodules

@@ -245,9 +245,7 @@ podman build --pull . -f Containerfile.pdfiumlo-ubuntu -t tes:pdfiumlo-ubuntu --
 podman build --pull . -f Containerfile.pdfiumlo-tesseract-latin-ubuntu -t tes:pdfiumlo-ocr-ubuntu --volume /tmp/cache:/tmp
 ```
 
-## Run TES in a container
-
-Examples
+## Run TES in a container (examples)
 
 ```sh
 # MuPDF based, using a volume for NATS JetStream storage

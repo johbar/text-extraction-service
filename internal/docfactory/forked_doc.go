@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 )
 
 // AlienationErr indicates that forking a new process is not possible

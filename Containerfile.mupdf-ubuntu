@@ -1,6 +1,6 @@
 ARG BUILD_IMG=docker.io/golang:bookworm
 ARG RUNTIME_IMG=docker.io/ubuntu:jammy
-ARG MUPDF_VERSION=1.26.2
+ARG MUPDF_VERSION=1.26.7
 ARG DEBIAN_FRONTEND=noninteractive
 
 FROM $BUILD_IMG AS builder
@@ -12,7 +12,7 @@ ARG GOAMD64=v2
 
 WORKDIR /usr/src/app
 
-ENV HOME=/tmp GOPATH=/tmp GIN_MODE=release 
+ENV HOME=/tmp GOPATH=/tmp
 
 # pre-copy/cache go.mod for pre-downloading dependencies and only redownloading them in subsequent builds if they change
 COPY go.mod go.sum ./
@@ -20,7 +20,7 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-RUN go build -trimpath -ldflags="-w" -tags "nomsgpack $BUILD_TAGS" -v -o /go/text-extraction-service
+RUN go build -trimpath -ldflags="-w" -tags "goexperiment.jsonv2 $BUILD_TAGS" -v -o /go/text-extraction-service
 
 ## Build MuPDF - stripped down shared lib
 
@@ -61,9 +61,9 @@ USER nobody
 
 WORKDIR /tmp
 
-ENV GIN_MODE=release HOME=/tmp TES_PDF_LIB_NAME=mupdf MUPDF_VERSION=${MUPDF_VERSION}
+ENV HOME=/tmp TES_PDF_LIB_NAME=mupdf MUPDF_VERSION=${MUPDF_VERSION}
 
-# Expose the service and Nats (optional)
+# Expose the service and NATS (optional)
 EXPOSE 4222 8080
 
 VOLUME /tmp/nats

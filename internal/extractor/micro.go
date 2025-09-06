@@ -2,10 +2,10 @@ package extractor
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 
-	"github.com/go-json-experiment/json"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/micro"
 )

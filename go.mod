@@ -1,6 +1,6 @@
 module github.com/johbar/text-extraction-service/v2
 
-go 1.24
+go 1.25
 
 require (
 	github.com/dlclark/regexp2 v1.11.5
@@ -9,14 +9,12 @@ require (
 	github.com/gabriel-vasile/mimetype v1.4.10
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/httplog/v2 v2.1.1
-	github.com/go-json-experiment/json v0.0.0-20250813233538-9b1f9ea2e11b
 	github.com/klauspost/compress v1.18.0
 	github.com/nats-io/nats-server/v2 v2.11.8
 	github.com/nats-io/nats.go v1.45.0
 	github.com/pdfcpu/pdfcpu v0.11.0
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.4
-	github.com/veqryn/slog-json v0.5.0
 	go-simpler.org/env v0.12.0
 	golang.org/x/text v0.28.0
 )

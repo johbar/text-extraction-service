@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 	"github.com/johbar/text-extraction-service/v2/internal/cache"
 	"github.com/johbar/text-extraction-service/v2/internal/pdfproc"
 

@@ -15,21 +15,22 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-RUN go build -trimpath -ldflags="-w" -tags nomsgpack -v -o /go/text-extraction-service
+RUN go build -trimpath -ldflags="-w" -tags goexperiment.jsonv2 -v -o /go/text-extraction-service
 ## Runtime Image ##
 FROM docker.io/alpine:latest
 
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
-RUN apk update && apk add poppler-glib antiword
+RUN apk update && apk add poppler-glib antiword  && \
+    rm /var/cache/apk/*
 
 USER nobody
 
-# Expose the service and Nats (optional)
+# Expose the service and NATS (optional)
 EXPOSE 4222 8080
 
 VOLUME /tmp/nats
 
-ENV GIN_MODE=release HOME=/tmp TES_PDF_LIB_NAME=poppler
+ENV HOME=/tmp TES_PDF_LIB_NAME=poppler
 
 CMD ["text-extraction-service"]
