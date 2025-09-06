@@ -107,7 +107,7 @@ On *nix systems you need to `chmod +x` the binary after `gunzip`ing it.
 
 ## Dev Setup - Building TES
 
-Building only requires a recent Go SDK (v1.24.1) thanks to `purego`.
+Building only requires a recent Go SDK (v1.25) thanks to `purego`.
 But testing and running TES requires additional shared libs.
 Depending on the PDF engine you choose (see below for comparison) you need it installed in your dev/build environment.
 
