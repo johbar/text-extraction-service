@@ -23,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.25'
       - name: Download libpdfium
         shell: bash
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
@@ -68,7 +68,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.25'
       - name: Download libpdfium
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
       - name: Build service
@@ -82,7 +82,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.25'
       - name: Download libpdfium
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
       - name: Build service
