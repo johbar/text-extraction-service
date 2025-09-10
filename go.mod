@@ -10,7 +10,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/httplog/v2 v2.1.1
 	github.com/klauspost/compress v1.18.0
-	github.com/nats-io/nats-server/v2 v2.11.8
+	github.com/nats-io/nats-server/v2 v2.11.9
 	github.com/nats-io/nats.go v1.45.0
 	github.com/pdfcpu/pdfcpu v0.11.0
 	github.com/richardlehane/mscfb v1.0.4
@@ -20,6 +20,7 @@ require (
 )
 
 require (
+	github.com/antithesishq/antithesis-sdk-go v0.5.0 // indirect
 	github.com/google/go-tpm v0.9.5 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/pkcs7 v0.2.0 // indirect
