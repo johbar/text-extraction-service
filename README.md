@@ -147,7 +147,7 @@ Otherwise or if you prefer a current version of the upstream lib:
 ## Build locally
 
 ```sh
-go build -o tes
+GOEXPERIMENT=jsonv2 go build -o tes
 ```
 
 ## Embed NATS
@@ -155,8 +155,19 @@ go build -o tes
 If you want to run NATS embedded in TES with zero config use the build tag `embed_nats`.
 
 ```sh
-go build -tags embed_nats -o tes
+GOEXPERIMENT=jsonv2 go build -tags embed_nats -o tes
 ```
+
+## Embed PDFium
+
+PDFium can be embedded into TES.
+It needs to be available in `pkg/pdflibwrappers/pdfium_purego/lib` with name according to the OS TES is being built for: `libpdfium.so`, `libpdfium.dylib` or `pdfium.dll`
+
+```sh
+GOEXPERIMENT=jsonv2 go build -tags embed_pdfium -o tes
+```
+
+NOTE: If PDFium is available in a standard system path or at path specified by `TES_PDF_LIB_PATH` at runtime, it will be preferred to the embedded lib.
 
 ## OCR (experimental)
 
