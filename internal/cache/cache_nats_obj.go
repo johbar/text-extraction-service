@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"time"
 
-	config "github.com/johbar/text-extraction-service/v2/internal/config"
+	config "github.com/johbar/text-extraction-service/v4/internal/config"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )

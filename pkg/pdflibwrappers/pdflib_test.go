@@ -4,9 +4,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/mupdf_purego"
-	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/pdfium_purego"
-	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/poppler_purego"
+	"github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers/mupdf_purego"
+	"github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers/pdfium_purego"
+	"github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers/poppler_purego"
 )
 
 const shortPdf = "testdata/2000001.pdf"

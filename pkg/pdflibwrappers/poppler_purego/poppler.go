@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/ebitengine/purego"
-	"github.com/johbar/text-extraction-service/v2/internal/unix"
-	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers"
+	"github.com/johbar/text-extraction-service/v4/internal/unix"
+	"github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers"
 )
 
 type GError struct {

@@ -1,4 +1,4 @@
-module github.com/johbar/text-extraction-service/v2
+module github.com/johbar/text-extraction-service/v4
 
 go 1.25
 

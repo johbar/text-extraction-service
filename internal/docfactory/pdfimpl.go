@@ -7,11 +7,11 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/johbar/text-extraction-service/v2/internal/cache"
-	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers"
-	mupdf "github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/mupdf_purego"
-	pdfium "github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/pdfium_purego"
-	poppler "github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/poppler_purego"
+	"github.com/johbar/text-extraction-service/v4/internal/cache"
+	"github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers"
+	mupdf "github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers/mupdf_purego"
+	pdfium "github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers/pdfium_purego"
+	poppler "github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers/poppler_purego"
 )
 
 type pdfImplementation struct {

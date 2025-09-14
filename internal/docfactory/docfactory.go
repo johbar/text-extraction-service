@@ -14,13 +14,13 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/gabriel-vasile/mimetype"
-	"github.com/johbar/text-extraction-service/v2/internal/cache"
-	"github.com/johbar/text-extraction-service/v2/internal/config"
-	"github.com/johbar/text-extraction-service/v2/internal/imageparser"
-	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
-	"github.com/johbar/text-extraction-service/v2/pkg/officexmlparser"
-	"github.com/johbar/text-extraction-service/v2/pkg/rtfparser"
-	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
+	"github.com/johbar/text-extraction-service/v4/internal/cache"
+	"github.com/johbar/text-extraction-service/v4/internal/config"
+	"github.com/johbar/text-extraction-service/v4/internal/imageparser"
+	"github.com/johbar/text-extraction-service/v4/pkg/docparser"
+	"github.com/johbar/text-extraction-service/v4/pkg/officexmlparser"
+	"github.com/johbar/text-extraction-service/v4/pkg/rtfparser"
+	"github.com/johbar/text-extraction-service/v4/pkg/tesswrap"
 )
 
 var (

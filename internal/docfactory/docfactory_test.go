@@ -5,11 +5,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/johbar/text-extraction-service/v2/internal/config"
-	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
-	"github.com/johbar/text-extraction-service/v2/pkg/officexmlparser"
-	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers/pdfium_purego"
-	"github.com/johbar/text-extraction-service/v2/pkg/rtfparser"
+	"github.com/johbar/text-extraction-service/v4/internal/config"
+	"github.com/johbar/text-extraction-service/v4/pkg/docparser"
+	"github.com/johbar/text-extraction-service/v4/pkg/officexmlparser"
+	"github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers/pdfium_purego"
+	"github.com/johbar/text-extraction-service/v4/pkg/rtfparser"
 )
 
 const readmeOcrPath = "../../pkg/pdflibwrappers/testdata/readme.pdf"

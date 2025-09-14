@@ -8,12 +8,13 @@ import (
 	"strings"
 
 	"encoding/json/v2"
-	"github.com/johbar/text-extraction-service/v2/internal/cache"
-	"github.com/johbar/text-extraction-service/v2/internal/pdfproc"
 
-	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
-	"github.com/johbar/text-extraction-service/v2/pkg/docparser"
-	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
+	"github.com/johbar/text-extraction-service/v4/internal/cache"
+	"github.com/johbar/text-extraction-service/v4/internal/pdfproc"
+
+	"github.com/johbar/text-extraction-service/v4/pkg/dehyphenator"
+	"github.com/johbar/text-extraction-service/v4/pkg/docparser"
+	"github.com/johbar/text-extraction-service/v4/pkg/tesswrap"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 

@@ -3,7 +3,7 @@
 package nats
 
 import (
-	tesconfig "github.com/johbar/text-extraction-service/v2/internal/config"
+	tesconfig "github.com/johbar/text-extraction-service/v4/internal/config"
 	"github.com/nats-io/nats.go"
 )
 

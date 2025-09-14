@@ -10,8 +10,8 @@ import (
 	"sync"
 
 	"github.com/ebitengine/purego"
-	"github.com/johbar/text-extraction-service/v2/internal/pdfdateparser"
-	"github.com/johbar/text-extraction-service/v2/pkg/pdflibwrappers"
+	"github.com/johbar/text-extraction-service/v4/internal/pdfdateparser"
+	"github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
 )

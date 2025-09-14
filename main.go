@@ -9,15 +9,15 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v2"
 
-	"github.com/johbar/text-extraction-service/v2/internal/cache"
-	tesnats "github.com/johbar/text-extraction-service/v2/internal/cache/nats"
-	"github.com/johbar/text-extraction-service/v2/internal/config"
-	"github.com/johbar/text-extraction-service/v2/internal/docfactory"
-	"github.com/johbar/text-extraction-service/v2/internal/extractor"
+	"github.com/johbar/text-extraction-service/v4/internal/cache"
+	tesnats "github.com/johbar/text-extraction-service/v4/internal/cache/nats"
+	"github.com/johbar/text-extraction-service/v4/internal/config"
+	"github.com/johbar/text-extraction-service/v4/internal/docfactory"
+	"github.com/johbar/text-extraction-service/v4/internal/extractor"
 	"github.com/nats-io/nats.go"
 
-	"github.com/johbar/text-extraction-service/v2/pkg/dehyphenator"
-	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
+	"github.com/johbar/text-extraction-service/v4/pkg/dehyphenator"
+	"github.com/johbar/text-extraction-service/v4/pkg/tesswrap"
 )
 
 var (

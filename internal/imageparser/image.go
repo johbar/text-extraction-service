@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
+	"github.com/johbar/text-extraction-service/v4/pkg/tesswrap"
 )
 
 type ImageDoc struct {

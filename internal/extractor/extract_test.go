@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/johbar/text-extraction-service/v2/internal/cache"
-	"github.com/johbar/text-extraction-service/v2/internal/config"
-	"github.com/johbar/text-extraction-service/v2/internal/docfactory"
-	"github.com/johbar/text-extraction-service/v2/pkg/tesswrap"
+	"github.com/johbar/text-extraction-service/v4/internal/cache"
+	"github.com/johbar/text-extraction-service/v4/internal/config"
+	"github.com/johbar/text-extraction-service/v4/internal/docfactory"
+	"github.com/johbar/text-extraction-service/v4/pkg/tesswrap"
 )
 
 const readmeOcrPath = "../../pkg/pdflibwrappers/testdata/readme.pdf"

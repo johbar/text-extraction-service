@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/ebitengine/purego"
-	"github.com/johbar/text-extraction-service/v2/internal/unix"
+	"github.com/johbar/text-extraction-service/v4/internal/unix"
 )
 
 var (

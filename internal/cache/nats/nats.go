@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/johbar/text-extraction-service/v2/internal/config"
+	"github.com/johbar/text-extraction-service/v4/internal/config"
 	"github.com/nats-io/nats.go"
 )
 

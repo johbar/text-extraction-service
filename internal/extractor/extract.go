@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/johbar/text-extraction-service/v2/internal/cache"
-	"github.com/johbar/text-extraction-service/v2/internal/config"
-	"github.com/johbar/text-extraction-service/v2/internal/docfactory"
+	"github.com/johbar/text-extraction-service/v4/internal/cache"
+	"github.com/johbar/text-extraction-service/v4/internal/config"
+	"github.com/johbar/text-extraction-service/v4/internal/docfactory"
 )
 
 type RequestParams struct {
@@ -213,7 +213,7 @@ func (e *Extractor) ExtractRemote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errMsg, http.StatusBadRequest)
 		return
 	}
-	params.Url =  url
+	params.Url = url
 
 	status, extractErr := e.DocFromUrl(params, w, w.Header())
 	if extractErr != nil {
