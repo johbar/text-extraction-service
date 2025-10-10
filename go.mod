@@ -16,7 +16,7 @@ require (
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.4
 	go-simpler.org/env v0.12.0
-	golang.org/x/text v0.29.0
+	golang.org/x/text v0.30.0
 )
 
 require (
@@ -32,9 +32,9 @@ require (
 	github.com/nats-io/nkeys v0.4.11 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	golang.org/x/crypto v0.42.0 // indirect
-	golang.org/x/image v0.31.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/time v0.13.0 // indirect
+	golang.org/x/crypto v0.43.0 // indirect
+	golang.org/x/image v0.32.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/time v0.14.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
