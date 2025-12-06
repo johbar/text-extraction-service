@@ -62,7 +62,7 @@ func (e *Extractor) WriteTextOrRunOcr(d cache.Document, w io.Writer, origin stri
 					continue
 				}
 				if _, err := w.Write([]byte(ocrText)); err != nil {
-					e.log.Error("Could not write to output", "err", err)
+					e.log.Error("writing OCRed text to output", "err", err)
 					return err
 				}
 			}

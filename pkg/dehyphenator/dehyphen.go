@@ -29,7 +29,6 @@ func Dehyphenate(in io.Reader, out bufio.Writer) error {
 	defer out.Flush()
 
 	for s.Scan() {
-		//
 		currentLine := strings.TrimSpace(s.Text())
 		currentRunes := []rune(currentLine)
 		currentRuneCount := len(currentRunes)
