@@ -32,7 +32,7 @@ func main() {
 		slog.Error("FATAL: error when parsing config values", "err", err)
 	}
 
-	h := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{})
+	h := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: tesConfig.LogLevel})
 
 	log = slog.New(h)
 	// set static/global config of submodules
