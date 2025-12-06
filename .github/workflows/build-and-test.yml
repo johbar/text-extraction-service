@@ -30,7 +30,8 @@ jobs:
       - name: Build service
         run: go build -tags embed_pdfium
       - name: Run unit tests
-        run: go test ./pkg/officexmlparser ./pkg/rtfparser
+        run: |
+          go test ./pkg/officexmlparser ./pkg/rtfparser ./pkg/mmappool ./internal/docfactory ./internal/extractor ./internal/pdfdateparser
       - name: Run basic test - embedded pdfium
         shell: bash
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
