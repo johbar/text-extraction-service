@@ -162,7 +162,6 @@ func (f *Document) Close() {
 	fz_drop_document(f.ctx, f.doc)
 	fz_drop_context(f.ctx)
 
-	f.data = nil
 }
 
 // Pages returns total number of pages in document.
@@ -200,6 +199,10 @@ func (d *Document) Data() *[]byte {
 
 func (d *Document) Path() string {
 	return d.path
+}
+
+func (d *Document) HasNewlines() bool {
+	return true
 }
 
 // Metadata returns a map with standard metadata.

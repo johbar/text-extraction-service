@@ -139,6 +139,10 @@ func (d *ForkedDoc) MetadataMap() map[string]string {
 	return d.metadata
 }
 
+func (d *ForkedDoc) HasNewlines() bool {
+	return false
+}
+
 func (d *ForkedDoc) Close() {
 	d.cancel()
 	_ = d.cmd.Cancel()

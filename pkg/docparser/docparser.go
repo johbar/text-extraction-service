@@ -263,6 +263,10 @@ func (d *WordDoc) runExternalWordProcessor(w io.Writer, wordProg progAndArgs) er
 	return nil
 }
 
+func (d *WordDoc) HasNewlines() bool {
+	return true
+}
+
 // Close is a no-op
 func (d *WordDoc) Close() {
 }

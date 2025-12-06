@@ -643,3 +643,7 @@ func (d *RichTextDoc) MetadataMap() map[string]string {
 // Close is a no-op for RTFs
 func (d *RichTextDoc) Close() {
 }
+
+func (d *RichTextDoc) HasNewlines() bool {
+	return true
+}

@@ -40,6 +40,10 @@ func (d *ImageDoc) Close() {
 	// no op
 }
 
+func (d *ImageDoc) HasNewlines() bool {
+	return true
+}
+
 func (d *ImageDoc) Pages() int {
 	return -1
 }

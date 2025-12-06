@@ -247,6 +247,10 @@ func (d *XmlBasedDocument) Text(_ int) (string, bool) {
 	panic("not allowed")
 }
 
+func (d *XmlBasedDocument) HasNewlines() bool {
+	return true
+}
+
 func (d *XmlBasedDocument) Close() {
 	if d.file != nil {
 		d.file.Close()

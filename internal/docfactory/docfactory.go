@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/dustin/go-humanize"
 	"github.com/gabriel-vasile/mimetype"
@@ -18,18 +17,16 @@ import (
 	"github.com/johbar/text-extraction-service/v4/internal/config"
 	"github.com/johbar/text-extraction-service/v4/internal/imageparser"
 	"github.com/johbar/text-extraction-service/v4/pkg/docparser"
+	"github.com/johbar/text-extraction-service/v4/pkg/mmappool"
 	"github.com/johbar/text-extraction-service/v4/pkg/officexmlparser"
 	"github.com/johbar/text-extraction-service/v4/pkg/rtfparser"
 	"github.com/johbar/text-extraction-service/v4/pkg/tesswrap"
 )
 
 var (
-	xmlBasedFormats           = []string{".odt", ".odp", ".docx", ".pptx"}
-	errZeroSize               = errors.New("zero-length data can not be parsed")
-	errTooLarge               = errors.New("file too large")
-	bytesPool       sync.Pool = sync.Pool{New: func() any {
-		return make([]byte, 0, 2_000_000)
-	}}
+	xmlBasedFormats = []string{".odt", ".odp", ".docx", ".pptx"}
+	errZeroSize     = errors.New("zero-length data can not be parsed")
+	errTooLarge     = errors.New("file too large")
 )
 
 type DocFactory struct {
@@ -38,19 +35,37 @@ type DocFactory struct {
 	pdfImpl          pdfImplementation
 	log              *slog.Logger
 	executable       string
+	pool             *mmappool.Mempool
+}
+
+type PooledDoc struct {
+	cache.Document
+	poolBuffer []byte
+	df         *DocFactory
+}
+
+func (d *PooledDoc) Close() {
+	d.Document.Close()
+	d.df.pool.Put(d.poolBuffer)
+}
+
+func (d *PooledDoc) HasNewlines() bool {
+	return d.Document.HasNewlines()
 }
 
 func New(tesconfig *config.TesConfig, logger *slog.Logger) *DocFactory {
 	exe, _ := os.Executable()
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
 	df := &DocFactory{
 		MaxInMemoryBytes: tesconfig.MaxInMemoryBytes,
 		MaxFileSizeBytes: tesconfig.MaxFileSizeBytes,
 		log:              logger,
 		executable:       exe,
+		pool:             mmappool.New(int(tesconfig.MaxInMemoryBytes), 8, logger.With("mod", "docfactory mempool")),
 	}
-	if logger == nil {
-		df.log = slog.New(slog.DiscardHandler)
-	}
+
 	err := df.loadPdfLib(tesconfig.PdfLibName, tesconfig.PdfLibPath)
 	if err != nil {
 		df.log.Error("PDF library could not be loaded", "err", err)
@@ -82,13 +97,12 @@ func (df *DocFactory) saveToFs(r io.Reader, origin string) (string, error) {
 	return f.Name(), err
 }
 
+// handleUnknownSize deals with HTTP chunked encoding or reading from stdin
 func (df *DocFactory) handleUnknownSize(r io.Reader, origin string) (cache.Document, error) {
-	// HTTP chunked encoding or reading from stdin
-	buf := make([]byte, df.MaxInMemoryBytes)
-
+	buf, _ := df.pool.Get()
 	df.log.Debug("Reading stream of unknown size", "origin", origin, "buf", len(buf))
 	bytesRead := 0
-	n, err := io.ReadFull(r, buf)
+	n, err := io.ReadFull(r, buf[:df.MaxInMemoryBytes])
 	bytesRead += n
 	isAll := err == io.EOF || err == io.ErrUnexpectedEOF
 	isNotEvenAll := err == nil
@@ -102,7 +116,7 @@ func (df *DocFactory) handleUnknownSize(r io.Reader, origin string) (cache.Docum
 		df.log.Info("Saving temporary file", "origin", origin, "path", f.Name())
 
 		defer f.Close()
-		if _, err := f.Write(buf); err != nil {
+		if _, err := f.Write(buf[:df.MaxInMemoryBytes]); err != nil {
 			return nil, err
 		}
 		if n, err := io.Copy(f, r); err != nil {
@@ -110,10 +124,13 @@ func (df *DocFactory) handleUnknownSize(r io.Reader, origin string) (cache.Docum
 		} else {
 			df.log.Debug("Finished reading remaining chunks from stream of unknown size", "bytes", n, "path", f.Name())
 		}
+		df.pool.Put(buf)
 		return df.NewFromPath(f.Name(), origin)
-	} else if isAll {
+	}
+	if isAll {
 		// no error, file read was smaller than buf
-		return df.NewFromBytes(buf[:bytesRead], origin)
+		d, err := df.NewFromBytes(buf[:bytesRead], origin)
+		return &PooledDoc{d, buf, df}, err
 	}
 	return nil, err
 }
@@ -129,12 +146,17 @@ func (df *DocFactory) handleMediumSize(r io.Reader, size int64, origin string) (
 }
 
 func (df *DocFactory) handleSmallSize(r io.Reader, size int64, origin string) (cache.Document, error) {
-	data := make([]byte, size)
-	_, err := io.ReadFull(r, data)
+	buf, err := df.pool.Get()
 	if err != nil {
 		return nil, err
 	}
-	return df.NewFromBytes(data, origin)
+
+	n, err := io.ReadFull(r, buf[:size])
+	if err != nil {
+		return nil, err
+	}
+	d, err := df.NewFromBytes(buf[:n], origin)
+	return &PooledDoc{d, buf, df}, err
 }
 
 func (df *DocFactory) NewDocFromStream(r io.Reader, size int64, origin string) (cache.Document, error) {

@@ -20,6 +20,8 @@ type Document interface {
 	Path() string
 	// MetadataMap returns a map of Document properties, such as Author, Title etc.
 	MetadataMap() DocumentMetadata
+	// HasNewlines reports if dehyphenation is possible and sensible
+	HasNewlines() bool
 	// Close releases resources associated with the document
 	Close()
 }

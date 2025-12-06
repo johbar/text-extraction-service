@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/ebitengine/purego"
 	"github.com/johbar/text-extraction-service/v4/internal/pdfdateparser"
+	"github.com/johbar/text-extraction-service/v4/pkg/mmappool"
 	"github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
@@ -52,7 +53,7 @@ var (
 	FPDFText_GetText    func(textHandle textPage, startIndex int, count int, resultBuf []byte) (charsWritten int)
 	FPDFText_GetUnicode func(textHandle textPage, index int) rune
 	/*
-			Get the text string of specific tag from meta data of a PDF document.
+		Get the text string of specific tag from meta data of a PDF document.
 
 		Regardless of the platform, the text string is alway in UTF-16LE encoding.
 		That means the buffer can be treated as an array of WORD (on Intel and compatible CPUs),
@@ -63,6 +64,9 @@ var (
 
 	// PDFium is not thread-safe. This lock guards the lib against concurrent access in places where this is known to be necessary
 	Lock sync.Mutex
+
+	// Memorypool for string copying
+	mempool *mmappool.Mempool
 )
 
 type Document struct {
@@ -108,6 +112,7 @@ func InitLib(path string) (string, error) {
 	purego.RegisterLibFunc(&FPDF_GetMetaText, lib, "FPDF_GetMetaText")
 
 	FPDF_InitLibrary()
+	mempool = mmappool.New(65536, 10, nil)
 	return path, nil
 }
 
@@ -132,7 +137,6 @@ func (d *Document) Close() {
 		FPDF_CloseDocument(d.handle)
 		d.handle = 0
 	}
-	d.data = nil
 }
 
 func (d *Document) Pages() int {
@@ -180,27 +184,54 @@ func (t textPage) countChars() int {
 	return chars
 }
 
-func (t textPage) utf16Text() []byte {
-	charCount := t.countChars()
-	charData := make([]byte, (charCount+1)*2)
+func (t textPage) utf8Text() []byte {
+	charData, _ := mempool.Get()
 	Lock.Lock()
 	defer Lock.Unlock()
-	charsWritten := FPDFText_GetText(t, 0, charCount, charData)
+	chars := FPDFText_GetText(t, 0, cap(charData), charData)
+	if chars == 0 {
+		//empty page or error
+		return charData[:0]
+	}
+
 	// strip 2 trailing NUL bytes
-	return charData[0 : 2*charsWritten]
+	utf8, _ := transformUtf16LeToUtf8(charData[:2*chars-2])
+	charData = mapBytes(func(r rune) rune {
+		switch r {
+		case '\u0000':
+			// PDFium inserts NUL bytes around headers and footers
+			return '\n'
+		case '\uFFFE':
+			// PDFium replaces hyphens with unicode replacement chars (uFFFE)
+			return -1
+		case '\r':
+			// PDFium outputs windows-like newlines (CRLF)
+			return -1
+		default:
+			return r
+		}
+	}, utf8, charData[0:0])
+
+	return charData
 }
 
-func (t textPage) utf8Text() string {
-	charData := t.utf16Text()
-	if len(charData) == 0 {
-		return ""
+// Map returns a copy of the byte slice s with all its characters modified
+// according to the mapping function. If mapping returns a negative value, the character is
+// dropped from the byte slice with no replacement. The characters in s and the
+// output are interpreted as UTF-8-encoded code points.
+func mapBytes(mapping func(r rune) rune, s []byte, result []byte) []byte {
+	for i := 0; i < len(s); {
+		wid := 1
+		r := rune(s[i])
+		if r >= utf8.RuneSelf {
+			r, wid = utf8.DecodeRune(s[i:])
+		}
+		r = mapping(r)
+		if r >= 0 {
+			result = utf8.AppendRune(result, r)
+		}
+		i += wid
 	}
-	result, _ := transformUtf16LeToUtf8(charData)
-	// PDFium inserts NUL bytes around headers and footers
-	result = strings.ReplaceAll(result, "\x00", "\n")
-	// PDFium replaces hyphens with `noncharacters`:
-	result = strings.ReplaceAll(result, "\uFFFE", "")
-	result = strings.TrimSpace(result)
 	return result
 }
 
@@ -215,13 +246,27 @@ func (d *Document) Text(i int) (string, bool) {
 	if len(text) == 0 && d.countImages(p) > 0 {
 		hasImages = true
 	}
+	result := string(text)
+	mempool.Put(text)
+	return result, hasImages
+}
+
+// textOptimzed returns page i's text as byte slice
+func (d *Document) textOptimzed(i int) ([]byte, bool) {
+	p := d.page(i)
+	defer p.close()
+	t := d.textPage(p)
+	defer t.close()
+	text := t.utf8Text()
+	hasImages := len(text) == 0 && d.countImages(p) > 0
 	return text, hasImages
 }
 
 func (d *Document) StreamText(w io.Writer) error {
 	for i := range d.pages {
-		pageText, _ := d.Text(i)
-		_, err := w.Write([]byte(pageText))
+		pageText, _ := d.textOptimzed(i)
+		_, err := w.Write(pageText)
+		mempool.Put(pageText)
 		if err != nil {
 			return err
 		}
@@ -242,21 +287,22 @@ func (d *Document) MetadataMap() map[string]string {
 	}
 
 	// we use the same (oversized) byte array for all fields
-	var defaultSize uint64 = 512
-	buf := make([]byte, defaultSize)
+	buf, _ := mempool.Get()
+	defer mempool.Put(buf)
 	lookup := func(key string) (ok bool, value string) {
-		requiredSize := FPDF_GetMetaText(d.handle, key, buf, uint64(len(buf)))
+		requiredSize := FPDF_GetMetaText(d.handle, key, buf, uint64(cap(buf)))
 		if requiredSize <= 2 {
 			return false, ""
 		}
-		if requiredSize > uint64(len(buf)) {
+		if requiredSize > uint64(cap(buf)) {
+
 			// if the buffer was too small, allocate a bigger one
 			buf = make([]byte, requiredSize)
-			FPDF_GetMetaText(d.handle, key, buf, uint64(len(buf)))
+			FPDF_GetMetaText(d.handle, key, buf, uint64(cap(buf)))
 		}
 		// Strip the last two bytes (NULs)
 		str, _ := transformUtf16LeToUtf8(buf[0 : requiredSize-2])
-		return true, str
+		return true, string(str)
 	}
 
 	if ok, val := lookup("Title"); ok {
@@ -286,12 +332,12 @@ func (d *Document) MetadataMap() map[string]string {
 	return m
 }
 
-func transformUtf16LeToUtf8(charData []byte) (string, error) {
+func transformUtf16LeToUtf8(charData []byte) ([]byte, error) {
 	result, _, err := transform.Bytes(unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewDecoder(), charData)
 	if err != nil {
-		return "", err
+		return []byte{}, err
 	}
-	return string(result), nil
+	return result, nil
 }
 
 func (d *Document) countImages(pageHandle page) int {
@@ -305,4 +351,8 @@ func (d *Document) countImages(pageHandle page) int {
 		}
 	}
 	return imgCount
+}
+
+func (d *Document) HasNewlines() bool {
+	return true
 }

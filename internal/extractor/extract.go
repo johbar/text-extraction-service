@@ -250,16 +250,11 @@ func (e *Extractor) constructDoc(url string, r io.Reader, contentLength int64) (
 	if e.tesConfig.ForkThreshold > -1 && contentLength > e.tesConfig.ForkThreshold {
 		// file size above threshold - fork a subprocess
 		d, err = e.df.NewDocFromForkedProcess(r, url)
-		// the forked TES process does dehyphenation already
-		// and the dehyphenator fails with input not containing newlines
-		skipDehypenator = true
 	} else {
 		d, err = e.df.NewDocFromStream(r, contentLength, url)
 		// our PDFium impl also forks a new process when the lib is in use already
-		_, ok := d.(*docfactory.ForkedDoc)
-		skipDehypenator = ok
 	}
-	return d, err, skipDehypenator
+	return d, err, !d.HasNewlines()
 }
 
 func addHttpHeadersToMetadata(doc cache.Document, response *http.Response) cache.DocumentMetadata {

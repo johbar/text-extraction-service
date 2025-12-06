@@ -172,6 +172,10 @@ func (d *Document) Close() {
 	d.handle = 0
 }
 
+func (d *Document) HasNewlines() bool {
+	return true
+}
+
 func (d *Document) Text(pageIndex int) (string, bool) {
 	p := d.GetPage(pageIndex)
 	txt := p.Text()
