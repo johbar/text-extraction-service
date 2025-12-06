@@ -32,7 +32,7 @@ jobs:
       - name: Run unit tests
         env:
           TES_PDF_LIB_NAME: pdfium
-          TES_PDF_LIB_PATH: pkg/pdflibwrappers/pdfium_purego/pdfium.dll
+          TES_PDF_LIB_PATH: pkg/pdflibwrappers/pdfium_purego/lib/pdfium.dll
         run: |
           go test ./pkg/officexmlparser ./pkg/rtfparser ./pkg/mmappool ./internal/docfactory ./internal/extractor
       - name: Run basic test - embedded pdfium
