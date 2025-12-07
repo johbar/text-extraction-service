@@ -92,7 +92,7 @@ local_name="${name_in_tar}.${ext}"
     mkdir -p "${my_dir}/lib"
     cd "${my_dir}/lib"
     download "${url}" | tar -xz --strip-components 1 "${path_in_tar}/${local_name}"
-    printf "Extracted lib to %s\n" "${my_dir}/${name_in_tar}.${ext}"
+    printf "Extracted lib to %s\n" "${my_dir}/lib/${name_in_tar}.${ext}"
     file "${local_name}" || true
     try_to_strip "${local_name}"
     printf "Done.\n"

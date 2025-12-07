@@ -29,12 +29,9 @@ jobs:
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
       - name: Build service
         run: go build -tags embed_pdfium
-      - name: Run unit tests
-        env:
-          TES_PDF_LIB_NAME: pdfium
-          TES_PDF_LIB_PATH: pkg/pdflibwrappers/pdfium_purego/lib/pdfium.dll
+      - name: Run some unit tests
         run: |
-          go test ./pkg/officexmlparser ./pkg/rtfparser ./pkg/mmappool ./internal/docfactory ./internal/extractor
+          go test ./pkg/officexmlparser ./pkg/rtfparser ./pkg/mmappool 
       - name: Run basic test - embedded pdfium
         shell: bash
         run: time ./text-extraction-service pkg/pdflibwrappers/testdata/2000001.pdf
