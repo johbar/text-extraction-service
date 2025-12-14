@@ -1,4 +1,4 @@
-// Package mempool implements a pool of fixed-size off-heap byte slices, backed by anonymous memory-mapped files.
+// Package mmappool implements a pool of fixed-size off-heap byte slices, backed by anonymous memory-mapped files.
 package mmappool
 
 import (
@@ -17,7 +17,7 @@ type Mempool struct {
 
 // New creates a new memory pool of max size `poolsize` which emits []byte of size and capacity `elemsize`.
 // The pool is lazily populated whenever a byte slice is requested.
-// poolsize*elemsize the upper bound of memory that will never be freed up again.
+// poolsize*elemsize the upper bound of memory that will not be freed up until [Free] is called.
 func New(elemSize, poolSize int, logger *slog.Logger) *Mempool {
 	if elemSize < 8 {
 		panic("illegal elemSize for mempool")
@@ -72,18 +72,24 @@ func (m *Mempool) Put(b []byte) {
 	}
 }
 
+// CurrentSize reports the number of allocated byte slices ready to use.
 func (m *Mempool) CurrentSize() int {
 	return len(m.mmaps)
 }
 
+// PoolSize returns the size of the pool
 func (m *Mempool) PoolSize() int {
 	return cap(m.mmaps)
 }
 
+// ElemSize returns the size of each element in the pool.
 func (m *Mempool) ElemSize() int {
 	return m.elemSize
 }
 
+// Free releases every mmap or []byte in the pool.
+// Calling [Get] after calling [Free] will allocate new mmap.
+// Free reports errors when the pool's elements were not actually mmaps.
 func (m *Mempool) Free() []error {
 	errs := make([]error, 0, m.CurrentSize())
 	for {
