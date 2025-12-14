@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"sync"
 	"unicode/utf8"
@@ -13,8 +14,8 @@ import (
 	"github.com/johbar/text-extraction-service/v4/internal/pdfdateparser"
 	"github.com/johbar/text-extraction-service/v4/pkg/mmappool"
 	"github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers"
+	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/unicode"
-	"golang.org/x/text/transform"
 )
 
 type document uintptr
@@ -67,6 +68,9 @@ var (
 
 	// Memorypool for string copying
 	mempool *mmappool.Mempool
+
+	utf16Transformer *encoding.Decoder = unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewDecoder()
+	transformerLock  sync.Mutex
 )
 
 type Document struct {
@@ -112,7 +116,10 @@ func InitLib(path string) (string, error) {
 	purego.RegisterLibFunc(&FPDF_GetMetaText, lib, "FPDF_GetMetaText")
 
 	FPDF_InitLibrary()
-	mempool = mmappool.New(65536, 10, nil)
+	// use for debugging mempool usage:
+	// log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})).With("mod", "pdfium")
+	log := slog.New(slog.DiscardHandler)
+	mempool = mmappool.New(65536, 10, log)
 	return path, nil
 }
 
@@ -211,14 +218,11 @@ func (t textPage) utf8Text() []byte {
 			return r
 		}
 	}, utf8, charData[0:0])
-
+	mempool.Put(utf8)
 	return charData
 }
 
-// Map returns a copy of the byte slice s with all its characters modified
-// according to the mapping function. If mapping returns a negative value, the character is
-// dropped from the byte slice with no replacement. The characters in s and the
-// output are interpreted as UTF-8-encoded code points.
+// mapBytes is copied from the bytes pkg and modified not to allocate a new byte slice
 func mapBytes(mapping func(r rune) rune, s []byte, result []byte) []byte {
 	for i := 0; i < len(s); {
 		wid := 1
@@ -302,6 +306,7 @@ func (d *Document) MetadataMap() map[string]string {
 		}
 		// Strip the last two bytes (NULs)
 		str, _ := transformUtf16LeToUtf8(buf[0 : requiredSize-2])
+		defer mempool.Put(str)
 		return true, string(str)
 	}
 
@@ -332,12 +337,21 @@ func (d *Document) MetadataMap() map[string]string {
 	return m
 }
 
+// transformUtf16LeToUtf8 returns mempooled byte slice containing the
+// ut8 encoded bytes of charData.
+// The calller needs to return the result to the pool
 func transformUtf16LeToUtf8(charData []byte) ([]byte, error) {
-	result, _, err := transform.Bytes(unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewDecoder(), charData)
+	dst, _ := mempool.Get()
+	transformerLock.Lock()
+	defer func() {
+		utf16Transformer.Reset()
+		transformerLock.Unlock()
+	}()
+	nDst, _, err := utf16Transformer.Transform(dst, charData, true)
 	if err != nil {
 		return []byte{}, err
 	}
-	return result, nil
+	return dst[:nDst], nil
 }
 
 func (d *Document) countImages(pageHandle page) int {

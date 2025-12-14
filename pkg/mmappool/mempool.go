@@ -35,7 +35,7 @@ func New(elemSize, poolSize int, logger *slog.Logger) *Mempool {
 // responsible for calling [Put]. Not doing so will result in a memory leak.
 // If creating an off-heap chunk of memory fails, an ordinary []byte will be returned instead. Additionally
 // the error will be returned, contrary to the Go rule to either return a value or an error.
-// Slices returned by Get should not be resliced regarding the lower bound. 
+// Slices returned by Get should not be resliced regarding the lower bound.
 // It is also illegal to grow the underlying array
 func (m *Mempool) Get() ([]byte, error) {
 	select {
@@ -43,13 +43,12 @@ func (m *Mempool) Get() ([]byte, error) {
 		return mmap[:m.elemSize], nil
 	default:
 		b, err := mmap.MapRegion(nil, m.elemSize, mmap.RDWR, mmap.ANON, 0)
-		m.NumCreated.Add(1)
+		created := m.NumCreated.Add(1)
 		if err != nil {
 			return make([]byte, m.elemSize), err
 		}
-		created := m.NumCreated.Load()
 		if created > int32(m.PoolSize()) {
-			m.log.Warn("Number of byte slices allocated is bigger than pool size. This might indicate a memory leak.", "poolSize", m.PoolSize())
+			m.log.Warn("Number of byte slices allocated is bigger than pool size. This might indicate a memory leak.", "created", created, "poolSize", m.PoolSize())
 		}
 		return b, err
 	}
