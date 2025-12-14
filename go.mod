@@ -7,7 +7,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/ebitengine/purego v0.9.1
 	github.com/edsrzf/mmap-go v1.2.0
-	github.com/gabriel-vasile/mimetype v1.4.11
+	github.com/gabriel-vasile/mimetype v1.4.12
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/httplog/v2 v2.1.1
 	github.com/klauspost/compress v1.18.2
@@ -17,7 +17,7 @@ require (
 	github.com/richardlehane/mscfb v1.0.4
 	github.com/richardlehane/msoleps v1.0.4
 	go-simpler.org/env v0.12.0
-	golang.org/x/text v0.31.0
+	golang.org/x/text v0.32.0
 )
 
 require (
@@ -34,9 +34,9 @@ require (
 	github.com/nats-io/nkeys v0.4.12 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
-	golang.org/x/image v0.33.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/image v0.34.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
