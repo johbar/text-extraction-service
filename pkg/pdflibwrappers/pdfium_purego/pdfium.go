@@ -173,8 +173,8 @@ func (p page) close() {
 
 func (d *Document) textPage(pageHandle page) textPage {
 	Lock.Lock()
-	t := FPDFText_LoadPage(pageHandle)
 	defer Lock.Unlock()
+	t := FPDFText_LoadPage(pageHandle)
 	return t
 }
 
@@ -194,8 +194,8 @@ func (t textPage) countChars() int {
 func (t textPage) utf8Text() []byte {
 	charData, _ := mempool.Get()
 	Lock.Lock()
-	defer Lock.Unlock()
 	chars := FPDFText_GetText(t, 0, cap(charData), charData)
+	Lock.Unlock()
 	if chars == 0 {
 		//empty page or error
 		return charData[:0]
@@ -339,7 +339,7 @@ func (d *Document) MetadataMap() map[string]string {
 
 // transformUtf16LeToUtf8 returns mempooled byte slice containing the
 // ut8 encoded bytes of charData.
-// The calller needs to return the result to the pool
+// The caller needs to return the result to the pool.
 func transformUtf16LeToUtf8(charData []byte) ([]byte, error) {
 	dst, _ := mempool.Get()
 	transformerLock.Lock()
