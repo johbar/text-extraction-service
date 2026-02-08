@@ -19,7 +19,7 @@ jobs:
   build-embedded-on-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -38,13 +38,13 @@ jobs:
   build-on-ubuntu:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
           go-version: '1.25'
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           args: --timeout 120s --max-same-issues 10
         continue-on-error: true
@@ -65,7 +65,7 @@ jobs:
   build-embedded-on-ubuntu:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -79,7 +79,7 @@ jobs:
   build-embedded-on-darwin:
     runs-on: "macos-latest"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -102,7 +102,7 @@ jobs:
       env:
         MUPDF_VERSION: "1.26.11"
       steps:
-        - uses: actions/checkout@v5
+        - uses: actions/checkout@v6
         - name: Install some tools
           run: apk update && apk add --no-cache file binutils tzdata
         - name: Download libpdfium

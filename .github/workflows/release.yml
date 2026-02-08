@@ -12,7 +12,7 @@ jobs:
     name: Build glibc Linux Release Artefacts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -57,7 +57,7 @@ jobs:
     steps:
       - name: Install tools
         run: apk update && apk add file binutils binutils-aarch64
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Build arm64 and amd64 Musl Linux binaries
         run: |
           mkdir dist
@@ -72,14 +72,14 @@ jobs:
           done
           ls -lah dist/
       - name: Save Musl Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: "tes-musl-linux-pdfium-embedded"
           path: ./dist/*
   compile-darwin:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -98,7 +98,7 @@ jobs:
           done
           ls -lah dist/
       - name: Save Darwin Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: "tes-darwin-pdfium-embedded"
           path: ./dist/*
@@ -110,7 +110,7 @@ jobs:
       - compile-musl-linux
     steps:
       - name: Download Artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with: 
           merge-multiple: true
       - name: Compress artifacts
