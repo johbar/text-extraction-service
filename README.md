@@ -6,7 +6,7 @@ TES is a simple Go service for extracting and storing textual content from PDF a
 
 This started as an exercise in using Golang and cgo.
 But it is being used in production (at least for PDFs).
-The use case is the fast processing of binary documents for repeated search machine indexation (see blow for details).
+The use case is the fast processing of binary documents for repeated search machine indexation (see below for details).
 
 The RegEx-based RTF parser is rather inefficient.
 
