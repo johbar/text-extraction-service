@@ -22,7 +22,7 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
   - ODT and ODP
   - DOCX and PPTX
   - legacy MS Word (.doc) files (with external helper)
-- Support for three runtime-pluggable C/C++ PDF engines
+- Support for three runtime-pluggable C/C++ PDF engines + a Go native experimental implementation
     - Google Chromium's [PDFium](https://pdfium.googlesource.com/pdfium/)
     - Free Desktops [Poppler](https://poppler.freedesktop.org/)
     - Artifex' [MuPDF](https://mupdf.com/)
@@ -201,14 +201,14 @@ Regarding speed with ordinary (rather small) files *PDFium* and *MuPDF* are most
 
 Some other aspects:
 
-|                                             | PDFium                   | Poppler              | MuPDF                        |
-|---------------------------------------------|--------------------------|----------------------|------------------------------|
-| License                                     | ✅ permissive             | ⚠️ Copyleft          | ⚠️ Copyleft or payed license  |
-| Performance with small files                | ✅ good                   | ❌ bad              | ✅ good                      |
-| Performance with large files                | ✅ good                   | 🚀 best             | ❌ bad                       |
-| Memory consumption                          | ❌ high with large files¹ | ✅ consistently low | ❌ high with large files     |
-| Available from Linux sources(deb, rpm, apk) | ❌ no, but...¹            | ✅ yes              | ✔️ partially²                 |
-| Multi-threaded                              | ❌ no³                    | ✅ yes              | ✅ yes                       |
+|                                             | PDFium                   | Poppler            | MuPDF                        |
+|---------------------------------------------|--------------------------|--------------------|------------------------------|
+| License                                     | ✅ permissive             | ⚠️ Copyleft        | ⚠️ Copyleft or payed license |
+| Performance with small files                | ✅ good                   | ❌ bad              | ✅ good                       |
+| Performance with large files                | ✅ good                   | 🚀 best            | ❌ bad                        |
+| Memory consumption                          | ❌ high with large files¹ | ✅ consistently low | ❌ high with large files      |
+| Available from Linux sources(deb, rpm, apk) | ❌ no, but...¹            | ✅ yes              | ✔️ partially²                |
+| Multi-threaded                              | ❌ no³                    | ✅ yes              | ✅ yes                        |
 
 ¹ At runtime you can use the LibreOffice build of *PDFium*, `libpdfiumlo.so` from the Debian/Ubuntu package `libreoffice-core-nogui`.
 Using this lib instead of [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) performance drops a bit (maybe 10%), but in turn memory consumption with large files decreases a lot.
@@ -294,14 +294,14 @@ Configuration happens through environment variables only.
 | `TES_NATS_CONNECT_RETRIES`            | Number of times a connection to an external NATS server/cluster and to JetStream is being tried. Default: `10`                                                                                 |
 | `TES_HOST_PORT`                       | Listen address of HTTP server. Default: `:8080` (same as `0.0.0.0:8080`)                                                                                                                       |
 | `TES_NO_HTTP`                         | If `true` and `TES_EXPOSE_NATS` is `true`, too, no HTTP server is started                                                                                                                      |
-| `TES_PDF_LIB_NAME`                    | Name of the PDF implementation to load; options: `pdfium` (default), `poppler`, `mupdf`                                                                                                        |
+| `TES_PDF_LIB_NAME`                    | Name of the PDF implementation to load; options: `pdfium` (default), `poppler`, `mupdf`, `native` (or anthing else)                                                                            |
 | `TES_PDF_LIB_PATH`                    | Path or basename of the shared lib (`.so`, `.dylib`, `.dll`); if empty some default names and paths are tried                                                                                  |
 | `TES_REMOVE_NEWLINES`                 | If true, extracted text will be compacted by replacing newlines with whitespace. Default: `true`                                                                                               |
 | `TES_FORK_THRESHOLD`                  | Maximum content length (size in bytes) of a file that is being converted in-process rather than by a subprocess in fork-exec style. Choose a negative value to disable forking. Default: 2 MiB |
 | `TES_MAX_IN_MEMORY`                   | Maximum size a file may have to be processed in-memory. Is a file larger, it will be downloaded to `$TMP`. Default: `2MiB`                                                                     |
 | `TES_MAX_FILE_SIZE`                   | Maximum size a file may have to be processed. Larger files will be discarded. Default `300MiB`                                                                                                 |
 | `TES_HTTP_CLIENT_DISABLE_COMPRESSION` | Disable `Accept-Encoding: gzip` header in outgoing HTTP Requests. Default: `false`                                                                                                             |
-| `TES_TESSERACT_LANGS`                 | Set languages for Tesseract OCR as a list of 3-letter codes or script identifiers, separated by `+`. Default: `Latin` = all languages with latin script                                                              |
+| `TES_TESSERACT_LANGS`                 | Set languages for Tesseract OCR as a list of 3-letter codes or script identifiers, separated by `+`. Default: `Latin` = all languages with latin script                                        |
 | `TES_LOG_LEVEL`                       | Sets the log level. Options (case-insensitive): `info` (default), `debug`, `warn`, `error`                                                                                                     |
 | `TES_DEBUG`                           | Adds source info to each log line. Default: `false`                                                                                                                                            |
 

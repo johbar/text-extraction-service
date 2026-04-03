@@ -11,6 +11,7 @@ import (
 	"github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers"
 	mupdf "github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers/mupdf_purego"
 	pdfium "github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers/pdfium_purego"
+	"github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers/pdftextextractor"
 	poppler "github.com/johbar/text-extraction-service/v4/pkg/pdflibwrappers/poppler_purego"
 )
 
@@ -51,8 +52,14 @@ func (df *DocFactory) loadPdfLib(libName, libPath string) error {
 			}
 		}
 		return err
+	default:
+		df.pdfImpl = pdfImplementation{LibShort: "native",
+			LibDescription: "Experimental pure Go implementation",
+			LibPath:        "n/a",
+		}
+		df.log.Warn("Using experimental native fallback PDF implementation. This is not recommended for production.")
+		return nil
 	}
-	return errors.New("not a supported PDF library: " + libName)
 }
 
 func (df *DocFactory) initPdfium(libName, libPath string) (pdfImplementation, error) {
@@ -110,10 +117,9 @@ func (df *DocFactory) NewPdfFromBytes(data []byte, origin string) (doc cache.Doc
 		return poppler.Load(data)
 	case "mupdf":
 		return mupdf.Load(data)
-
+	default:
+		return pdftextextractor.Load(data)
 	}
-	// this should never happen as startup fails when no lib can be loaded:
-	return nil, errors.New("no PDF implementation available")
 }
 
 // NewPdfFromPath returns a PDF Document parsed by the particular PDF lib that was loaded before
@@ -131,8 +137,10 @@ func (df *DocFactory) NewPdfFromPath(path, origin string) (doc cache.Document, e
 		return poppler.Open(path)
 	case "mupdf":
 		return mupdf.Open(path)
+	default:
+		return pdftextextractor.Open(path)
 	}
-	return nil, errors.New("no PDF implementation available")
+
 }
 
 func (df *DocFactory) PdfImpl() pdfImplementation {

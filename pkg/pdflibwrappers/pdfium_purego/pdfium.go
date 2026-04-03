@@ -1,4 +1,4 @@
-// Package pdfium_purego loads the PDFium shard library and exposes some functions needed for text extraction.
+// Package pdfium_purego loads the PDFium shared library and exposes some functions needed for text extraction.
 package pdfium_purego
 
 import (
