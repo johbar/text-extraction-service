@@ -367,7 +367,7 @@ func (ts *textState) emitBreakDelta(w io.ByteWriter, dx, dy float64) {
 		w.WriteByte('\n')
 	} else if dx*(ts.wordSpacing) > spaceThreshold {
 		// FIXME: This is mostly redundant, sometimes misplaced
-		w.WriteByte(' ')
+		// w.WriteByte(' ')
 	}
 	// Small/zero/negative dx with no vertical movement: contiguous chunk,
 	// emit nothing.
@@ -885,15 +885,61 @@ func tokenize(content []byte) [][]byte {
 
 		case '<':
 			if i+1 < n && content[i+1] == '<' {
-				// Dict – collect until >>
+				// Dict – collect until the matching >>, skipping over any
+				// nested hex strings (<...>) and literal strings ((...)) so
+				// that a value like <</Lang<6465>>> is consumed correctly.
+				// Without this, the >> inside <6465>> is mistaken for the
+				// dict-closing >>, leaving a stray > that causes the hex-string
+				// branch to scan unboundedly forward and stall.
 				start := i
-				i += 2
-				for i < n-1 {
-					if content[i] == '>' && content[i+1] == '>' {
-						i += 2
-						break
+				i += 2 // skip <<
+				depth := 1
+				for i < n && depth > 0 {
+					switch content[i] {
+					case '<':
+						if i+1 < n && content[i+1] == '<' {
+							depth++
+							i += 2
+						} else {
+							// Nested hex string — skip to its closing >.
+							i++
+							for i < n && content[i] != '>' {
+								i++
+							}
+							if i < n {
+								i++ // consume '>'
+							}
+						}
+					case '>':
+						if i+1 < n && content[i+1] == '>' {
+							depth--
+							i += 2
+						} else {
+							i++
+						}
+					case '(':
+						// Nested literal string — skip to matching ')'.
+						i++
+						pdepth := 0
+						for i < n {
+							if content[i] == '\\' {
+								i += 2
+								continue
+							}
+							if content[i] == '(' {
+								pdepth++
+							} else if content[i] == ')' {
+								if pdepth == 0 {
+									i++
+									break
+								}
+								pdepth--
+							}
+							i++
+						}
+					default:
+						i++
 					}
-					i++
 				}
 				tokens = append(tokens, (content[start:i]))
 			} else {
