@@ -2,6 +2,7 @@ package extractor
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
