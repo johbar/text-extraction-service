@@ -21,6 +21,7 @@ func TestNewFromPath(t *testing.T) {
 		rtftyp    *rtfparser.RichTextDoc
 		pdfiumtyp *pdfium_purego.Document
 	)
+	os.Setenv("TES_PDF_LIB_NAME", "pdfium")
 	conf, err := config.NewTesConfigFromEnv()
 	if err != nil {
 		t.Fatal(err)
