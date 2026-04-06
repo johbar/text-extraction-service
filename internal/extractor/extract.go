@@ -130,6 +130,9 @@ func (e *Extractor) DocFromUrl(params RequestParams, w io.Writer, header http.He
 		e.log.Error("Error fetching", "err", err, "url", url)
 		return http.StatusBadRequest, err
 	}
+	if response.StatusCode >= 400 {
+		return response.StatusCode, errors.New("Could not get requested resource. Remote server replied: " + response.Status)
+	}
 	defer response.Body.Close()
 
 	if response.StatusCode == http.StatusNotModified {
