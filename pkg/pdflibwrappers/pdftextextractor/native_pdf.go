@@ -84,6 +84,9 @@ func (d *Document) Text(i int) (string, bool) {
 		// FIXME
 		panic(err)
 	}
+	if text == nil {
+		return "", false
+	}
 	return text.String(), false
 }
 
@@ -91,7 +94,10 @@ func (d *Document) StreamText(w io.Writer) error {
 	for i := range d.Pages() {
 		text, err := extractPageText(&d.ctx, i+1)
 		if err != nil {
-			return err
+			continue
+		}
+		if text == nil {
+			continue
 		}
 		_, err = text.WriteTo(w)
 		if err != nil {

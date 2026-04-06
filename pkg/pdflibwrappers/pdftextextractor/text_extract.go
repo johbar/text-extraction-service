@@ -131,8 +131,8 @@ func init() {
 	winAnsiEnc = winAnsiEncoding()
 }
 
-// ExtractPageText extracts the readable text from the given page of ctx.
-// pageNr is 1-based. Returns a PageText with the decoded text or an error.
+// extractPageText extracts the readable text from the given page of ctx.
+// pageNr is 1-based. Returns a bytes.Buffer with the decoded text or an error.
 func extractPageText(ctx *model.Context, pageNr int) (*bytes.Buffer, error) {
 	if pageNr < 1 || pageNr > ctx.PageCount {
 		return nil, fmt.Errorf("extractPageText: invalid page number %d (document has %d pages)", pageNr, ctx.PageCount)
@@ -147,7 +147,6 @@ func extractPageText(ctx *model.Context, pageNr int) (*bytes.Buffer, error) {
 		return nil, fmt.Errorf("extractPageText: page %d not found", pageNr)
 	}
 
-	// Retrieve raw content stream bytes for this page.
 	content, err := ctx.XRefTable.PageContent(pageDict, pageNr)
 	if err != nil {
 		if err == model.ErrNoContent {
@@ -156,7 +155,6 @@ func extractPageText(ctx *model.Context, pageNr int) (*bytes.Buffer, error) {
 		return nil, fmt.Errorf("extractPageText: page %d content: %w", pageNr, err)
 	}
 
-	// Build a font map from the inherited resource dict so we can decode text.
 	fontMap := buildFontMap(ctx.XRefTable, inhPAttrs.Resources)
 
 	text, err := extractTextFromContent(content, fontMap)
@@ -168,25 +166,74 @@ func extractPageText(ctx *model.Context, pageNr int) (*bytes.Buffer, error) {
 }
 
 // ---------------------------------------------------------------------------
-// Font encoding helpers
+// Font encoding and width helpers
 // ---------------------------------------------------------------------------
 
-// pdfFont represents just enough font metadata to decode text operands.
+// pdfFont holds just enough font metadata to decode text operands and compute
+// glyph advance widths for cursor tracking.
 type pdfFont struct {
 	// encoding maps a single-byte character code to a Unicode rune.
-	// nil means use the identity / Latin-1 mapping as a fallback.
+	// nil means fall back to Latin-1.
 	encoding map[byte]rune
-	// toUnicode maps a character code (as a 2-byte big-endian uint16) to a
-	// Unicode string. When present this takes precedence over encoding.
+
+	// toUnicode maps a character code (big-endian uint16) to a Unicode string.
+	// Takes precedence over encoding when present.
 	toUnicode map[uint16]string
+
+	// widths maps a character code to its advance width in PDF glyph-space
+	// units (1/1000 of a text unit). Covers both 1-byte (simple fonts) and
+	// 2-byte (CIDFont) codes stored as uint16.
+	widths map[uint16]float64
+
+	// defaultWidth is used for codes absent from widths. Overridden by the
+	// FontDescriptor's MissingWidth; falls back to 500 (half an em).
+	defaultWidth float64
 }
 
-// decodeBytes converts a slice of raw character code bytes using the font's
-// encoding tables and returns the corresponding Unicode string.
+// glyphAdvance returns the advance width for the glyph encoded at b[i] in
+// glyph-space units (1/1000 text unit), together with the number of bytes
+// consumed (1 for simple fonts, 2 for composite fonts using 2-byte codes).
+func (f *pdfFont) glyphAdvance(b []byte, i int) (width float64, consumed int) {
+	dw := f.defaultWidth
+	if dw == 0 {
+		dw = 500
+	}
+	if f.widths == nil {
+		return dw, 1
+	}
+	// Try 2-byte code first (composite / CIDFont).
+	if i+1 < len(b) {
+		if w, ok := f.widths[(uint16(b[i])<<8)|uint16(b[i+1])]; ok {
+			return w, 2
+		}
+	}
+	// 1-byte code (simple font).
+	if w, ok := f.widths[uint16(b[i])]; ok {
+		return w, 1
+	}
+	return dw, 1
+}
+
+// rawStringWidth returns the total advance of raw glyph bytes b in glyph-space
+// units, without scaling by font size.
+func (f *pdfFont) rawStringWidth(b []byte) float64 {
+	if f == nil {
+		return float64(len(b)) * 500
+	}
+	total := 0.0
+	for i := 0; i < len(b); {
+		w, n := f.glyphAdvance(b, i)
+		total += w
+		i += n
+	}
+	return total
+}
+
+// decodeBytes converts raw character-code bytes to UTF-8 using the font's
+// encoding tables.
 func (f *pdfFont) decodeBytes(b []byte) []byte {
 	var sb bytes.Buffer
 	for i := 0; i < len(b); {
-		// Try 2-byte lookup first when toUnicode is available.
 		if f.toUnicode != nil && i+1 < len(b) {
 			code := (uint16(b[i]) << 8) | uint16(b[i+1])
 			if s, ok := f.toUnicode[code]; ok {
@@ -196,8 +243,7 @@ func (f *pdfFont) decodeBytes(b []byte) []byte {
 			}
 		}
 		if f.toUnicode != nil {
-			code := uint16(b[i])
-			if s, ok := f.toUnicode[code]; ok {
+			if s, ok := f.toUnicode[uint16(b[i])]; ok {
 				sb.WriteString(s)
 				i++
 				continue
@@ -210,7 +256,6 @@ func (f *pdfFont) decodeBytes(b []byte) []byte {
 				continue
 			}
 		}
-		// Fallback: treat as Latin-1 but skip control characters.
 		r := rune(b[i])
 		if r >= 0x20 && r != 0x7f {
 			sb.WriteRune(r)
@@ -243,9 +288,9 @@ func buildFontMap(xRefTable *model.XRefTable, resources types.Dict) map[string]*
 		if err != nil || fd == nil {
 			continue
 		}
-		f := &pdfFont{}
+		f := &pdfFont{defaultWidth: 500}
 
-		// Try to parse a ToUnicode CMap.
+		// ToUnicode CMap.
 		if tuRef, ok := fd.Find("ToUnicode"); ok {
 			if sd, _, err := xRefTable.DereferenceStreamDict(tuRef); err == nil && sd != nil {
 				if err := sd.Decode(); err == nil {
@@ -254,9 +299,33 @@ func buildFontMap(xRefTable *model.XRefTable, resources types.Dict) map[string]*
 			}
 		}
 
-		// Parse the Encoding entry if present.
+		// Encoding.
 		if encObj, ok := fd.Find("Encoding"); ok {
 			f.encoding = parseEncoding(xRefTable, encObj)
+		}
+
+		// Glyph widths. Type0 (composite) fonts store widths in the
+		// descendant CIDFont dict under the W key; all other font types
+		// use the FirstChar/LastChar/Widths triplet.
+		subtype, _ := fd.Find("Subtype")
+		if n, ok := subtype.(types.Name); ok && n.Value() == "Type0" {
+			f.widths = parseCIDFontWidths(xRefTable, fd)
+		} else {
+			f.widths = parseSimpleFontWidths(xRefTable, fd)
+		}
+
+		// MissingWidth from FontDescriptor overrides the default.
+		if fdRef, ok := fd.Find("FontDescriptor"); ok {
+			if fdDict, err := xRefTable.DereferenceDict(fdRef); err == nil && fdDict != nil {
+				if mw, ok := fdDict.Find("MissingWidth"); ok {
+					switch v := mw.(type) {
+					case types.Integer:
+						f.defaultWidth = float64(v.Value())
+					case types.Float:
+						f.defaultWidth = v.Value()
+					}
+				}
+			}
 		}
 
 		fontMap[name] = f
@@ -265,19 +334,121 @@ func buildFontMap(xRefTable *model.XRefTable, resources types.Dict) map[string]*
 	return fontMap
 }
 
+// parseSimpleFontWidths extracts the Widths array from a simple font dict
+// (Type1, TrueType, Type3) using the FirstChar/LastChar/Widths triplet.
+func parseSimpleFontWidths(xRefTable *model.XRefTable, fd types.Dict) map[uint16]float64 {
+	fcObj, ok1 := fd.Find("FirstChar")
+	wObj, ok2 := fd.Find("Widths")
+	if !ok1 || !ok2 {
+		return nil
+	}
+	fc, ok := fcObj.(types.Integer)
+	if !ok {
+		return nil
+	}
+	arr, err := xRefTable.DereferenceArray(wObj)
+	if err != nil || len(arr) == 0 {
+		return nil
+	}
+	widths := make(map[uint16]float64, len(arr))
+	for idx, entry := range arr {
+		switch v := entry.(type) {
+		case types.Integer:
+			widths[uint16(fc.Value()+idx)] = float64(v.Value())
+		case types.Float:
+			widths[uint16(fc.Value()+idx)] = v.Value()
+		}
+	}
+	return widths
+}
+
+// parseCIDFontWidths extracts glyph widths from the W array of a Type0 font's
+// descendant CIDFont dict. The W array uses two alternate forms:
+//
+//	c [w0 w1 … wn-1]   — individual widths for codes c through c+n-1
+//	c1 c2 w             — uniform width w for all codes c1 through c2
+func parseCIDFontWidths(xRefTable *model.XRefTable, type0fd types.Dict) map[uint16]float64 {
+	dfObj, ok := type0fd.Find("DescendantFonts")
+	if !ok {
+		return nil
+	}
+	dfArr, err := xRefTable.DereferenceArray(dfObj)
+	if err != nil || len(dfArr) == 0 {
+		return nil
+	}
+	cidfd, err := xRefTable.DereferenceDict(dfArr[0])
+	if err != nil || cidfd == nil {
+		return nil
+	}
+	wObj, ok := cidfd.Find("W")
+	if !ok {
+		return nil
+	}
+	wArr, err := xRefTable.DereferenceArray(wObj)
+	if err != nil || len(wArr) == 0 {
+		return nil
+	}
+
+	widths := make(map[uint16]float64)
+	i := 0
+	for i < len(wArr) {
+		cObj, ok := wArr[i].(types.Integer)
+		if !ok {
+			i++
+			continue
+		}
+		c := cObj.Value()
+		i++
+		if i >= len(wArr) {
+			break
+		}
+		switch next := wArr[i].(type) {
+		case types.Array:
+			// c [w0 w1 …]
+			for j, wEntry := range next {
+				switch v := wEntry.(type) {
+				case types.Integer:
+					widths[uint16(c+j)] = float64(v.Value())
+				case types.Float:
+					widths[uint16(c+j)] = v.Value()
+				}
+			}
+			i++
+		case types.Integer:
+			// c1 c2 w
+			c2 := next.Value()
+			i++
+			if i >= len(wArr) {
+				break
+			}
+			var w float64
+			switch v := wArr[i].(type) {
+			case types.Integer:
+				w = float64(v.Value())
+			case types.Float:
+				w = v.Value()
+			}
+			for code := c; code <= c2; code++ {
+				widths[uint16(code)] = w
+			}
+			i++
+		default:
+			i++
+		}
+	}
+	return widths
+}
+
 // parseEncoding converts a PDF Encoding entry (Name or Dict) into a char→rune map.
 func parseEncoding(xRefTable *model.XRefTable, obj types.Object) map[byte]rune {
 	obj, err := xRefTable.Dereference(obj)
 	if err != nil || obj == nil {
 		return nil
 	}
-
 	switch v := obj.(type) {
 	case types.Name:
 		return namedEncoding(v.Value())
-
 	case types.Dict:
-		// Start from a base encoding if specified.
 		var base map[byte]rune
 		if baseObj, ok := v.Find("BaseEncoding"); ok {
 			if n, ok := baseObj.(types.Name); ok {
@@ -287,8 +458,6 @@ func parseEncoding(xRefTable *model.XRefTable, obj types.Object) map[byte]rune {
 		if base == nil {
 			base = maps.Clone(standardEnc)
 		}
-
-		// Apply Differences array.
 		if diffObj, ok := v.Find("Differences"); ok {
 			arr, err := xRefTable.DereferenceArray(diffObj)
 			if err == nil {
@@ -316,15 +485,14 @@ func applyDifferences(enc map[byte]rune, diffs types.Array) {
 	}
 }
 
-// namedEncoding returns a copy of one of the standard PDF named encodings.
+// namedEncoding returns a mutable copy of one of the standard PDF named encodings.
 func namedEncoding(name string) map[byte]rune {
-
 	switch name {
 	case "MacRomanEncoding":
 		return maps.Clone(macRomanEnc)
 	case "WinAnsiEncoding":
 		return maps.Clone(winAnsiEnc)
-	default: // StandardEncoding and fallback
+	default:
 		return maps.Clone(standardEnc)
 	}
 }
@@ -340,46 +508,95 @@ type textState struct {
 	fontMap     map[string]*pdfFont
 	wordSpacing float64
 
-	// Text line matrix origin — the absolute position of the start of the
-	// current text line. Updated by Tm (absolute set) and Td/TD (relative
-	// offset). T* uses the stored leading to compute a relative offset.
-	// tlTx/tlTy are in unscaled user-space points.
+	// tlTx/tlTy is the text line matrix origin — the reference point used by
+	// Td/TD (relative offsets) to compute the next absolute position.
+	// Updated by Tm (absolute set), Td/TD (accumulated relative offset), T*.
 	tlTx, tlTy float64
-	tlSet      bool // true once we have a reference position
+	tlSet      bool // true once we have seen at least one positioning op
 
-	// leading is the current text leading (set by TL, or implicitly by TD).
+	// cursorX/cursorY is the pen position after the last rendered glyph, in
+	// user-space coordinates. This is what we compare against the next
+	// operator's target position to decide whether to emit a space or newline.
+	//
+	// cursorX advances after each text-showing operator by the sum of glyph
+	// advances scaled to user space: advance = (glyphWidth/1000) * fontSize.
+	// cursorY mirrors the current baseline and only changes on line moves.
+	cursorX, cursorY float64
+
+	// leading is the current text leading (set by TL, implied by TD).
 	leading float64
 
-	// Current font size from the most recent Tf operator.
+	// fontSize is the current font size in user-space points.
 	fontSize float64
 }
 
-// emitBreakDelta writes a newline or space to w based on the per-operator
-// position delta (dx, dy). dy is positive when moving up the page (PDF
-// coordinate system), negative when moving down.
-func (ts *textState) emitBreakDelta(w io.ByteWriter, dx, dy float64) {
+// reposition sets both the text line origin and the cursor to (x, y) and
+// marks the state as having a valid reference position. Called by every
+// operator that moves the text position.
+func (ts *textState) reposition(x, y float64) {
+	ts.tlTx, ts.tlTy = x, y
+	ts.cursorX, ts.cursorY = x, y
+	ts.tlSet = true
+}
+
+// advanceCursor moves cursorX forward by the user-space width of the glyph
+// sequence encoded in raw bytes b:
+//
+//	userSpaceAdvance = (glyphSpaceWidth / 1000) * fontSize
+func (ts *textState) advanceCursor(b []byte) {
+	if ts.fontSize == 0 {
+		return
+	}
+	var gsWidth float64
+	if ts.currentFont != nil {
+		gsWidth = ts.currentFont.rawStringWidth(b)
+	} else {
+		gsWidth = float64(len(b)) * 500
+	}
+	ts.cursorX += gsWidth / 1000.0 * ts.fontSize
+}
+
+// emitGap compares the new text origin (newX, newY) against the current cursor
+// position and writes a separator to w when needed:
+//
+//   - |newY - cursorY| > lineThreshold  →  newline
+//   - same line AND newX - cursorX > spaceThreshold  →  space
+//   - otherwise  →  nothing
+//
+// Always calls reposition afterwards so the cursor reflects the new origin.
+func (ts *textState) emitGap(w io.ByteWriter, newX, newY float64) {
+	if !ts.tlSet {
+		ts.reposition(newX, newY)
+		return
+	}
+
 	lineThreshold := ts.fontSize * 0.5
-	spaceThreshold := ts.fontSize * 0.1
 	if lineThreshold < 1 {
 		lineThreshold = 1
 	}
+
+	dy := ts.cursorY - newY // positive = moved down the page (PDF y points up)
 	if dy > lineThreshold || dy < -lineThreshold {
 		w.WriteByte('\n')
-	} else if dx*(ts.wordSpacing) > spaceThreshold {
-		// FIXME: This is mostly redundant, sometimes misplaced
-		// w.WriteByte(' ')
+	} else {
+		// Same baseline — check whether there is a visible gap between where
+		// the last glyph ended (cursorX) and where the next chunk starts (newX).
+		// Threshold: ~20% of font size. This clears normal kerning adjustments
+		// (±50–200 glyph units ≈ ±0.05–0.2 em) while catching word gaps
+		// (typically 200–500 glyph units ≈ 0.2–0.5 em).
+		spaceThreshold := ts.fontSize * 0.2
+		if spaceThreshold < 1 {
+			spaceThreshold = 1
+		}
+		if newX-ts.cursorX > spaceThreshold {
+			w.WriteByte(' ')
+		}
 	}
-	// Small/zero/negative dx with no vertical movement: contiguous chunk,
-	// emit nothing.
+
+	ts.reposition(newX, newY)
 }
 
-// extractTextFromContent parses a PDF content stream and returns the plain text.
-// It handles the most common text-showing operators:
-//
-//	Tj  – show string
-//	TJ  – show array of strings/numbers
-//	'   – move to next line and show string
-//	"   – set spacing, move to next line, show string
+// extractTextFromContent parses a PDF content stream and returns plain text.
 func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.Buffer, error) {
 	var out bytes.Buffer
 	ts := &textState{fontMap: fontMap}
@@ -392,13 +609,22 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 		switch string(tok) {
 		case "BT":
 			ts.inBT = true
-			ts.tlSet = false // reset position tracking for each text block
+			// Reset the text line matrix origin to (0,0) as the PDF spec
+			// requires: Td/TD offsets are relative to this origin and it
+			// starts fresh for every new text object.
+			// cursorX/cursorY are intentionally NOT reset: they carry the
+			// pen position across ET/BT boundaries so that emitGap can
+			// compare the next chunk position against where the last
+			// glyph ended and detect same-line vs new-line correctly.
+			ts.tlTx, ts.tlTy = 0, 0
+
 		case "ET":
-			if ts.inBT {
-				out.WriteRune('\n')
-			}
 			ts.inBT = false
-			ts.tlSet = false
+			// No newline here. All line-break decisions are made by emitGap
+			// when the next positioning operator fires. Emitting \n on every
+			// ET would split same-line chunks that happen to be in separate
+			// BT blocks (common in tagged PDFs where each word or glyph run
+			// gets its own BT/ET pair).
 
 		case "Tf":
 			// /FontName size Tf
@@ -416,7 +642,6 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			}
 
 		case "TL":
-			// leading TL — sets the text leading used by T*.
 			if i >= 1 {
 				ts.leading, _ = strconv.ParseFloat(string(tokens[i-1]), 64)
 			}
@@ -427,10 +652,8 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			}
 
 		case "Td", "TD":
-			// tx ty Td — move the text line position by (tx, ty) relative to
-			// the start of the current line. ty == 0 means a purely horizontal
-			// shift (same line); any non-zero ty is a vertical move.
-			// TD additionally sets the leading to -ty.
+			// tx ty Td — move line position by (tx, ty) relative to current
+			// line origin. TD also sets leading = -ty.
 			if ts.inBT && i >= 2 {
 				dy, errY := strconv.ParseFloat(string(tokens[i-1]), 64)
 				dx, errX := strconv.ParseFloat(string(tokens[i-2]), 64)
@@ -438,116 +661,97 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 					if bytes.Equal(tok, []byte{'T', 'D'}) {
 						ts.leading = -dy
 					}
-					ts.tlTx += dx
-					ts.tlTy += dy
-					if !ts.tlSet {
-						ts.tlSet = true
-					} else {
-						ts.emitBreakDelta(&out, dx, dy)
-					}
+					ts.emitGap(&out, ts.tlTx+dx, ts.tlTy+dy)
 				}
 			}
 
 		case "T*":
-			// Move to the start of the next line, equivalent to 0 -leading Td.
+			// Equivalent to 0 -leading Td.
 			if ts.inBT {
-				dy := -ts.leading
-				ts.tlTy += dy
-				ts.tlTx = 0
-				if !ts.tlSet {
-					ts.tlSet = true
-				} else {
-					ts.emitBreakDelta(&out, 0, dy)
-				}
+				ts.emitGap(&out, 0, ts.tlTy+(-ts.leading))
 			}
 
 		case "Tm":
-			// a b c d tx ty Tm — sets the text matrix and text line matrix
-			// to an absolute position. We compare against the previous line
-			// origin to decide between a new line and a same-line reposition.
+			// a b c d tx ty Tm — absolute position.
 			if ts.inBT && i >= 6 {
 				newTy, errY := strconv.ParseFloat(string(tokens[i-1]), 64)
 				newTx, errX := strconv.ParseFloat(string(tokens[i-2]), 64)
 				if errY == nil && errX == nil {
-					if !ts.tlSet {
-						// First position in this BT block — nothing to compare.
-						ts.tlTx, ts.tlTy = newTx, newTy
-						ts.tlSet = true
-					} else {
-						prevTx, prevTy := ts.tlTx, ts.tlTy
-						ts.tlTx, ts.tlTy = newTx, newTy
-						// dy is positive when the new position is above the old
-						// one (PDF y-axis points up), matching Td/TD convention.
-						ts.emitBreakDelta(&out, newTx-prevTx, prevTy-newTy)
-					}
+					ts.emitGap(&out, newTx, newTy)
 				}
 			}
 
 		case "Tj":
-			// string Tj
 			if ts.inBT && i >= 1 {
-				text := decodeOperand(tokens[i-1], ts.currentFont)
-				out.Write(text)
+				raw, ok := parsePDFString(tokens[i-1])
+				if ok {
+					out.Write(decodeRaw(raw, ts.currentFont))
+					ts.advanceCursor(raw)
+				}
 			}
 
 		case "'":
-			// string '  — newline then show string
+			// Move to next line then show string.
 			if ts.inBT && i >= 1 {
-				out.WriteRune('\n')
-				text := decodeOperand(tokens[i-1], ts.currentFont)
-				out.Write(text)
+				ts.emitGap(&out, 0, ts.tlTy+(-ts.leading))
+				raw, ok := parsePDFString(tokens[i-1])
+				if ok {
+					out.Write(decodeRaw(raw, ts.currentFont))
+					ts.advanceCursor(raw)
+				}
 			}
 
 		case "\"":
-			// aw ac string "  — set spacing, newline, show string
-			if ts.inBT && i >= 1 {
-				out.WriteRune('\n')
-				text := decodeOperand(tokens[i-1], ts.currentFont)
-				out.Write(text)
+			// aw ac string " — set word/char spacing, move to next line, show.
+			if ts.inBT && i >= 3 {
+				ts.wordSpacing, _ = strconv.ParseFloat(string(tokens[i-3]), 64)
+				// tokens[i-2] is charSpacing (Tc) — not tracked here.
+				ts.emitGap(&out, 0, ts.tlTy+(-ts.leading))
+				raw, ok := parsePDFString(tokens[i-1])
+				if ok {
+					out.Write(decodeRaw(raw, ts.currentFont))
+					ts.advanceCursor(raw)
+				}
 			}
 
 		case "TJ":
-			// array TJ
+			// Interleaved strings and kerning numbers.
 			if ts.inBT && i >= 1 {
-				text := decodeTJArray(tokens[i-1], ts.currentFont)
-				out.Write(text)
+				gsAdvance := decodeTJInto(tokens[i-1], ts.currentFont, &out)
+				// Scale from glyph-space to user-space and advance cursor.
+				ts.cursorX += gsAdvance / 1000.0 * ts.fontSize
 			}
 		}
 
 		i++
 	}
-
-	// return dehyphenate(normaliseWhitespace(out.String())), nil
-	return normaliseWhitespace(out.Bytes()), nil
-
+	out = normaliseWhitespace(out.Bytes())
+	return out, nil
 }
 
-// decodeOperand decodes a PDF string literal or hex string operand.
-// It handles both ( literal ) and < hex > forms.
-func decodeOperand(tok []byte, f *pdfFont) []byte {
-	raw, ok := parsePDFString(tok)
-	if !ok {
-		return []byte{}
-	}
+// decodeRaw decodes raw PDF string bytes to UTF-8 via the font's tables,
+// falling back to Latin-1 when no font is active.
+func decodeRaw(raw []byte, f *pdfFont) []byte {
 	if f == nil {
 		return decodeLatin1(raw)
 	}
 	return f.decodeBytes(raw)
 }
 
-// decodeTJArray decodes the array operand of a TJ operator.
-// Elements are alternating string operands and numeric kerning offsets.
-func decodeTJArray(tok []byte, f *pdfFont) []byte {
+// decodeTJInto decodes the array operand of a TJ operator, writes the
+// decoded text to w, and returns the net advance in glyph-space units
+// (1/1000 text unit). Kerning numbers are subtracted from the advance.
+// The caller scales to user-space by multiplying by fontSize/1000.
+func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) float64 {
 	tok = bytes.TrimSpace(tok)
-	if tok[0] != '[' || tok[len(tok)-1] != ']' {
-		return []byte{}
+	if len(tok) < 2 || tok[0] != '[' || tok[len(tok)-1] != ']' {
+		return 0
 	}
 	inner := tok[1 : len(tok)-1]
-	var sb bytes.Buffer
+	var gsAdvance float64
 	i := 0
 	for i < len(inner) {
-		// Skip whitespace.
-		for i < len(inner) && isWhitespace(inner[i]) {
+		for i < len(inner) && isWhitespaceByte(inner[i]) {
 			i++
 		}
 		if i >= len(inner) {
@@ -555,51 +759,61 @@ func decodeTJArray(tok []byte, f *pdfFont) []byte {
 		}
 
 		if inner[i] == '(' {
-			// Find matching unescaped ')'.
 			end := findClosingParen(inner, i)
 			if end < 0 {
 				break
 			}
-			segment := inner[i : end+1]
-			sb.Write(decodeOperand(segment, f))
+			raw, ok := parsePDFString(inner[i : end+1])
+			if ok {
+				w.Write(decodeRaw(raw, f))
+				if f != nil {
+					gsAdvance += f.rawStringWidth(raw)
+				} else {
+					gsAdvance += float64(len(raw)) * 500
+				}
+			}
 			i = end + 1
+
 		} else if inner[i] == '<' {
 			end := bytes.Index(inner[i:], []byte{'>'})
 			if end < 0 {
 				break
 			}
-			segment := inner[i : i+end+1]
-			sb.Write(decodeOperand(segment, f))
+			raw, ok := parsePDFString(inner[i : i+end+1])
+			if ok {
+				w.Write(decodeRaw(raw, f))
+				if f != nil {
+					gsAdvance += f.rawStringWidth(raw)
+				} else {
+					gsAdvance += float64(len(raw)) * 500
+				}
+			}
 			i += end + 1
+
 		} else {
-			// Numeric kerning offset — skip until whitespace or next string.
-			for i < len(inner) && !isWhitespace(inner[i]) && inner[i] != '(' && inner[i] != '<' {
+			// Kerning number — negative values tighten spacing (subtract).
+			start := i
+			for i < len(inner) && !isWhitespaceByte(inner[i]) && inner[i] != '(' && inner[i] != '<' {
 				i++
+			}
+			if n, err := strconv.ParseFloat(string(inner[start:i]), 64); err == nil {
+				gsAdvance -= n
 			}
 		}
 	}
-	return sb.Bytes()
+	return gsAdvance
 }
 
-// parsePDFString parses a PDF string literal:
-//   - ( ... )  — literal string (may contain escape sequences)
-//   - < ... >  — hex string
-//
-// Returns the raw byte slice and true on success.
+// parsePDFString parses a PDF string literal (literal or hex form).
 func parsePDFString(s []byte) ([]byte, bool) {
 	s = bytes.TrimSpace(s)
 	if len(s) == 0 {
 		return nil, false
 	}
-
 	if s[0] == '(' && s[len(s)-1] == ')' {
-		// Literal string – unescape.
-		inner := s[1 : len(s)-1]
-		return unescapePDFLiteralString(inner), true
+		return unescapePDFLiteralString(s[1 : len(s)-1]), true
 	}
-
 	if s[0] == '<' && s[len(s)-1] == '>' {
-		// Hex string.
 		inner := bytes.ReplaceAll(s[1:len(s)-1], []byte{' '}, []byte{})
 		inner = bytes.ReplaceAll(inner, []byte{'\n'}, []byte{})
 		inner = bytes.ReplaceAll(inner, []byte{'\r'}, []byte{})
@@ -607,13 +821,11 @@ func parsePDFString(s []byte) ([]byte, bool) {
 			inner = append(inner, '0')
 		}
 		b := make([]byte, len(inner)/2)
-		_, err := hex.Decode(b, inner)
-		if err != nil {
+		if _, err := hex.Decode(b, inner); err != nil {
 			return nil, false
 		}
 		return b, true
 	}
-
 	return nil, false
 }
 
@@ -635,14 +847,9 @@ func unescapePDFLiteralString(s []byte) []byte {
 				buf.WriteByte('\b')
 			case 'f':
 				buf.WriteByte('\f')
-			case '(':
-				buf.WriteByte('(')
-			case ')':
-				buf.WriteByte(')')
-			case '\\':
-				buf.WriteByte('\\')
+			case '(', ')', '\\':
+				buf.WriteByte(s[i])
 			default:
-				// Octal escape \ddd
 				if s[i] >= '0' && s[i] <= '7' {
 					octal := string(s[i])
 					if i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '7' {
@@ -667,8 +874,7 @@ func unescapePDFLiteralString(s []byte) []byte {
 	return buf.Bytes()
 }
 
-// decodeLatin1 converts a byte slice to a string using Latin-1/ISO-8859-1,
-// filtering out non-printable characters.
+// decodeLatin1 converts bytes to UTF-8 using Latin-1, filtering controls.
 func decodeLatin1(b []byte) []byte {
 	var sb bytes.Buffer
 	for _, c := range b {
@@ -684,12 +890,10 @@ func decodeLatin1(b []byte) []byte {
 // ToUnicode CMap parser
 // ---------------------------------------------------------------------------
 
-// parseToUnicodeCMap extracts the bfchar and bfrange mappings from a ToUnicode CMap stream.
 func parseToUnicodeCMap(content []byte) map[uint16]string {
 	m := make(map[uint16]string)
 	text := string(content)
 
-	// beginbfchar / endbfchar blocks.
 	for {
 		start := strings.Index(text, "beginbfchar")
 		if start < 0 {
@@ -699,12 +903,10 @@ func parseToUnicodeCMap(content []byte) map[uint16]string {
 		if end < 0 {
 			break
 		}
-		block := text[start+len("beginbfchar") : start+end]
-		parseBfChar(block, m)
+		parseBfChar(text[start+len("beginbfchar"):start+end], m)
 		text = text[start+end+len("endbfchar"):]
 	}
 
-	// Reset and parse bfrange.
 	text = string(content)
 	for {
 		start := strings.Index(text, "beginbfrange")
@@ -715,30 +917,47 @@ func parseToUnicodeCMap(content []byte) map[uint16]string {
 		if end < 0 {
 			break
 		}
-		block := text[start+len("beginbfrange") : start+end]
-		parseBfRange(block, m)
+		parseBfRange(text[start+len("beginbfrange"):start+end], m)
 		text = text[start+end+len("endbfrange"):]
 	}
 
 	return m
 }
 
+// scanHexTokens extracts all <...> hex tokens from s in order.
+// It is whitespace-agnostic: tokens may be adjacent (<0000><0020>) or
+// separated by spaces, as both forms appear in real PDF CMap streams.
+func scanHexTokens(s string) []string {
+	var tokens []string
+	for {
+		start := strings.Index(s, "<")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(s[start:], ">")
+		if end < 0 {
+			break
+		}
+		tokens = append(tokens, s[start:start+end+1])
+		s = s[start+end+1:]
+	}
+	return tokens
+}
+
 func parseBfChar(block string, m map[uint16]string) {
-	lines := strings.Split(block, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
+	// Each bfchar entry is exactly two hex tokens: <src> <dst>.
+	// Tokens may be whitespace-separated or directly adjacent.
+	// We therefore scan for <...> tokens per line rather than splitting on spaces.
+	for line := range strings.SplitSeq(block, "\n") {
+		toks := scanHexTokens(line)
+		if len(toks) < 2 {
 			continue
 		}
-		parts := strings.Fields(line)
-		if len(parts) < 2 {
-			continue
-		}
-		src, err := parseHexToken(parts[0])
+		src, err := parseHexToken(toks[0])
 		if err != nil {
 			continue
 		}
-		dst, err := parseUnicodeHexToken(parts[1])
+		dst, err := parseUnicodeHexToken(toks[1])
 		if err != nil {
 			continue
 		}
@@ -747,56 +966,43 @@ func parseBfChar(block string, m map[uint16]string) {
 }
 
 func parseBfRange(block string, m map[uint16]string) {
-	lines := strings.Split(block, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
+	// Each bfrange entry is three tokens: <lo> <hi> <base-or-[array]>.
+	// As with bfchar, tokens may appear without whitespace between them.
+	for line := range strings.SplitSeq(block, "\n") {
+		// Array form starts with '[' after the two code tokens; handle it
+		// by checking the raw line before token extraction.
+		if strings.Contains(line, "[") {
+			continue // array form not yet supported
+		}
+		toks := scanHexTokens(line)
+		if len(toks) < 3 {
 			continue
 		}
-		parts := strings.Fields(line)
-		if len(parts) < 3 {
-			continue
-		}
-		lo, err := parseHexToken(parts[0])
+		lo, err := parseHexToken(toks[0])
 		if err != nil {
 			continue
 		}
-		hi, err := parseHexToken(parts[1])
+		hi, err := parseHexToken(toks[1])
 		if err != nil {
 			continue
 		}
-
-		// Third element may be a hex token (single mapping) or an array.
-		third := parts[2]
-		if strings.HasPrefix(third, "[") {
-			// Array form – not yet supported; fall through.
-			continue
-		}
-
-		base, err := parseUnicodeHexToken(third)
+		base, err := parseUnicodeHexToken(toks[2])
 		if err != nil {
 			continue
 		}
-		// base as rune value.
 		baseRunes := []rune(base)
 		if len(baseRunes) == 0 {
 			continue
 		}
 		baseRune := baseRunes[len(baseRunes)-1]
-
 		for code := lo; code <= hi; code++ {
-			delta := rune(code - lo)
-			newRune := baseRune + delta
-			m[code] = string(newRune)
+			m[code] = string(baseRune + rune(code-lo))
 		}
 	}
 }
 
-// parseHexToken parses a <XXXX> token into a uint16 character code.
 func parseHexToken(s string) (uint16, error) {
-	s = strings.TrimSpace(s)
-	s = strings.TrimPrefix(s, "<")
-	s = strings.TrimSuffix(s, ">")
+	s = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "<"), ">"))
 	val, err := strconv.ParseUint(s, 16, 32)
 	if err != nil {
 		return 0, err
@@ -804,31 +1010,22 @@ func parseHexToken(s string) (uint16, error) {
 	return uint16(val), nil
 }
 
-// parseUnicodeHexToken parses a <XXXX> hex token into a Unicode string.
-// The hex bytes are interpreted as UTF-16BE if length >= 4, else as a code point.
 func parseUnicodeHexToken(s string) (string, error) {
-	s = strings.TrimSpace(s)
-	s = strings.TrimPrefix(s, "<")
-	s = strings.TrimSuffix(s, ">")
-
+	s = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "<"), ">"))
 	b, err := hex.DecodeString(s)
 	if err != nil {
 		return "", err
 	}
-
 	if len(b) == 0 {
 		return "", nil
 	}
-
 	if len(b)%2 == 0 && len(b) >= 2 {
-		// Interpret as UTF-16BE.
 		u16 := make([]uint16, len(b)/2)
 		for i := 0; i < len(b); i += 2 {
 			u16[i/2] = (uint16(b[i]) << 8) | uint16(b[i+1])
 		}
 		return string(utf16.Decode(u16)), nil
 	}
-	// Single byte.
 	return string(rune(b[0])), nil
 }
 
@@ -836,16 +1033,11 @@ func parseUnicodeHexToken(s string) (string, error) {
 // Tokenizer
 // ---------------------------------------------------------------------------
 
-// tokenize splits a PDF content stream into tokens: operators, names,
-// numbers, string literals, and array literals.
-// This is a simplified tokenizer sufficient for text extraction.
 func tokenize(content []byte) [][]byte {
 	var tokens [][]byte
-	i := 0
-	n := len(content)
+	i, n := 0, len(content)
 
 	for i < n {
-		// Skip whitespace.
 		for i < n && isWhitespaceByte(content[i]) {
 			i++
 		}
@@ -855,16 +1047,14 @@ func tokenize(content []byte) [][]byte {
 
 		switch content[i] {
 		case '%':
-			// Comment – skip to end of line.
 			for i < n && content[i] != '\n' && content[i] != '\r' {
 				i++
 			}
 
 		case '(':
-			// Literal string – collect until matching unescaped ')'.
 			start := i
 			depth := 0
-			i++ // skip opening '('
+			i++
 			for i < n {
 				if content[i] == '\\' {
 					i += 2
@@ -881,18 +1071,15 @@ func tokenize(content []byte) [][]byte {
 				}
 				i++
 			}
-			tokens = append(tokens, (content[start:i]))
+			tokens = append(tokens, content[start:i])
 
 		case '<':
 			if i+1 < n && content[i+1] == '<' {
-				// Dict – collect until the matching >>, skipping over any
-				// nested hex strings (<...>) and literal strings ((...)) so
-				// that a value like <</Lang<6465>>> is consumed correctly.
-				// Without this, the >> inside <6465>> is mistaken for the
-				// dict-closing >>, leaving a stray > that causes the hex-string
-				// branch to scan unboundedly forward and stall.
+				// Dict — collect until the matching >>, skipping over nested
+				// hex strings (<...>) so that <</Lang<6465>>> is handled
+				// correctly and does not cause the hex-string branch to stall.
 				start := i
-				i += 2 // skip <<
+				i += 2
 				depth := 1
 				for i < n && depth > 0 {
 					switch content[i] {
@@ -901,13 +1088,12 @@ func tokenize(content []byte) [][]byte {
 							depth++
 							i += 2
 						} else {
-							// Nested hex string — skip to its closing >.
 							i++
 							for i < n && content[i] != '>' {
 								i++
 							}
 							if i < n {
-								i++ // consume '>'
+								i++
 							}
 						}
 					case '>':
@@ -918,7 +1104,6 @@ func tokenize(content []byte) [][]byte {
 							i++
 						}
 					case '(':
-						// Nested literal string — skip to matching ')'.
 						i++
 						pdepth := 0
 						for i < n {
@@ -941,9 +1126,8 @@ func tokenize(content []byte) [][]byte {
 						i++
 					}
 				}
-				tokens = append(tokens, (content[start:i]))
+				tokens = append(tokens, content[start:i])
 			} else {
-				// Hex string.
 				start := i
 				i++
 				for i < n && content[i] != '>' {
@@ -952,32 +1136,30 @@ func tokenize(content []byte) [][]byte {
 				if i < n {
 					i++
 				}
-				tokens = append(tokens, (content[start:i]))
+				tokens = append(tokens, content[start:i])
 			}
 
 		case '[':
-			// Array – collect until matching ']'.
 			start := i
 			depth := 0
 			i++
 			for i < n {
 				if content[i] == '(' {
-					// String inside array.
 					i++
-					innerDepth := 0
+					id := 0
 					for i < n {
 						if content[i] == '\\' {
 							i += 2
 							continue
 						}
 						if content[i] == '(' {
-							innerDepth++
+							id++
 						} else if content[i] == ')' {
-							if innerDepth == 0 {
+							if id == 0 {
 								i++
 								break
 							}
-							innerDepth--
+							id--
 						}
 						i++
 					}
@@ -994,25 +1176,23 @@ func tokenize(content []byte) [][]byte {
 				}
 				i++
 			}
-			tokens = append(tokens, (content[start:i]))
+			tokens = append(tokens, content[start:i])
 
 		case '/':
-			// Name object.
 			start := i
 			i++
 			for i < n && !isWhitespaceByte(content[i]) && !isDelimiter(content[i]) {
 				i++
 			}
-			tokens = append(tokens, (content[start:i]))
+			tokens = append(tokens, content[start:i])
 
 		default:
-			// Number or operator.
 			start := i
 			for i < n && !isWhitespaceByte(content[i]) && !isDelimiter(content[i]) {
 				i++
 			}
 			if i > start {
-				tokens = append(tokens, (content[start:i]))
+				tokens = append(tokens, content[start:i])
 			}
 		}
 	}
@@ -1024,24 +1204,15 @@ func isWhitespaceByte(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\f' || b == 0
 }
 
-func isWhitespace(b byte) bool {
-	return isWhitespaceByte(b)
-}
-
 func isDelimiter(b byte) bool {
 	return b == '(' || b == ')' || b == '<' || b == '>' || b == '[' || b == ']' ||
 		b == '{' || b == '}' || b == '/' || b == '%'
 }
 
-func stripSlash(s []byte) []byte {
-	return bytes.TrimPrefix(s, []byte{'/'})
-}
+func stripSlash(s []byte) []byte { return bytes.TrimPrefix(s, []byte{'/'}) }
 
-// findClosingParen finds the index of the ')' that closes the '(' at position
-// start within s, respecting escape sequences and nested parens.
 func findClosingParen(s []byte, start int) int {
-	depth := 0
-	i := start
+	depth, i := 0, start
 	for i < len(s) {
 		if s[i] == '\\' {
 			i += 2
@@ -1065,97 +1236,14 @@ func findClosingParen(s []byte, start int) int {
 // Post-processing
 // ---------------------------------------------------------------------------
 
-// dehyphenate joins words that were broken across lines with a hyphen.
-// It handles two cases:
-//
-//  1. Soft hyphen (U+00AD) immediately before a newline — the hyphen is a
-//     formatting artifact and is dropped entirely: "hyphen\u00ad\nated" → "hyphenated".
-//
-//  2. Hard hyphen ('-') at the end of a line where both the preceding and
-//     following substrings look like word fragments (all letters). In that case
-//     the hyphen and newline are dropped and the fragments joined:
-//     "hyphen-\nated" → "hyphenated".
-//     If either side contains digits or the preceding part ends with another
-//     hyphen (e.g. "state-of-\nthe-art") the hyphen is retained and only the
-//     newline is replaced with a space, preserving the intended punctuation.
-func dehyphenate(s string) string {
-	runes := []rune(s)
-	var out []rune
-	i := 0
-	for i < len(runes) {
-		r := runes[i]
-
-		// Soft hyphen followed by newline → drop both.
-		if r == '\u00AD' && i+1 < len(runes) && runes[i+1] == '\n' {
-			i += 2 // skip soft-hyphen and newline
-			continue
-		}
-
-		// Hard hyphen followed by newline → check context.
-		if r == '-' && i+1 < len(runes) && runes[i+1] == '\n' {
-			before := trailingWord(out)
-			after := leadingWord(runes[i+2:])
-			if isWordFragment(before) && isWordFragment(after) {
-				// Looks like typographic line-breaking — drop hyphen and newline.
-				i += 2
-				continue
-			}
-			// Genuine hyphen (compound word, number range, etc.) — keep the
-			// hyphen but replace the newline with a space so the line still joins.
-			out = append(out, '-')
-			out = append(out, ' ')
-			i += 2
-			continue
-		}
-
-		out = append(out, r)
-		i++
-	}
-	return string(out)
-}
-
-// trailingWord returns the last uninterrupted run of letters from buf.
-func trailingWord(buf []rune) []rune {
-	end := len(buf)
-	start := end
-	for start > 0 && isLetter(buf[start-1]) {
-		start--
-	}
-	return buf[start:end]
-}
-
-// leadingWord returns the first uninterrupted run of letters from s.
-func leadingWord(s []rune) []rune {
-	end := 0
-	for end < len(s) && isLetter(s[end]) {
-		end++
-	}
-	return s[:end]
-}
-
-// isWordFragment reports whether frag is non-empty and consists entirely of
-// Unicode letters — the hallmark of a hyphenation fragment rather than a
-// number range or compound term with digits.
-func isWordFragment(frag []rune) bool {
-	if len(frag) == 0 {
-		return false
-	}
-	for _, r := range frag {
-		if !isLetter(r) {
-			return false
-		}
-	}
-	return true
-}
 
 func isLetter(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-		(r >= '\u00C0' && r <= '\u024F') // Latin extended — covers accented chars
+		(r >= '\u00C0' && r <= '\u024F')
 }
 
-// normaliseWhitespace collapses runs of spaces into a single space, collapses
-// runs of newlines into a single newline, drops spaces that immediately
-// precede a newline, and trims leading/trailing whitespace.
+// normaliseWhitespace collapses space runs, collapses newline runs, drops
+// spaces before newlines, and trims leading/trailing whitespace.
 func normaliseWhitespace(s []byte) bytes.Buffer {
 	var sb bytes.Buffer
 	prevNewline := false
@@ -1164,7 +1252,6 @@ func normaliseWhitespace(s []byte) bytes.Buffer {
 	for _, r := range bytes.Runes(s) {
 		switch r {
 		case '\n', '\r':
-			// Discard any pending space — it would only trail a line.
 			pendingSpace = false
 			if !prevNewline {
 				sb.WriteRune('\n')
@@ -1172,8 +1259,6 @@ func normaliseWhitespace(s []byte) bytes.Buffer {
 			prevNewline = true
 		case ' ', '\t':
 			if !prevNewline {
-				// Defer the space; we'll emit it only if the next character
-				// is not a newline.
 				pendingSpace = true
 			}
 		default:
@@ -1185,24 +1270,18 @@ func normaliseWhitespace(s []byte) bytes.Buffer {
 			prevNewline = false
 		}
 	}
-	return sb
-	// return strings.TrimSpace(sb.String())
+	return *bytes.NewBuffer(bytes.TrimSpace(sb.Bytes()))
 }
 
 // ---------------------------------------------------------------------------
 // Standard encoding tables
 // ---------------------------------------------------------------------------
 
-// standardEncoding returns the Adobe Standard Encoding as a map.
-
-// winAnsiEncoding returns Windows-1252 encoding as a map.
 func winAnsiEncoding() map[byte]rune {
 	m := make(map[byte]rune, 256)
-	// ASCII range.
 	for i := 0x20; i < 0x7F; i++ {
 		m[byte(i)] = rune(i)
 	}
-	// Windows-1252 extensions.
 	extras := map[byte]rune{
 		0x80: '\u20AC', 0x82: '\u201A', 0x83: '\u0192', 0x84: '\u201E',
 		0x85: '\u2026', 0x86: '\u2020', 0x87: '\u2021', 0x88: '\u02C6',
@@ -1213,13 +1292,12 @@ func winAnsiEncoding() map[byte]rune {
 		0x9C: '\u0153', 0x9E: '\u017E', 0x9F: '\u0178',
 	}
 	for i := 0xA0; i < 0x100; i++ {
-		m[byte(i)] = rune(i) // Latin-1 supplement.
+		m[byte(i)] = rune(i)
 	}
 	maps.Copy(m, extras)
 	return m
 }
 
-// macRomanEncoding returns the Mac Roman encoding.
 func macRomanEncoding() map[byte]rune {
 	m := make(map[byte]rune, 256)
 	for i := 0x20; i < 0x7F; i++ {
@@ -1249,19 +1327,15 @@ func macRomanEncoding() map[byte]rune {
 	return m
 }
 
-// glyphToRune converts a PDF glyph name (e.g. "space", "A", "AE") to a rune.
 func glyphToRune(name string) (rune, bool) {
 	if r, ok := glyphNames[name]; ok {
 		return r, true
 	}
-	// Single letter names map to themselves.
 	if len(name) == 1 {
 		return rune(name[0]), true
 	}
-	// uni<XXXX> names.
 	if strings.HasPrefix(name, "uni") {
-		val, err := strconv.ParseInt(name[3:], 16, 32)
-		if err == nil {
+		if val, err := strconv.ParseInt(name[3:], 16, 32); err == nil {
 			return rune(val), true
 		}
 	}
