@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -498,75 +499,278 @@ func namedEncoding(name string) map[byte]rune {
 }
 
 // ---------------------------------------------------------------------------
+// 3×3 matrix arithmetic (column-major, PDF convention)
+// ---------------------------------------------------------------------------
+
+// matrix3 is a 3×3 transformation matrix stored in the six meaningful
+// components of the PDF "a b c d e f" form.  The bottom row is always
+// [0 0 1] and is never stored explicitly.
+//
+// PDF column-vector convention (point on the right):
+//
+//	| a  b  0 |
+//	| c  d  0 |
+//	| e  f  1 |   ← this is how PDF spec lays it out for row vectors
+//
+// For our purposes we carry [a b c d e f] and compose as:
+//
+//	result = left × right
+//	result.e = left.a*right.e + left.c*right.f + left.e
+//	…etc.
+type matrix3 struct {
+	a, b, c, d, e, f float64
+}
+
+// identityMatrix returns the 3×3 identity.
+func identityMatrix() matrix3 {
+	return matrix3{a: 1, d: 1}
+}
+
+// multiply returns m × n (PDF row-vector convention).
+func (m matrix3) multiply(n matrix3) matrix3 {
+	return matrix3{
+		a: m.a*n.a + m.b*n.c,
+		b: m.a*n.b + m.b*n.d,
+		c: m.c*n.a + m.d*n.c,
+		d: m.c*n.b + m.d*n.d,
+		e: m.e*n.a + m.f*n.c + n.e,
+		f: m.e*n.b + m.f*n.d + n.f,
+	}
+}
+
+// transformPoint maps text-space point (x, y) through m into device space.
+func (m matrix3) transformPoint(x, y float64) (float64, float64) {
+	return m.a*x + m.c*y + m.e, m.b*x + m.d*y + m.f
+}
+
+// scaleX returns the x-axis scale factor of the matrix (length of the x
+// basis vector), used to derive the effective font size in device space.
+func (m matrix3) scaleX() float64 {
+	return math.Sqrt(m.a*m.a + m.b*m.b)
+}
+
+// ---------------------------------------------------------------------------
 // Content stream parser
 // ---------------------------------------------------------------------------
 
+// graphicsState holds the subset of the PDF graphics state needed for text
+// extraction: the current transformation matrix and its save/restore stack.
+type graphicsState struct {
+	ctm   matrix3
+	stack []matrix3
+}
+
+func newGraphicsState() graphicsState {
+	return graphicsState{ctm: identityMatrix()}
+}
+
+// push saves a copy of the current CTM onto the stack (PDF operator q).
+func (gs *graphicsState) push() {
+	gs.stack = append(gs.stack, gs.ctm)
+}
+
+// pop restores the most recently saved CTM (PDF operator Q).
+// A Q without a matching q is silently ignored, as in most PDF viewers.
+func (gs *graphicsState) pop() {
+	if n := len(gs.stack); n > 0 {
+		gs.ctm = gs.stack[n-1]
+		gs.stack = gs.stack[:n-1]
+	}
+}
+
 // textState tracks the PDF text state machine during content stream parsing.
+// All position arithmetic is performed in device space (after composing the
+// current transformation matrix with the text matrix and the text line matrix).
 type textState struct {
 	inBT        bool
 	currentFont *pdfFont
 	fontMap     map[string]*pdfFont
+
+	// charSpacing is the Tc text state parameter (set by the "Tc" operator and
+	// by the " operator). It is added to the advance of every glyph in text
+	// space units. See PDF spec §9.3.2.
+	charSpacing float64
+
+	// wordSpacing is the Tw text state parameter (set by the "Tw" operator and
+	// by the " operator). It is added to the advance of every glyph whose
+	// character code is 0x20 (the single-byte word-space code) in text space
+	// units. See PDF spec §9.3.3.
 	wordSpacing float64
 
-	// tlTx/tlTy is the text line matrix origin — the reference point used by
-	// Td/TD (relative offsets) to compute the next absolute position.
-	// Updated by Tm (absolute set), Td/TD (accumulated relative offset), T*.
-	tlTx, tlTy float64
-	tlSet      bool // true once we have seen at least one positioning op
+	// Text line matrix (Tlm) and text matrix (Tm) per PDF spec §9.4.
+	// Tlm is the reference point updated by Td/TD/T*/Tm.
+	// After every showing operator Tm is also updated (Tlm is not).
+	// We store both as full 3×3 matrices so that composition with the CTM
+	// is exact regardless of rotation, shear, or non-uniform scale.
+	tlm matrix3 // text line matrix
+	tm  matrix3 // text matrix (equals tlm at line-start; advances with glyphs)
 
-	// cursorX/cursorY is the pen position after the last rendered glyph, in
-	// user-space coordinates. This is what we compare against the next
-	// operator's target position to decide whether to emit a space or newline.
-	//
-	// cursorX advances after each text-showing operator by the sum of glyph
-	// advances scaled to user space: advance = (glyphWidth/1000) * fontSize.
-	// cursorY mirrors the current baseline and only changes on line moves.
-	cursorX, cursorY float64
+	// tlSet is true once at least one positioning operator has fired inside
+	// the current BT/ET block, making tlm/tm valid reference points.
+	tlSet bool
+
+	// cursorDevX/cursorDevY is the device-space pen position after the last
+	// rendered glyph.  It is compared against the device-space origin of the
+	// next text chunk to decide whether to emit a space or newline.
+	cursorDevX, cursorDevY float64
 
 	// leading is the current text leading (set by TL, implied by TD).
 	leading float64
 
-	// fontSize is the current font size in user-space points.
+	// tfSize is the raw size argument from the most recent Tf operator.
+	tfSize float64
+
+	// fontSize is the effective rendered size in device-space units.
+	// Computed as tfSize × ||CTM × Tm||(x-scale) whenever Tm or the CTM
+	// changes.  Used for all gap-detection thresholds.
 	fontSize float64
 }
 
-// reposition sets both the text line origin and the cursor to (x, y) and
-// marks the state as having a valid reference position. Called by every
-// operator that moves the text position.
-func (ts *textState) reposition(x, y float64) {
-	ts.tlTx, ts.tlTy = x, y
-	ts.cursorX, ts.cursorY = x, y
+// deviceOrigin maps the current text-line-matrix origin through the CTM
+// to obtain the device-space coordinates of the start of the current line.
+func (ts *textState) deviceOrigin(gs *graphicsState) (float64, float64) {
+	combined := ts.tlm.multiply(gs.ctm)
+	return combined.transformPoint(0, 0)
+}
+
+// updateFontSize recomputes the effective device-space font size from tfSize
+// and the x-scale of the combined Tm × CTM matrix.
+func (ts *textState) updateFontSize(gs *graphicsState) {
+	if ts.tfSize == 0 {
+		ts.fontSize = 0
+		return
+	}
+	combined := ts.tm.multiply(gs.ctm)
+	scale := combined.scaleX()
+	if scale == 0 {
+		scale = 1
+	}
+	ts.fontSize = ts.tfSize * scale
+}
+
+// setTm replaces both the text matrix and the text line matrix with mat,
+// recomputes the effective font size, and marks the state as positioned.
+func (ts *textState) setTm(mat matrix3, gs *graphicsState) {
+	ts.tlm = mat
+	ts.tm = mat
+	ts.updateFontSize(gs)
 	ts.tlSet = true
 }
 
-// advanceCursor moves cursorX forward by the user-space width of the glyph
-// sequence encoded in raw bytes b:
-//
-//	userSpaceAdvance = (glyphSpaceWidth / 1000) * fontSize
-func (ts *textState) advanceCursor(b []byte) {
-	if ts.fontSize == 0 {
-		return
-	}
-	var gsWidth float64
-	if ts.currentFont != nil {
-		gsWidth = ts.currentFont.rawStringWidth(b)
-	} else {
-		gsWidth = float64(len(b)) * 500
-	}
-	ts.cursorX += gsWidth / 1000.0 * ts.fontSize
+// applyTd moves the text line matrix by the text-space offset (tx, ty)
+// (a translation appended to the current line matrix) and resets the text
+// matrix to the new line matrix.
+func (ts *textState) applyTd(tx, ty float64, gs *graphicsState) {
+	// Build a pure-translation matrix and concatenate on the right of tlm.
+	// This matches the PDF spec: Tlm′ = [1 0 0 1 tx ty] × Tlm
+	trans := matrix3{a: 1, d: 1, e: tx, f: ty}
+	ts.tlm = trans.multiply(ts.tlm)
+	ts.tm = ts.tlm
+	ts.updateFontSize(gs)
+	ts.tlSet = true
 }
 
-// emitGap compares the new text origin (newX, newY) against the current cursor
-// position and writes a separator to w when needed:
+// advanceTm moves the text matrix (not the line matrix) forward by the full
+// text-space advance of the glyph sequence encoded in raw bytes b, following
+// PDF spec §9.4.4:
 //
-//   - |newY - cursorY| > lineThreshold  →  newline
-//   - same line AND newX - cursorX > spaceThreshold  →  space
-//   - otherwise  →  nothing
+//	tx = (w₀/1000 + Tc) × Tfs          for every glyph
+//	tx += Tw × Tfs                     additionally for code 0x20 (word space)
 //
-// Always calls reposition afterwards so the cursor reflects the new origin.
-func (ts *textState) emitGap(w io.ByteWriter, newX, newY float64) {
+// Both Tc (charSpacing) and Tw (wordSpacing) are applied in text space so that
+// the cursor lands exactly where the PDF renderer would place the next glyph,
+// preventing false inter-word spaces from being inserted by emitGap.
+func (ts *textState) advanceTm(b []byte, gs *graphicsState) {
+	if ts.tfSize == 0 {
+		return
+	}
+	tx := ts.rawBytesAdvance(b)
+	adv := matrix3{a: 1, d: 1, e: tx}
+	ts.tm = adv.multiply(ts.tm)
+	combined := ts.tm.multiply(gs.ctm)
+	ts.cursorDevX, ts.cursorDevY = combined.transformPoint(0, 0)
+}
+
+// advanceTmGS is like advanceTm but accepts a pre-computed net glyph-space
+// advance (kerning already folded in) plus the original raw bytes, so that Tc
+// and Tw can be applied per character.  Used by TJ which interleaves strings
+// with kerning numbers: the kerning part is passed in gsKernAdj (already
+// accumulated as a signed glyph-space delta), while Tc/Tw are derived from b.
+func (ts *textState) advanceTmGS(gsKernAdj float64, b []byte, gs *graphicsState) {
+	if ts.tfSize == 0 {
+		return
+	}
+	// gsKernAdj is the net glyph-space advance after kerning adjustments.
+	// Convert to text space, then add per-character Tc/Tw on top.
+	tx := gsKernAdj/1000.0*ts.tfSize + ts.tcTwAdvance(b)
+	adv := matrix3{a: 1, d: 1, e: tx}
+	ts.tm = adv.multiply(ts.tm)
+	combined := ts.tm.multiply(gs.ctm)
+	ts.cursorDevX, ts.cursorDevY = combined.transformPoint(0, 0)
+}
+
+// rawBytesAdvance returns the total text-space advance for raw glyph bytes b,
+// including glyph widths scaled by tfSize plus Tc per character and Tw per
+// 0x20 word-space byte.
+func (ts *textState) rawBytesAdvance(b []byte) float64 {
+	var tx float64
+	if ts.currentFont != nil {
+		for i := 0; i < len(b); {
+			w, n := ts.currentFont.glyphAdvance(b, i)
+			tx += w/1000.0*ts.tfSize + ts.charSpacing*ts.tfSize
+			if n == 1 && b[i] == 0x20 {
+				tx += ts.wordSpacing * ts.tfSize
+			}
+			i += n
+		}
+	} else {
+		// No font loaded: assume 500-unit advance per byte, apply Tc/Tw.
+		for _, c := range b {
+			tx += 500.0/1000.0*ts.tfSize + ts.charSpacing*ts.tfSize
+			if c == 0x20 {
+				tx += ts.wordSpacing * ts.tfSize
+			}
+		}
+	}
+	return tx
+}
+
+// tcTwAdvance returns the Tc+Tw contribution (in text space) for raw bytes b,
+// without the glyph-width component. Used by advanceTmGS where the glyph
+// widths are already accounted for via the kerning-adjusted gsKernAdj.
+func (ts *textState) tcTwAdvance(b []byte) float64 {
+	var tx float64
+	if ts.currentFont != nil {
+		for i := 0; i < len(b); {
+			_, n := ts.currentFont.glyphAdvance(b, i)
+			tx += ts.charSpacing * ts.tfSize
+			if n == 1 && b[i] == 0x20 {
+				tx += ts.wordSpacing * ts.tfSize
+			}
+			i += n
+		}
+	} else {
+		for _, c := range b {
+			tx += ts.charSpacing * ts.tfSize
+			if c == 0x20 {
+				tx += ts.wordSpacing * ts.tfSize
+			}
+		}
+	}
+	return tx
+}
+
+// emitGap compares the device-space origin of the next text chunk against the
+// current cursor position and writes a separator to w when needed:
+//
+//   - |newDevY − cursorDevY| > lineThreshold  →  newline
+//   - same baseline AND gap > spaceThreshold AND gap < maxWordGap  →  space
+//
+// After emitting (or not) it resets the cursor to (newDevX, newDevY) and
+// re-syncs the text matrix cursor.
+func (ts *textState) emitGap(w io.ByteWriter, newDevX, newDevY float64) {
 	if !ts.tlSet {
-		ts.reposition(newX, newY)
+		ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 		return
 	}
 
@@ -575,30 +779,37 @@ func (ts *textState) emitGap(w io.ByteWriter, newX, newY float64) {
 		lineThreshold = 1
 	}
 
-	dy := ts.cursorY - newY // positive = moved down the page (PDF y points up)
+	dy := ts.cursorDevY - newDevY // positive = moved down the page (PDF y up)
 	if dy > lineThreshold || dy < -lineThreshold {
 		w.WriteByte('\n')
 	} else {
-		// Same baseline — check whether there is a visible gap between where
-		// the last glyph ended (cursorX) and where the next chunk starts (newX).
-		// Threshold: ~20% of font size. This clears normal kerning adjustments
-		// (±50–200 glyph units ≈ ±0.05–0.2 em) while catching word gaps
-		// (typically 200–500 glyph units ≈ 0.2–0.5 em).
+		// Same baseline — check visible gap between last glyph end and next start.
+		// Threshold ≈ 20% of font size catches word gaps while ignoring kerning.
 		spaceThreshold := ts.fontSize * 0.2
 		if spaceThreshold < 1 {
 			spaceThreshold = 1
 		}
-		if newX-ts.cursorX > spaceThreshold {
+		// Gaps > 3× fontSize are layout jumps (column breaks etc.) — no space.
+		maxWordGap := ts.fontSize * 3
+		gap := newDevX - ts.cursorDevX
+		if gap > spaceThreshold && gap < maxWordGap {
 			w.WriteByte(' ')
 		}
 	}
 
-	ts.reposition(newX, newY)
+	ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 }
 
 // extractTextFromContent parses a PDF content stream and returns plain text.
+//
+// It maintains the full 3×3 current transformation matrix (CTM) composed with
+// the text matrix (Tm) and text line matrix (Tlm) at every operator, working
+// entirely in device space.  This means rotated, scaled, and sheared text is
+// handled correctly, and the q/Q graphics-state save/restore stack is honoured
+// so nested cm operators accumulate properly.
 func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.Buffer, error) {
 	var out bytes.Buffer
+	gs := newGraphicsState()
 	ts := &textState{fontMap: fontMap}
 
 	tokens := tokenize(content)
@@ -607,24 +818,61 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 		tok := tokens[i]
 
 		switch string(tok) {
+
+		// -----------------------------------------------------------------
+		// Graphics state operators
+		// -----------------------------------------------------------------
+
+		case "q":
+			// Save the current graphics state (push CTM onto stack).
+			gs.push()
+
+		case "Q":
+			// Restore the most recently saved graphics state (pop CTM).
+			gs.pop()
+			// The font size must be recomputed against the restored CTM.
+			ts.updateFontSize(&gs)
+
+		case "cm":
+			// a b c d e f cm — concatenate matrix with the CTM.
+			// Operand order matches PDF spec: six numbers before the keyword.
+			if i >= 6 {
+				a, ea := strconv.ParseFloat(string(tokens[i-6]), 64)
+				b, eb := strconv.ParseFloat(string(tokens[i-5]), 64)
+				c, ec := strconv.ParseFloat(string(tokens[i-4]), 64)
+				d, ed := strconv.ParseFloat(string(tokens[i-3]), 64)
+				e, ee := strconv.ParseFloat(string(tokens[i-2]), 64)
+				f, ef := strconv.ParseFloat(string(tokens[i-1]), 64)
+				if ea == nil && eb == nil && ec == nil && ed == nil && ee == nil && ef == nil {
+					m := matrix3{a: a, b: b, c: c, d: d, e: e, f: f}
+					// PDF spec: new CTM = m × CTM  (m is pre-multiplied)
+					gs.ctm = m.multiply(gs.ctm)
+					ts.updateFontSize(&gs)
+				}
+			}
+
+		// -----------------------------------------------------------------
+		// Text object delimiters
+		// -----------------------------------------------------------------
+
 		case "BT":
 			ts.inBT = true
-			// Reset the text line matrix origin to (0,0) as the PDF spec
-			// requires: Td/TD offsets are relative to this origin and it
-			// starts fresh for every new text object.
-			// cursorX/cursorY are intentionally NOT reset: they carry the
-			// pen position across ET/BT boundaries so that emitGap can
-			// compare the next chunk position against where the last
-			// glyph ended and detect same-line vs new-line correctly.
-			ts.tlTx, ts.tlTy = 0, 0
+			// Reset Tm and Tlm to the identity matrix (PDF spec §9.4.1).
+			// The cursor is intentionally NOT reset so that emitGap can
+			// compare across ET/BT boundaries (common in tagged PDFs where
+			// every word gets its own BT/ET pair).
+			ts.tlm = identityMatrix()
+			ts.tm = identityMatrix()
+			ts.updateFontSize(&gs)
 
 		case "ET":
 			ts.inBT = false
-			// No newline here. All line-break decisions are made by emitGap
-			// when the next positioning operator fires. Emitting \n on every
-			// ET would split same-line chunks that happen to be in separate
-			// BT blocks (common in tagged PDFs where each word or glyph run
-			// gets its own BT/ET pair).
+			// No separator emitted here — emitGap decides when the next
+			// positioning operator fires.
+
+		// -----------------------------------------------------------------
+		// Text state operators
+		// -----------------------------------------------------------------
 
 		case "Tf":
 			// /FontName size Tf
@@ -635,10 +883,11 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 				} else {
 					ts.currentFont = nil
 				}
-				ts.fontSize, _ = strconv.ParseFloat(string(tokens[i-1]), 64)
-				if ts.fontSize < 0 {
-					ts.fontSize = -ts.fontSize
+				ts.tfSize, _ = strconv.ParseFloat(string(tokens[i-1]), 64)
+				if ts.tfSize < 0 {
+					ts.tfSize = -ts.tfSize
 				}
+				ts.updateFontSize(&gs)
 			}
 
 		case "TL":
@@ -646,58 +895,92 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 				ts.leading, _ = strconv.ParseFloat(string(tokens[i-1]), 64)
 			}
 
+		case "Tc":
+			if i >= 1 {
+				ts.charSpacing, _ = strconv.ParseFloat(string(tokens[i-1]), 64)
+			}
+
 		case "Tw":
 			if i >= 1 {
 				ts.wordSpacing, _ = strconv.ParseFloat(string(tokens[i-1]), 64)
 			}
 
+		// -----------------------------------------------------------------
+		// Text positioning operators
+		// -----------------------------------------------------------------
+
+		case "Tm":
+			// a b c d tx ty Tm — set Tm and Tlm to a new absolute matrix.
+			// All six components are required.
+			if ts.inBT && i >= 6 {
+				a, ea := strconv.ParseFloat(string(tokens[i-6]), 64)
+				b, eb := strconv.ParseFloat(string(tokens[i-5]), 64)
+				c, ec := strconv.ParseFloat(string(tokens[i-4]), 64)
+				d, ed := strconv.ParseFloat(string(tokens[i-3]), 64)
+				e, ee := strconv.ParseFloat(string(tokens[i-2]), 64)
+				f, ef := strconv.ParseFloat(string(tokens[i-1]), 64)
+				if ea == nil && eb == nil && ec == nil && ed == nil && ee == nil && ef == nil {
+					mat := matrix3{a: a, b: b, c: c, d: d, e: e, f: f}
+					// Compute the device-space origin BEFORE updating state
+					// so emitGap can compare old cursor vs new position.
+					combined := mat.multiply(gs.ctm)
+					newDevX, newDevY := combined.transformPoint(0, 0)
+					ts.setTm(mat, &gs)
+					ts.emitGap(&out, newDevX, newDevY)
+					ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
+				}
+			}
+
 		case "Td", "TD":
-			// tx ty Td — move line position by (tx, ty) relative to current
-			// line origin. TD also sets leading = -ty.
+			// tx ty Td — move text line position by (tx, ty) in text space.
+			// TD also updates leading to -ty.
 			if ts.inBT && i >= 2 {
-				dy, errY := strconv.ParseFloat(string(tokens[i-1]), 64)
-				dx, errX := strconv.ParseFloat(string(tokens[i-2]), 64)
+				ty, errY := strconv.ParseFloat(string(tokens[i-1]), 64)
+				tx, errX := strconv.ParseFloat(string(tokens[i-2]), 64)
 				if errY == nil && errX == nil {
 					if bytes.Equal(tok, []byte{'T', 'D'}) {
-						ts.leading = -dy
+						ts.leading = -ty
 					}
-					ts.emitGap(&out, ts.tlTx+dx, ts.tlTy+dy)
+					ts.applyTd(tx, ty, &gs)
+					newDevX, newDevY := ts.deviceOrigin(&gs)
+					ts.emitGap(&out, newDevX, newDevY)
+					ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				}
 			}
 
 		case "T*":
 			// Equivalent to 0 -leading Td.
 			if ts.inBT {
-				ts.emitGap(&out, 0, ts.tlTy+(-ts.leading))
+				ts.applyTd(0, -ts.leading, &gs)
+				newDevX, newDevY := ts.deviceOrigin(&gs)
+				ts.emitGap(&out, newDevX, newDevY)
+				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 			}
 
-		case "Tm":
-			// a b c d tx ty Tm — absolute position.
-			if ts.inBT && i >= 6 {
-				newTy, errY := strconv.ParseFloat(string(tokens[i-1]), 64)
-				newTx, errX := strconv.ParseFloat(string(tokens[i-2]), 64)
-				if errY == nil && errX == nil {
-					ts.emitGap(&out, newTx, newTy)
-				}
-			}
+		// -----------------------------------------------------------------
+		// Text showing operators
+		// -----------------------------------------------------------------
 
 		case "Tj":
 			if ts.inBT && i >= 1 {
 				raw, ok := parsePDFString(tokens[i-1])
 				if ok {
 					out.Write(decodeRaw(raw, ts.currentFont))
-					ts.advanceCursor(raw)
+					ts.advanceTm(raw, &gs)
 				}
 			}
 
 		case "'":
 			// Move to next line then show string.
 			if ts.inBT && i >= 1 {
-				ts.emitGap(&out, 0, ts.tlTy+(-ts.leading))
+				ts.applyTd(0, -ts.leading, &gs)
+				newDevX, newDevY := ts.deviceOrigin(&gs)
+				ts.emitGap(&out, newDevX, newDevY)
+				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				raw, ok := parsePDFString(tokens[i-1])
 				if ok {
 					out.Write(decodeRaw(raw, ts.currentFont))
-					ts.advanceCursor(raw)
+					ts.advanceTm(raw, &gs)
 				}
 			}
 
@@ -705,21 +988,23 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			// aw ac string " — set word/char spacing, move to next line, show.
 			if ts.inBT && i >= 3 {
 				ts.wordSpacing, _ = strconv.ParseFloat(string(tokens[i-3]), 64)
-				// tokens[i-2] is charSpacing (Tc) — not tracked here.
-				ts.emitGap(&out, 0, ts.tlTy+(-ts.leading))
+				ts.charSpacing, _ = strconv.ParseFloat(string(tokens[i-2]), 64)
+				ts.applyTd(0, -ts.leading, &gs)
+				newDevX, newDevY := ts.deviceOrigin(&gs)
+				ts.emitGap(&out, newDevX, newDevY)
+				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				raw, ok := parsePDFString(tokens[i-1])
 				if ok {
 					out.Write(decodeRaw(raw, ts.currentFont))
-					ts.advanceCursor(raw)
+					ts.advanceTm(raw, &gs)
 				}
 			}
 
 		case "TJ":
 			// Interleaved strings and kerning numbers.
 			if ts.inBT && i >= 1 {
-				gsAdvance := decodeTJInto(tokens[i-1], ts.currentFont, &out)
-				// Scale from glyph-space to user-space and advance cursor.
-				ts.cursorX += gsAdvance / 1000.0 * ts.fontSize
+				gsKernAdj, allRaw := decodeTJInto(tokens[i-1], ts.currentFont, &out)
+				ts.advanceTmGS(gsKernAdj, allRaw, &gs)
 			}
 		}
 
@@ -738,17 +1023,20 @@ func decodeRaw(raw []byte, f *pdfFont) []byte {
 	return f.decodeBytes(raw)
 }
 
-// decodeTJInto decodes the array operand of a TJ operator, writes the
-// decoded text to w, and returns the net advance in glyph-space units
-// (1/1000 text unit). Kerning numbers are subtracted from the advance.
-// The caller scales to user-space by multiplying by fontSize/1000.
-func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) float64 {
+// decodeTJInto decodes the array operand of a TJ operator, writes the decoded
+// text to w, and returns:
+//
+//   - gsKernAdj: net glyph-space advance after folding in all kerning numbers
+//     (positive numbers in the array reduce the advance; negative numbers
+//     increase it — PDF spec §9.4.3).
+//   - allRaw: concatenation of all raw character-code bytes across every string
+//     element in the array, used by the caller to apply Tc and Tw.
+func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) (gsKernAdj float64, allRaw []byte) {
 	tok = bytes.TrimSpace(tok)
 	if len(tok) < 2 || tok[0] != '[' || tok[len(tok)-1] != ']' {
-		return 0
+		return 0, nil
 	}
 	inner := tok[1 : len(tok)-1]
-	var gsAdvance float64
 	i := 0
 	for i < len(inner) {
 		for i < len(inner) && isWhitespaceByte(inner[i]) {
@@ -767,10 +1055,11 @@ func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) float64 {
 			if ok {
 				w.Write(decodeRaw(raw, f))
 				if f != nil {
-					gsAdvance += f.rawStringWidth(raw)
+					gsKernAdj += f.rawStringWidth(raw)
 				} else {
-					gsAdvance += float64(len(raw)) * 500
+					gsKernAdj += float64(len(raw)) * 500
 				}
+				allRaw = append(allRaw, raw...)
 			}
 			i = end + 1
 
@@ -783,25 +1072,27 @@ func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) float64 {
 			if ok {
 				w.Write(decodeRaw(raw, f))
 				if f != nil {
-					gsAdvance += f.rawStringWidth(raw)
+					gsKernAdj += f.rawStringWidth(raw)
 				} else {
-					gsAdvance += float64(len(raw)) * 500
+					gsKernAdj += float64(len(raw)) * 500
 				}
+				allRaw = append(allRaw, raw...)
 			}
 			i += end + 1
 
 		} else {
-			// Kerning number — negative values tighten spacing (subtract).
+			// Kerning number — positive values move the current point left
+			// (tighten spacing); negative values move it right (open spacing).
 			start := i
 			for i < len(inner) && !isWhitespaceByte(inner[i]) && inner[i] != '(' && inner[i] != '<' {
 				i++
 			}
 			if n, err := strconv.ParseFloat(string(inner[start:i]), 64); err == nil {
-				gsAdvance -= n
+				gsKernAdj -= n
 			}
 		}
 	}
-	return gsAdvance
+	return gsKernAdj, allRaw
 }
 
 // parsePDFString parses a PDF string literal (literal or hex form).
@@ -1235,12 +1526,6 @@ func findClosingParen(s []byte, start int) int {
 // ---------------------------------------------------------------------------
 // Post-processing
 // ---------------------------------------------------------------------------
-
-
-func isLetter(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-		(r >= '\u00C0' && r <= '\u024F')
-}
 
 // normaliseWhitespace collapses space runs, collapses newline runs, drops
 // spaces before newlines, and trims leading/trailing whitespace.
