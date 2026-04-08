@@ -587,14 +587,14 @@ type textState struct {
 	fontMap     map[string]*pdfFont
 
 	// charSpacing is the Tc text state parameter (set by the "Tc" operator and
-	// by the " operator). It is added to the advance of every glyph in text
-	// space units. See PDF spec §9.3.2.
+	// by the " operator).  It is added to the advance of every glyph in text
+	// space units.  PDF spec §9.3.2.
 	charSpacing float64
 
 	// wordSpacing is the Tw text state parameter (set by the "Tw" operator and
-	// by the " operator). It is added to the advance of every glyph whose
+	// by the " operator).  It is added to the advance of every glyph whose
 	// character code is 0x20 (the single-byte word-space code) in text space
-	// units. See PDF spec §9.3.3.
+	// units.  PDF spec §9.3.3.
 	wordSpacing float64
 
 	// Text line matrix (Tlm) and text matrix (Tm) per PDF spec §9.4.
@@ -675,7 +675,7 @@ func (ts *textState) applyTd(tx, ty float64, gs *graphicsState) {
 // PDF spec §9.4.4:
 //
 //	tx = (w₀/1000 + Tc) × Tfs          for every glyph
-//	tx += Tw × Tfs                     additionally for code 0x20 (word space)
+//	tx += Tw × Tfs                       additionally for code 0x20 (word space)
 //
 // Both Tc (charSpacing) and Tw (wordSpacing) are applied in text space so that
 // the cursor lands exactly where the PDF renderer would place the next glyph,
@@ -736,7 +736,7 @@ func (ts *textState) rawBytesAdvance(b []byte) float64 {
 }
 
 // tcTwAdvance returns the Tc+Tw contribution (in text space) for raw bytes b,
-// without the glyph-width component. Used by advanceTmGS where the glyph
+// without the glyph-width component.  Used by advanceTmGS where the glyph
 // widths are already accounted for via the kerning-adjusted gsKernAdj.
 func (ts *textState) tcTwAdvance(b []byte) float64 {
 	var tx float64
@@ -807,16 +807,38 @@ func (ts *textState) emitGap(w io.ByteWriter, newDevX, newDevY float64) {
 // entirely in device space.  This means rotated, scaled, and sheared text is
 // handled correctly, and the q/Q graphics-state save/restore stack is honoured
 // so nested cm operators accumulate properly.
+//
+// Tokens are produced on-demand by tokenIter and kept in a fixed-size sliding
+// window (ring buffer) so that operator handlers can still look back at their
+// operands by negative offset, matching PDF's postfix convention, without
+// allocating a full token slice for the content stream.
 func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.Buffer, error) {
 	var out bytes.Buffer
 	gs := newGraphicsState()
 	ts := &textState{fontMap: fontMap}
 
-	tokens := tokenize(content)
-	i := 0
-	for i < len(tokens) {
-		tok := tokens[i]
+	// winSize must be > the maximum operand count of any operator we handle.
+	// The largest is Tm/cm with 6 operands, so 7 slots is sufficient.
+	// We use 8 to keep the size a power of two for cheap modulo arithmetic.
+	const winSize = 8
+	const winMask = winSize - 1
+	var win [winSize][]byte // ring buffer of the last winSize tokens
+	pos := 0                // total tokens seen so far (before storing current tok)
 
+	// atBack returns the token that arrived n steps before the current operator
+	// (n=1 is the immediately preceding token, n=6 is six back), matching
+	// the tokens[i-n] indexing used in the original implementation.
+	// Must only be called during token dispatch, before pos is incremented
+	// for the current token.
+	atBack := func(n int) []byte {
+		return win[(pos-n)&winMask]
+	}
+
+	for tok := range tokenIter(content) {
+		// Store the incoming token into the ring AFTER the dispatch so that
+		// atBack(n) addresses the n-th preceding token from the operator's
+		// perspective. The operator keyword itself is in tok; its operands
+		// are atBack(1) … atBack(6) (stored in earlier iterations).
 		switch string(tok) {
 
 		// -----------------------------------------------------------------
@@ -835,14 +857,13 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 
 		case "cm":
 			// a b c d e f cm — concatenate matrix with the CTM.
-			// Operand order matches PDF spec: six numbers before the keyword.
-			if i >= 6 {
-				a, ea := strconv.ParseFloat(string(tokens[i-6]), 64)
-				b, eb := strconv.ParseFloat(string(tokens[i-5]), 64)
-				c, ec := strconv.ParseFloat(string(tokens[i-4]), 64)
-				d, ed := strconv.ParseFloat(string(tokens[i-3]), 64)
-				e, ee := strconv.ParseFloat(string(tokens[i-2]), 64)
-				f, ef := strconv.ParseFloat(string(tokens[i-1]), 64)
+			if pos >= 7 {
+				a, ea := strconv.ParseFloat(string(atBack(6)), 64)
+				b, eb := strconv.ParseFloat(string(atBack(5)), 64)
+				c, ec := strconv.ParseFloat(string(atBack(4)), 64)
+				d, ed := strconv.ParseFloat(string(atBack(3)), 64)
+				e, ee := strconv.ParseFloat(string(atBack(2)), 64)
+				f, ef := strconv.ParseFloat(string(atBack(1)), 64)
 				if ea == nil && eb == nil && ec == nil && ed == nil && ee == nil && ef == nil {
 					m := matrix3{a: a, b: b, c: c, d: d, e: e, f: f}
 					// PDF spec: new CTM = m × CTM  (m is pre-multiplied)
@@ -876,14 +897,14 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 
 		case "Tf":
 			// /FontName size Tf
-			if i >= 2 {
-				fontName := stripSlash(tokens[i-2])
+			if pos >= 3 {
+				fontName := stripSlash(atBack(2))
 				if f, ok := fontMap[string(fontName)]; ok {
 					ts.currentFont = f
 				} else {
 					ts.currentFont = nil
 				}
-				ts.tfSize, _ = strconv.ParseFloat(string(tokens[i-1]), 64)
+				ts.tfSize, _ = strconv.ParseFloat(string(atBack(1)), 64)
 				if ts.tfSize < 0 {
 					ts.tfSize = -ts.tfSize
 				}
@@ -891,18 +912,18 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			}
 
 		case "TL":
-			if i >= 1 {
-				ts.leading, _ = strconv.ParseFloat(string(tokens[i-1]), 64)
+			if pos >= 2 {
+				ts.leading, _ = strconv.ParseFloat(string(atBack(1)), 64)
 			}
 
 		case "Tc":
-			if i >= 1 {
-				ts.charSpacing, _ = strconv.ParseFloat(string(tokens[i-1]), 64)
+			if pos >= 2 {
+				ts.charSpacing, _ = strconv.ParseFloat(string(atBack(1)), 64)
 			}
 
 		case "Tw":
-			if i >= 1 {
-				ts.wordSpacing, _ = strconv.ParseFloat(string(tokens[i-1]), 64)
+			if pos >= 2 {
+				ts.wordSpacing, _ = strconv.ParseFloat(string(atBack(1)), 64)
 			}
 
 		// -----------------------------------------------------------------
@@ -911,14 +932,13 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 
 		case "Tm":
 			// a b c d tx ty Tm — set Tm and Tlm to a new absolute matrix.
-			// All six components are required.
-			if ts.inBT && i >= 6 {
-				a, ea := strconv.ParseFloat(string(tokens[i-6]), 64)
-				b, eb := strconv.ParseFloat(string(tokens[i-5]), 64)
-				c, ec := strconv.ParseFloat(string(tokens[i-4]), 64)
-				d, ed := strconv.ParseFloat(string(tokens[i-3]), 64)
-				e, ee := strconv.ParseFloat(string(tokens[i-2]), 64)
-				f, ef := strconv.ParseFloat(string(tokens[i-1]), 64)
+			if ts.inBT && pos >= 7 {
+				a, ea := strconv.ParseFloat(string(atBack(6)), 64)
+				b, eb := strconv.ParseFloat(string(atBack(5)), 64)
+				c, ec := strconv.ParseFloat(string(atBack(4)), 64)
+				d, ed := strconv.ParseFloat(string(atBack(3)), 64)
+				e, ee := strconv.ParseFloat(string(atBack(2)), 64)
+				f, ef := strconv.ParseFloat(string(atBack(1)), 64)
 				if ea == nil && eb == nil && ec == nil && ed == nil && ee == nil && ef == nil {
 					mat := matrix3{a: a, b: b, c: c, d: d, e: e, f: f}
 					// Compute the device-space origin BEFORE updating state
@@ -934,9 +954,9 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 		case "Td", "TD":
 			// tx ty Td — move text line position by (tx, ty) in text space.
 			// TD also updates leading to -ty.
-			if ts.inBT && i >= 2 {
-				ty, errY := strconv.ParseFloat(string(tokens[i-1]), 64)
-				tx, errX := strconv.ParseFloat(string(tokens[i-2]), 64)
+			if ts.inBT && pos >= 3 {
+				ty, errY := strconv.ParseFloat(string(atBack(1)), 64)
+				tx, errX := strconv.ParseFloat(string(atBack(2)), 64)
 				if errY == nil && errX == nil {
 					if bytes.Equal(tok, []byte{'T', 'D'}) {
 						ts.leading = -ty
@@ -962,8 +982,8 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 		// -----------------------------------------------------------------
 
 		case "Tj":
-			if ts.inBT && i >= 1 {
-				raw, ok := parsePDFString(tokens[i-1])
+			if ts.inBT && pos >= 2 {
+				raw, ok := parsePDFString(atBack(1))
 				if ok {
 					out.Write(decodeRaw(raw, ts.currentFont))
 					ts.advanceTm(raw, &gs)
@@ -972,12 +992,12 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 
 		case "'":
 			// Move to next line then show string.
-			if ts.inBT && i >= 1 {
+			if ts.inBT && pos >= 2 {
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
 				ts.emitGap(&out, newDevX, newDevY)
 				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
-				raw, ok := parsePDFString(tokens[i-1])
+				raw, ok := parsePDFString(atBack(1))
 				if ok {
 					out.Write(decodeRaw(raw, ts.currentFont))
 					ts.advanceTm(raw, &gs)
@@ -986,14 +1006,14 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 
 		case "\"":
 			// aw ac string " — set word/char spacing, move to next line, show.
-			if ts.inBT && i >= 3 {
-				ts.wordSpacing, _ = strconv.ParseFloat(string(tokens[i-3]), 64)
-				ts.charSpacing, _ = strconv.ParseFloat(string(tokens[i-2]), 64)
+			if ts.inBT && pos >= 4 {
+				ts.wordSpacing, _ = strconv.ParseFloat(string(atBack(3)), 64)
+				ts.charSpacing, _ = strconv.ParseFloat(string(atBack(2)), 64)
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
 				ts.emitGap(&out, newDevX, newDevY)
 				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
-				raw, ok := parsePDFString(tokens[i-1])
+				raw, ok := parsePDFString(atBack(1))
 				if ok {
 					out.Write(decodeRaw(raw, ts.currentFont))
 					ts.advanceTm(raw, &gs)
@@ -1002,13 +1022,16 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 
 		case "TJ":
 			// Interleaved strings and kerning numbers.
-			if ts.inBT && i >= 1 {
-				gsKernAdj, allRaw := decodeTJInto(tokens[i-1], ts.currentFont, &out)
+			if ts.inBT && pos >= 2 {
+				gsKernAdj, allRaw := decodeTJInto(atBack(1), ts.currentFont, &out)
 				ts.advanceTmGS(gsKernAdj, allRaw, &gs)
 			}
 		}
 
-		i++
+		// Append current token to the ring so it becomes available as
+		// atBack(1) for the next operator.
+		win[pos&winMask] = tok
+		pos++
 	}
 	out = normaliseWhitespace(out.Bytes())
 	return out, nil
@@ -1324,171 +1347,200 @@ func parseUnicodeHexToken(s string) (string, error) {
 // Tokenizer
 // ---------------------------------------------------------------------------
 
-func tokenize(content []byte) [][]byte {
-	var tokens [][]byte
-	i, n := 0, len(content)
+// tokenIter is a zero-allocation push-style iterator over a PDF content
+// stream. Instead of materialising the full token slice upfront it scans
+// the raw bytes on demand, yielding one token at a time to a caller-supplied
+// yield function.
+//
+// The iterator is used via the range-over-func pattern introduced in Go 1.23:
+//
+//	for tok := range tokenIter(content) { … }
+//
+// Comments (%) are consumed silently and never yielded.
+func tokenIter(content []byte) func(yield func([]byte) bool) {
+	return func(yield func([]byte) bool) {
+		i, n := 0, len(content)
 
-	for i < n {
-		for i < n && isWhitespaceByte(content[i]) {
-			i++
-		}
-		if i >= n {
-			break
-		}
-
-		switch content[i] {
-		case '%':
-			for i < n && content[i] != '\n' && content[i] != '\r' {
+		for i < n {
+			// Skip whitespace.
+			for i < n && isWhitespaceByte(content[i]) {
 				i++
 			}
-
-		case '(':
-			start := i
-			depth := 0
-			i++
-			for i < n {
-				if content[i] == '\\' {
-					i += 2
-					continue
-				}
-				if content[i] == '(' {
-					depth++
-				} else if content[i] == ')' {
-					if depth == 0 {
-						i++
-						break
-					}
-					depth--
-				}
-				i++
+			if i >= n {
+				return
 			}
-			tokens = append(tokens, content[start:i])
 
-		case '<':
-			if i+1 < n && content[i+1] == '<' {
-				// Dict — collect until the matching >>, skipping over nested
-				// hex strings (<...>) so that <</Lang<6465>>> is handled
-				// correctly and does not cause the hex-string branch to stall.
+			switch content[i] {
+			case '%':
+				// Comment — skip to end of line.
+				for i < n && content[i] != '\n' && content[i] != '\r' {
+					i++
+				}
+
+			case '(':
+				// Literal string: balanced parens, backslash escapes.
 				start := i
-				i += 2
-				depth := 1
-				for i < n && depth > 0 {
-					switch content[i] {
-					case '<':
-						if i+1 < n && content[i+1] == '<' {
-							depth++
-							i += 2
-						} else {
+				depth := 0
+				i++
+				for i < n {
+					if content[i] == '\\' {
+						i += 2
+						continue
+					}
+					if content[i] == '(' {
+						depth++
+					} else if content[i] == ')' {
+						if depth == 0 {
 							i++
-							for i < n && content[i] != '>' {
+							break
+						}
+						depth--
+					}
+					i++
+				}
+				if !yield(content[start:i]) {
+					return
+				}
+
+			case '<':
+				if i+1 < n && content[i+1] == '<' {
+					// Dict — collect until matching >>, skipping nested hex
+					// strings (<...>) so that <</Lang<6465>>> is handled
+					// correctly and does not stall the hex-string branch.
+					start := i
+					i += 2
+					depth := 1
+					for i < n && depth > 0 {
+						switch content[i] {
+						case '<':
+							if i+1 < n && content[i+1] == '<' {
+								depth++
+								i += 2
+							} else {
+								i++
+								for i < n && content[i] != '>' {
+									i++
+								}
+								if i < n {
+									i++
+								}
+							}
+						case '>':
+							if i+1 < n && content[i+1] == '>' {
+								depth--
+								i += 2
+							} else {
 								i++
 							}
-							if i < n {
+						case '(':
+							i++
+							pdepth := 0
+							for i < n {
+								if content[i] == '\\' {
+									i += 2
+									continue
+								}
+								if content[i] == '(' {
+									pdepth++
+								} else if content[i] == ')' {
+									if pdepth == 0 {
+										i++
+										break
+									}
+									pdepth--
+								}
 								i++
 							}
-						}
-					case '>':
-						if i+1 < n && content[i+1] == '>' {
-							depth--
-							i += 2
-						} else {
+						default:
 							i++
 						}
-					case '(':
+					}
+					if !yield(content[start:i]) {
+						return
+					}
+				} else {
+					// Hex string.
+					start := i
+					i++
+					for i < n && content[i] != '>' {
 						i++
-						pdepth := 0
+					}
+					if i < n {
+						i++
+					}
+					if !yield(content[start:i]) {
+						return
+					}
+				}
+
+			case '[':
+				// Array: collect everything up to the matching ']', honouring
+				// nested arrays and literal strings inside the array.
+				start := i
+				depth := 0
+				i++
+				for i < n {
+					if content[i] == '(' {
+						i++
+						id := 0
 						for i < n {
 							if content[i] == '\\' {
 								i += 2
 								continue
 							}
 							if content[i] == '(' {
-								pdepth++
+								id++
 							} else if content[i] == ')' {
-								if pdepth == 0 {
+								if id == 0 {
 									i++
 									break
 								}
-								pdepth--
+								id--
 							}
 							i++
 						}
-					default:
-						i++
+						continue
 					}
+					if content[i] == '[' {
+						depth++
+					} else if content[i] == ']' {
+						if depth == 0 {
+							i++
+							break
+						}
+						depth--
+					}
+					i++
 				}
-				tokens = append(tokens, content[start:i])
-			} else {
+				if !yield(content[start:i]) {
+					return
+				}
+
+			case '/':
+				// Name object.
 				start := i
 				i++
-				for i < n && content[i] != '>' {
+				for i < n && !isWhitespaceByte(content[i]) && !isDelimiter(content[i]) {
 					i++
 				}
-				if i < n {
-					i++
+				if !yield(content[start:i]) {
+					return
 				}
-				tokens = append(tokens, content[start:i])
-			}
 
-		case '[':
-			start := i
-			depth := 0
-			i++
-			for i < n {
-				if content[i] == '(' {
+			default:
+				// Number, operator, or keyword.
+				start := i
+				for i < n && !isWhitespaceByte(content[i]) && !isDelimiter(content[i]) {
 					i++
-					id := 0
-					for i < n {
-						if content[i] == '\\' {
-							i += 2
-							continue
-						}
-						if content[i] == '(' {
-							id++
-						} else if content[i] == ')' {
-							if id == 0 {
-								i++
-								break
-							}
-							id--
-						}
-						i++
+				}
+				if i > start {
+					if !yield(content[start:i]) {
+						return
 					}
-					continue
 				}
-				if content[i] == '[' {
-					depth++
-				} else if content[i] == ']' {
-					if depth == 0 {
-						i++
-						break
-					}
-					depth--
-				}
-				i++
-			}
-			tokens = append(tokens, content[start:i])
-
-		case '/':
-			start := i
-			i++
-			for i < n && !isWhitespaceByte(content[i]) && !isDelimiter(content[i]) {
-				i++
-			}
-			tokens = append(tokens, content[start:i])
-
-		default:
-			start := i
-			for i < n && !isWhitespaceByte(content[i]) && !isDelimiter(content[i]) {
-				i++
-			}
-			if i > start {
-				tokens = append(tokens, content[start:i])
 			}
 		}
 	}
-
-	return tokens
 }
 
 func isWhitespaceByte(b byte) bool {
