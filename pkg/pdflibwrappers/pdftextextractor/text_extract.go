@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf16"
+	"unicode/utf8"
+	"unsafe"
 
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/types"
@@ -231,39 +233,37 @@ func (f *pdfFont) rawStringWidth(b []byte) float64 {
 }
 
 // decodeBytes converts raw character-code bytes to UTF-8 using the font's
-// encoding tables.
-func (f *pdfFont) decodeBytes(b []byte) []byte {
-	var sb bytes.Buffer
+// encoding tables, writing the result directly into dst.
+func (f *pdfFont) decodeBytes(b []byte, dst *bytes.Buffer) {
 	for i := 0; i < len(b); {
 		if f.toUnicode != nil && i+1 < len(b) {
 			code := (uint16(b[i]) << 8) | uint16(b[i+1])
 			if s, ok := f.toUnicode[code]; ok {
-				sb.WriteString(s)
+				dst.WriteString(s)
 				i += 2
 				continue
 			}
 		}
 		if f.toUnicode != nil {
 			if s, ok := f.toUnicode[uint16(b[i])]; ok {
-				sb.WriteString(s)
+				dst.WriteString(s)
 				i++
 				continue
 			}
 		}
 		if f.encoding != nil {
 			if r, ok := f.encoding[b[i]]; ok {
-				sb.WriteRune(r)
+				dst.WriteRune(r)
 				i++
 				continue
 			}
 		}
 		r := rune(b[i])
 		if r >= 0x20 && r != 0x7f {
-			sb.WriteRune(r)
+			dst.WriteRune(r)
 		}
 		i++
 	}
-	return sb.Bytes()
 }
 
 // buildFontMap inspects a page resource dict and returns a map from PDF font
@@ -714,21 +714,23 @@ func (ts *textState) advanceTmGS(gsKernAdj float64, b []byte, gs *graphicsState)
 // 0x20 word-space byte.
 func (ts *textState) rawBytesAdvance(b []byte) float64 {
 	var tx float64
+	tcf := ts.charSpacing * ts.tfSize
+	twf := ts.wordSpacing * ts.tfSize
 	if ts.currentFont != nil {
 		for i := 0; i < len(b); {
 			w, n := ts.currentFont.glyphAdvance(b, i)
-			tx += w/1000.0*ts.tfSize + ts.charSpacing*ts.tfSize
+			tx += w/1000.0*ts.tfSize + tcf
 			if n == 1 && b[i] == 0x20 {
-				tx += ts.wordSpacing * ts.tfSize
+				tx += twf
 			}
 			i += n
 		}
 	} else {
 		// No font loaded: assume 500-unit advance per byte, apply Tc/Tw.
 		for _, c := range b {
-			tx += 500.0/1000.0*ts.tfSize + ts.charSpacing*ts.tfSize
+			tx += 500.0/1000.0*ts.tfSize + tcf
 			if c == 0x20 {
-				tx += ts.wordSpacing * ts.tfSize
+				tx += twf
 			}
 		}
 	}
@@ -739,21 +741,34 @@ func (ts *textState) rawBytesAdvance(b []byte) float64 {
 // without the glyph-width component.  Used by advanceTmGS where the glyph
 // widths are already accounted for via the kerning-adjusted gsKernAdj.
 func (ts *textState) tcTwAdvance(b []byte) float64 {
+	if ts.charSpacing == 0 && ts.wordSpacing == 0 {
+		return 0
+	}
 	var tx float64
-	if ts.currentFont != nil {
+	tcf := ts.charSpacing * ts.tfSize
+	twf := ts.wordSpacing * ts.tfSize
+	if ts.currentFont != nil && ts.currentFont.widths != nil {
+		// Composite font: step by 1 or 2 bytes depending on whether a 2-byte
+		// code exists.  Word space only fires on single-byte 0x20.
 		for i := 0; i < len(b); {
-			_, n := ts.currentFont.glyphAdvance(b, i)
-			tx += ts.charSpacing * ts.tfSize
+			n := 1
+			if i+1 < len(b) {
+				if _, ok := ts.currentFont.widths[(uint16(b[i])<<8)|uint16(b[i+1])]; ok {
+					n = 2
+				}
+			}
+			tx += tcf
 			if n == 1 && b[i] == 0x20 {
-				tx += ts.wordSpacing * ts.tfSize
+				tx += twf
 			}
 			i += n
 		}
 	} else {
+		// Simple font or no font: every byte is one character.
 		for _, c := range b {
-			tx += ts.charSpacing * ts.tfSize
+			tx += tcf
 			if c == 0x20 {
-				tx += ts.wordSpacing * ts.tfSize
+				tx += twf
 			}
 		}
 	}
@@ -798,6 +813,16 @@ func (ts *textState) emitGap(w io.ByteWriter, newDevX, newDevY float64) {
 	}
 
 	ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
+}
+
+// parseFloatBytes parses a float from a byte slice without allocating a string.
+// It uses an unsafe string view that is valid only for the duration of the call
+// — safe here because strconv.ParseFloat does not retain the string.
+func parseFloatBytes(b []byte) (float64, error) {
+	if len(b) == 0 {
+		return 0, strconv.ErrSyntax
+	}
+	return strconv.ParseFloat(unsafe.String(unsafe.SliceData(b), len(b)), 64)
 }
 
 // extractTextFromContent parses a PDF content stream and returns plain text.
@@ -858,12 +883,12 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 		case "cm":
 			// a b c d e f cm — concatenate matrix with the CTM.
 			if pos >= 7 {
-				a, ea := strconv.ParseFloat(string(atBack(6)), 64)
-				b, eb := strconv.ParseFloat(string(atBack(5)), 64)
-				c, ec := strconv.ParseFloat(string(atBack(4)), 64)
-				d, ed := strconv.ParseFloat(string(atBack(3)), 64)
-				e, ee := strconv.ParseFloat(string(atBack(2)), 64)
-				f, ef := strconv.ParseFloat(string(atBack(1)), 64)
+				a, ea := parseFloatBytes(atBack(6))
+				b, eb := parseFloatBytes(atBack(5))
+				c, ec := parseFloatBytes(atBack(4))
+				d, ed := parseFloatBytes(atBack(3))
+				e, ee := parseFloatBytes(atBack(2))
+				f, ef := parseFloatBytes(atBack(1))
 				if ea == nil && eb == nil && ec == nil && ed == nil && ee == nil && ef == nil {
 					m := matrix3{a: a, b: b, c: c, d: d, e: e, f: f}
 					// PDF spec: new CTM = m × CTM  (m is pre-multiplied)
@@ -904,7 +929,7 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 				} else {
 					ts.currentFont = nil
 				}
-				ts.tfSize, _ = strconv.ParseFloat(string(atBack(1)), 64)
+				ts.tfSize, _ = parseFloatBytes(atBack(1))
 				if ts.tfSize < 0 {
 					ts.tfSize = -ts.tfSize
 				}
@@ -913,17 +938,17 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 
 		case "TL":
 			if pos >= 2 {
-				ts.leading, _ = strconv.ParseFloat(string(atBack(1)), 64)
+				ts.leading, _ = parseFloatBytes(atBack(1))
 			}
 
 		case "Tc":
 			if pos >= 2 {
-				ts.charSpacing, _ = strconv.ParseFloat(string(atBack(1)), 64)
+				ts.charSpacing, _ = parseFloatBytes(atBack(1))
 			}
 
 		case "Tw":
 			if pos >= 2 {
-				ts.wordSpacing, _ = strconv.ParseFloat(string(atBack(1)), 64)
+				ts.wordSpacing, _ = parseFloatBytes(atBack(1))
 			}
 
 		// -----------------------------------------------------------------
@@ -933,12 +958,12 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 		case "Tm":
 			// a b c d tx ty Tm — set Tm and Tlm to a new absolute matrix.
 			if ts.inBT && pos >= 7 {
-				a, ea := strconv.ParseFloat(string(atBack(6)), 64)
-				b, eb := strconv.ParseFloat(string(atBack(5)), 64)
-				c, ec := strconv.ParseFloat(string(atBack(4)), 64)
-				d, ed := strconv.ParseFloat(string(atBack(3)), 64)
-				e, ee := strconv.ParseFloat(string(atBack(2)), 64)
-				f, ef := strconv.ParseFloat(string(atBack(1)), 64)
+				a, ea := parseFloatBytes(atBack(6))
+				b, eb := parseFloatBytes(atBack(5))
+				c, ec := parseFloatBytes(atBack(4))
+				d, ed := parseFloatBytes(atBack(3))
+				e, ee := parseFloatBytes(atBack(2))
+				f, ef := parseFloatBytes(atBack(1))
 				if ea == nil && eb == nil && ec == nil && ed == nil && ee == nil && ef == nil {
 					mat := matrix3{a: a, b: b, c: c, d: d, e: e, f: f}
 					// Compute the device-space origin BEFORE updating state
@@ -955,8 +980,8 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			// tx ty Td — move text line position by (tx, ty) in text space.
 			// TD also updates leading to -ty.
 			if ts.inBT && pos >= 3 {
-				ty, errY := strconv.ParseFloat(string(atBack(1)), 64)
-				tx, errX := strconv.ParseFloat(string(atBack(2)), 64)
+				ty, errY := parseFloatBytes(atBack(1))
+				tx, errX := parseFloatBytes(atBack(2))
 				if errY == nil && errX == nil {
 					if bytes.Equal(tok, []byte{'T', 'D'}) {
 						ts.leading = -ty
@@ -985,7 +1010,7 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			if ts.inBT && pos >= 2 {
 				raw, ok := parsePDFString(atBack(1))
 				if ok {
-					out.Write(decodeRaw(raw, ts.currentFont))
+					decodeRaw(raw, ts.currentFont, &out)
 					ts.advanceTm(raw, &gs)
 				}
 			}
@@ -999,7 +1024,7 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				raw, ok := parsePDFString(atBack(1))
 				if ok {
-					out.Write(decodeRaw(raw, ts.currentFont))
+					decodeRaw(raw, ts.currentFont, &out)
 					ts.advanceTm(raw, &gs)
 				}
 			}
@@ -1007,15 +1032,15 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 		case "\"":
 			// aw ac string " — set word/char spacing, move to next line, show.
 			if ts.inBT && pos >= 4 {
-				ts.wordSpacing, _ = strconv.ParseFloat(string(atBack(3)), 64)
-				ts.charSpacing, _ = strconv.ParseFloat(string(atBack(2)), 64)
+				ts.wordSpacing, _ = parseFloatBytes(atBack(3))
+				ts.charSpacing, _ = parseFloatBytes(atBack(2))
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
 				ts.emitGap(&out, newDevX, newDevY)
 				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				raw, ok := parsePDFString(atBack(1))
 				if ok {
-					out.Write(decodeRaw(raw, ts.currentFont))
+					decodeRaw(raw, ts.currentFont, &out)
 					ts.advanceTm(raw, &gs)
 				}
 			}
@@ -1038,12 +1063,13 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 }
 
 // decodeRaw decodes raw PDF string bytes to UTF-8 via the font's tables,
-// falling back to Latin-1 when no font is active.
-func decodeRaw(raw []byte, f *pdfFont) []byte {
+// falling back to Latin-1 when no font is active, writing directly into dst.
+func decodeRaw(raw []byte, f *pdfFont, dst *bytes.Buffer) {
 	if f == nil {
-		return decodeLatin1(raw)
+		decodeLatin1(raw, dst)
+		return
 	}
-	return f.decodeBytes(raw)
+	f.decodeBytes(raw, dst)
 }
 
 // decodeTJInto decodes the array operand of a TJ operator, writes the decoded
@@ -1060,6 +1086,7 @@ func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) (gsKernAdj float64, a
 		return 0, nil
 	}
 	inner := tok[1 : len(tok)-1]
+	allRaw = make([]byte, 0, len(inner)) // upper-bound pre-allocation
 	i := 0
 	for i < len(inner) {
 		for i < len(inner) && isWhitespaceByte(inner[i]) {
@@ -1076,7 +1103,7 @@ func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) (gsKernAdj float64, a
 			}
 			raw, ok := parsePDFString(inner[i : end+1])
 			if ok {
-				w.Write(decodeRaw(raw, f))
+				decodeRaw(raw, f, w)
 				if f != nil {
 					gsKernAdj += f.rawStringWidth(raw)
 				} else {
@@ -1093,7 +1120,7 @@ func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) (gsKernAdj float64, a
 			}
 			raw, ok := parsePDFString(inner[i : i+end+1])
 			if ok {
-				w.Write(decodeRaw(raw, f))
+				decodeRaw(raw, f, w)
 				if f != nil {
 					gsKernAdj += f.rawStringWidth(raw)
 				} else {
@@ -1110,7 +1137,7 @@ func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) (gsKernAdj float64, a
 			for i < len(inner) && !isWhitespaceByte(inner[i]) && inner[i] != '(' && inner[i] != '<' {
 				i++
 			}
-			if n, err := strconv.ParseFloat(string(inner[start:i]), 64); err == nil {
+			if n, err := parseFloatBytes(inner[start:i]); err == nil {
 				gsKernAdj -= n
 			}
 		}
@@ -1128,76 +1155,88 @@ func parsePDFString(s []byte) ([]byte, bool) {
 		return unescapePDFLiteralString(s[1 : len(s)-1]), true
 	}
 	if s[0] == '<' && s[len(s)-1] == '>' {
-		inner := bytes.ReplaceAll(s[1:len(s)-1], []byte{' '}, []byte{})
-		inner = bytes.ReplaceAll(inner, []byte{'\n'}, []byte{})
-		inner = bytes.ReplaceAll(inner, []byte{'\r'}, []byte{})
-		if len(inner)%2 != 0 {
-			inner = append(inner, '0')
+		// Strip all whitespace from the hex body in a single pass into a
+		// reused stack buffer, avoiding the three-chain ReplaceAll that each
+		// allocates. The result is at most (len(s)-2) bytes so it fits in a
+		// slice grown once from an initial nil.
+		body := s[1 : len(s)-1]
+		filtered := make([]byte, 0, len(body))
+		for _, b := range body {
+			if b != ' ' && b != '\t' && b != '\n' && b != '\r' && b != '\f' {
+				filtered = append(filtered, b)
+			}
 		}
-		b := make([]byte, len(inner)/2)
-		if _, err := hex.Decode(b, inner); err != nil {
+		if len(filtered)%2 != 0 {
+			filtered = append(filtered, '0')
+		}
+		out := make([]byte, len(filtered)/2)
+		if _, err := hex.Decode(out, filtered); err != nil {
 			return nil, false
 		}
-		return b, true
+		return out, true
 	}
 	return nil, false
 }
 
-// unescapePDFLiteralString unescapes a PDF literal string body (without outer parens).
+// unescapePDFLiteralString unescapes a PDF literal string body (without outer
+// parens). If the string contains no backslash escapes the original slice is
+// returned directly with no allocation.
 func unescapePDFLiteralString(s []byte) []byte {
-	var buf bytes.Buffer
+	// Fast path: no escape sequences — return the slice as-is.
+	if bytes.IndexByte(s, '\\') < 0 {
+		return s
+	}
+	buf := make([]byte, 0, len(s)) // upper-bound pre-allocation
 	i := 0
 	for i < len(s) {
 		if s[i] == '\\' && i+1 < len(s) {
 			i++
 			switch s[i] {
 			case 'n':
-				buf.WriteByte('\n')
+				buf = append(buf, '\n')
 			case 'r':
-				buf.WriteByte('\r')
+				buf = append(buf, '\r')
 			case 't':
-				buf.WriteByte('\t')
+				buf = append(buf, '\t')
 			case 'b':
-				buf.WriteByte('\b')
+				buf = append(buf, '\b')
 			case 'f':
-				buf.WriteByte('\f')
+				buf = append(buf, '\f')
 			case '(', ')', '\\':
-				buf.WriteByte(s[i])
+				buf = append(buf, s[i])
 			default:
 				if s[i] >= '0' && s[i] <= '7' {
-					octal := string(s[i])
+					val := int(s[i] - '0')
 					if i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '7' {
 						i++
-						octal += string(s[i])
+						val = val*8 + int(s[i]-'0')
 						if i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '7' {
 							i++
-							octal += string(s[i])
+							val = val*8 + int(s[i]-'0')
 						}
 					}
-					val, _ := strconv.ParseInt(octal, 8, 16)
-					buf.WriteByte(byte(val))
+					buf = append(buf, byte(val))
 				} else {
-					buf.WriteByte(s[i])
+					buf = append(buf, s[i])
 				}
 			}
 		} else {
-			buf.WriteByte(s[i])
+			buf = append(buf, s[i])
 		}
 		i++
 	}
-	return buf.Bytes()
+	return buf
 }
 
-// decodeLatin1 converts bytes to UTF-8 using Latin-1, filtering controls.
-func decodeLatin1(b []byte) []byte {
-	var sb bytes.Buffer
+// decodeLatin1 converts bytes to UTF-8 using Latin-1, filtering controls,
+// writing directly into dst.
+func decodeLatin1(b []byte, dst *bytes.Buffer) {
 	for _, c := range b {
 		r := rune(c)
 		if r >= 0x20 && r != 0x7f {
-			sb.WriteRune(r)
+			dst.WriteRune(r)
 		}
 	}
-	return sb.Bytes()
 }
 
 // ---------------------------------------------------------------------------
@@ -1583,15 +1622,18 @@ func findClosingParen(s []byte, start int) int {
 // spaces before newlines, and trims leading/trailing whitespace.
 func normaliseWhitespace(s []byte) bytes.Buffer {
 	var sb bytes.Buffer
+	sb.Grow(len(s)) // at most as long as the input
 	prevNewline := false
 	pendingSpace := false
 
-	for _, r := range bytes.Runes(s) {
+	for len(s) > 0 {
+		r, size := utf8.DecodeRune(s)
+		s = s[size:]
 		switch r {
 		case '\n', '\r':
 			pendingSpace = false
 			if !prevNewline {
-				sb.WriteRune('\n')
+				sb.WriteByte('\n')
 			}
 			prevNewline = true
 		case ' ', '\t':
@@ -1600,7 +1642,7 @@ func normaliseWhitespace(s []byte) bytes.Buffer {
 			}
 		default:
 			if pendingSpace {
-				sb.WriteRune(' ')
+				sb.WriteByte(' ')
 				pendingSpace = false
 			}
 			sb.WriteRune(r)
