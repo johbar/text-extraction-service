@@ -789,8 +789,7 @@ type textSpan struct {
 //
 //   - |newDevY − cursorDevY| > lineThreshold  →  closes cur, appends to spans,
 //     starts a new span at (newDevX, newDevY)
-//   - same baseline AND gap > spaceThreshold AND gap < maxWordGap  →  space
-//     written into the current span
+//   - same baseline AND gap > spaceThreshold  →  space written into the current span
 //
 // It always updates the cursor to (newDevX, newDevY).
 func (ts *textState) emitGap(spans *[]textSpan, cur **textSpan, newDevX, newDevY float64) {
@@ -812,15 +811,17 @@ func (ts *textState) emitGap(spans *[]textSpan, cur **textSpan, newDevX, newDevY
 		}
 		*cur = &textSpan{devY: newDevY, devX: newDevX}
 	} else {
-		// Same baseline: emit a space into the current span if warranted.
+		// Same baseline — emit a space for any visible gap between the end of
+		// the last glyph and the start of the next chunk. The threshold of
+		// ~20% of font size clears normal kerning (±50–200 glyph units) while
+		// catching genuine word gaps. There is no upper cap: large gaps such as
+		// those between left- and right-aligned elements on the same header line
+		// still produce a single space, which is the correct extraction result.
 		spaceThreshold := ts.fontSize * 0.2
 		if spaceThreshold < 1 {
 			spaceThreshold = 1
 		}
-		// Gaps > 3× fontSize are layout jumps (column breaks etc.) — no space.
-		maxWordGap := ts.fontSize * 3
-		gap := newDevX - ts.cursorDevX
-		if gap > spaceThreshold && gap < maxWordGap {
+		if newDevX-ts.cursorDevX > spaceThreshold {
 			(*cur).text.WriteByte(' ')
 		}
 	}
