@@ -1,6 +1,7 @@
 /*
 Package pdftextextractor implements a text extractor for PDFs ontop of pdfcpu.
-It is not on spar with C++ PDF libs like PDFium or Poppler regarding accuracy and quality.
+It might not be on par with C++ PDF libs like PDFium or Poppler regarding accuracy and quality
+but does a decent job and is pure Go.
 */
 package pdftextextractor
 
@@ -8,9 +9,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"maps"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -775,15 +776,24 @@ func (ts *textState) tcTwAdvance(b []byte) float64 {
 	return tx
 }
 
+// textSpan holds one contiguous horizontal run of text at a fixed baseline.
+// Spans are collected during parsing and sorted into reading order before
+// being joined into the final output.
+type textSpan struct {
+	devY, devX float64
+	text       bytes.Buffer
+}
+
 // emitGap compares the device-space origin of the next text chunk against the
-// current cursor position and writes a separator to w when needed:
+// current cursor position and decides what separator to emit:
 //
-//   - |newDevY − cursorDevY| > lineThreshold  →  newline
+//   - |newDevY − cursorDevY| > lineThreshold  →  closes cur, appends to spans,
+//     starts a new span at (newDevX, newDevY)
 //   - same baseline AND gap > spaceThreshold AND gap < maxWordGap  →  space
+//     written into the current span
 //
-// After emitting (or not) it resets the cursor to (newDevX, newDevY) and
-// re-syncs the text matrix cursor.
-func (ts *textState) emitGap(w io.ByteWriter, newDevX, newDevY float64) {
+// It always updates the cursor to (newDevX, newDevY).
+func (ts *textState) emitGap(spans *[]textSpan, cur **textSpan, newDevX, newDevY float64) {
 	if !ts.tlSet {
 		ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 		return
@@ -796,10 +806,13 @@ func (ts *textState) emitGap(w io.ByteWriter, newDevX, newDevY float64) {
 
 	dy := ts.cursorDevY - newDevY // positive = moved down the page (PDF y up)
 	if dy > lineThreshold || dy < -lineThreshold {
-		w.WriteByte('\n')
+		// Different baseline: seal the current span and open a new one.
+		if (*cur).text.Len() > 0 {
+			*spans = append(*spans, **cur)
+		}
+		*cur = &textSpan{devY: newDevY, devX: newDevX}
 	} else {
-		// Same baseline — check visible gap between last glyph end and next start.
-		// Threshold ≈ 20% of font size catches word gaps while ignoring kerning.
+		// Same baseline: emit a space into the current span if warranted.
 		spaceThreshold := ts.fontSize * 0.2
 		if spaceThreshold < 1 {
 			spaceThreshold = 1
@@ -808,7 +821,7 @@ func (ts *textState) emitGap(w io.ByteWriter, newDevX, newDevY float64) {
 		maxWordGap := ts.fontSize * 3
 		gap := newDevX - ts.cursorDevX
 		if gap > spaceThreshold && gap < maxWordGap {
-			w.WriteByte(' ')
+			(*cur).text.WriteByte(' ')
 		}
 	}
 
@@ -829,7 +842,7 @@ func parseFloatBytes(b []byte) (float64, error) {
 //
 // It maintains the full 3×3 current transformation matrix (CTM) composed with
 // the text matrix (Tm) and text line matrix (Tlm) at every operator, working
-// entirely in device space.  This means rotated, scaled, and sheared text is
+// entirely in device space. This means rotated, scaled, and sheared text is
 // handled correctly, and the q/Q graphics-state save/restore stack is honoured
 // so nested cm operators accumulate properly.
 //
@@ -837,10 +850,23 @@ func parseFloatBytes(b []byte) (float64, error) {
 // window (ring buffer) so that operator handlers can still look back at their
 // operands by negative offset, matching PDF's postfix convention, without
 // allocating a full token slice for the content stream.
+//
+// Text runs are collected as (devY, devX, text) spans and sorted by descending
+// Y then ascending X before joining. This corrects for PDFs that write footer
+// or header decorations before the body content in the stream, which is common
+// in professionally typeset documents where the stream order reflects paint
+// order rather than reading order.
 func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.Buffer, error) {
-	var out bytes.Buffer
 	gs := newGraphicsState()
 	ts := &textState{fontMap: fontMap}
+
+	// spans accumulates all horizontal text runs. cur is the run being written.
+	var spans []textSpan
+	cur := &textSpan{}
+
+	// curWriter returns the buffer of the current span, used as the write
+	// target for text showing operators.
+	curWriter := func() *bytes.Buffer { return &cur.text }
 
 	// winSize must be > the maximum operand count of any operator we handle.
 	// The largest is Tm/cm with 6 operands, so 7 slots is sufficient.
@@ -971,7 +997,7 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 					combined := mat.multiply(gs.ctm)
 					newDevX, newDevY := combined.transformPoint(0, 0)
 					ts.setTm(mat, &gs)
-					ts.emitGap(&out, newDevX, newDevY)
+					ts.emitGap(&spans, &cur, newDevX, newDevY)
 					ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				}
 			}
@@ -988,7 +1014,7 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 					}
 					ts.applyTd(tx, ty, &gs)
 					newDevX, newDevY := ts.deviceOrigin(&gs)
-					ts.emitGap(&out, newDevX, newDevY)
+					ts.emitGap(&spans, &cur, newDevX, newDevY)
 					ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				}
 			}
@@ -998,7 +1024,7 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			if ts.inBT {
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
-				ts.emitGap(&out, newDevX, newDevY)
+				ts.emitGap(&spans, &cur, newDevX, newDevY)
 				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 			}
 
@@ -1010,7 +1036,7 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			if ts.inBT && pos >= 2 {
 				raw, ok := parsePDFString(atBack(1))
 				if ok {
-					decodeRaw(raw, ts.currentFont, &out)
+					decodeRaw(raw, ts.currentFont, curWriter())
 					ts.advanceTm(raw, &gs)
 				}
 			}
@@ -1020,11 +1046,11 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			if ts.inBT && pos >= 2 {
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
-				ts.emitGap(&out, newDevX, newDevY)
+				ts.emitGap(&spans, &cur, newDevX, newDevY)
 				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				raw, ok := parsePDFString(atBack(1))
 				if ok {
-					decodeRaw(raw, ts.currentFont, &out)
+					decodeRaw(raw, ts.currentFont, curWriter())
 					ts.advanceTm(raw, &gs)
 				}
 			}
@@ -1036,11 +1062,11 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 				ts.charSpacing, _ = parseFloatBytes(atBack(2))
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
-				ts.emitGap(&out, newDevX, newDevY)
+				ts.emitGap(&spans, &cur, newDevX, newDevY)
 				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				raw, ok := parsePDFString(atBack(1))
 				if ok {
-					decodeRaw(raw, ts.currentFont, &out)
+					decodeRaw(raw, ts.currentFont, curWriter())
 					ts.advanceTm(raw, &gs)
 				}
 			}
@@ -1048,7 +1074,7 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 		case "TJ":
 			// Interleaved strings and kerning numbers.
 			if ts.inBT && pos >= 2 {
-				gsKernAdj, allRaw := decodeTJInto(atBack(1), ts.currentFont, &out)
+				gsKernAdj, allRaw := decodeTJInto(atBack(1), ts.currentFont, curWriter())
 				ts.advanceTmGS(gsKernAdj, allRaw, &gs)
 			}
 		}
@@ -1058,8 +1084,45 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 		win[pos&winMask] = tok
 		pos++
 	}
-	out = normaliseWhitespace(out.Bytes())
-	return out, nil
+
+	// Seal the last open span.
+	if cur.text.Len() > 0 {
+		spans = append(spans, *cur)
+	}
+
+	// Sort spans into reading order: descending Y (top of page first),
+	// then ascending X (left to right). This corrects for stream-order
+	// mismatch between decorative elements (headers/footers written first)
+	// and body text (written later in the stream but higher on the page).
+	sort.Slice(spans, func(i, j int) bool {
+		if spans[i].devY != spans[j].devY {
+			return spans[i].devY > spans[j].devY
+		}
+		return spans[i].devX < spans[j].devX
+	})
+
+	// Join sorted spans, inserting newlines between spans on different baselines
+	// and spaces between spans on the same baseline. "Same baseline" means the
+	// Y coordinates are within 1 point — spans sorted to the same devY bucket
+	// by the sort above may still differ by floating-point rounding.
+	var out bytes.Buffer
+	for k, sp := range spans {
+		if k == 0 {
+			out.Write(sp.text.Bytes())
+			continue
+		}
+		prev := spans[k-1]
+		dy := prev.devY - sp.devY
+		if dy > 1 || dy < -1 {
+			out.WriteByte('\n')
+		} else if sp.devX > prev.devX {
+			out.WriteByte(' ')
+		}
+		out.Write(sp.text.Bytes())
+	}
+
+	result := normaliseWhitespace(out.Bytes())
+	return result, nil
 }
 
 // decodeRaw decodes raw PDF string bytes to UTF-8 via the font's tables,
