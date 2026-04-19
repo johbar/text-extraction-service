@@ -1,6 +1,6 @@
 module github.com/johbar/text-extraction-service/v4
 
-go 1.26.2
+go 1.25.0
 
 require (
 	github.com/dustin/go-humanize v1.0.1
