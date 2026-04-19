@@ -12,10 +12,10 @@ import (
 	"github.com/johbar/text-extraction-service/v4/internal/cache"
 	"github.com/johbar/text-extraction-service/v4/internal/pdfproc"
 
+	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/model"
 	"github.com/johbar/text-extraction-service/v4/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v4/pkg/docparser"
 	"github.com/johbar/text-extraction-service/v4/pkg/tesswrap"
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
 func (e *Extractor) parseForOcrOnce(d cache.Document, ctx *model.Context, origin string) (*model.Context, error) {

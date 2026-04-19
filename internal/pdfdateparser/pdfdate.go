@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/types"
+	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/types"
 )
 
 // PdfDateToTime parses the a date/time string from PDF metadata and returns a time.Time object.

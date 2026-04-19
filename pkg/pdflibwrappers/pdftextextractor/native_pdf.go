@@ -3,14 +3,16 @@ package pdftextextractor
 import (
 	"bytes"
 	"io"
-	"os"
 	"strconv"
 
+	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu"
+	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/model"
+	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/validate"
 	"github.com/johbar/text-extraction-service/v4/internal/cache"
 	"github.com/johbar/text-extraction-service/v4/internal/pdfdateparser"
-	"github.com/pdfcpu/pdfcpu/pkg/api"
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
+
+var pdfcpuConfig *model.Configuration = model.NewDefaultConfiguration()
 
 type Document struct {
 	ctx   model.Context
@@ -19,27 +21,39 @@ type Document struct {
 	pages int
 }
 
+func init() {
+	pdfcpuConfig.Offline = true
+	pdfcpuConfig.ValidateLinks = false
+	pdfcpuConfig.ValidationMode = model.ValidationRelaxed
+}
+
 func Load(data []byte) (*Document, error) {
 	rs := bytes.NewReader(data)
-	api.DisableConfigDir()
-	ctx, err := api.ReadAndValidate(rs, api.LoadConfiguration())
+	ctx, err := pdfcpu.Read(rs, pdfcpuConfig)
 	if err != nil {
 		return nil, err
 	}
+
+	// api.ReadAndValidate() doesn't handle validation issues gracefully.
+	// But the validation step seems to be necessary for fully initializing ctx.
+	// So we use lower-level APIs instead but ignore validation errors.
+	_ = validate.XRefTable(ctx)
+	// necessary for image extraction
+	_ = pdfcpu.OptimizeXRefTable(ctx)
+
 	return &Document{ctx: *ctx, data: &data, pages: ctx.PageCount}, nil
 }
 
 func Open(path string) (*Document, error) {
-	f, err := os.Open(path)
+	ctx, err := pdfcpu.ReadFile(path, pdfcpuConfig)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	api.DisableConfigDir()
-	ctx, err := api.ReadAndValidate(f, api.LoadConfiguration())
-	if err != nil {
-		return nil, err
-	}
+
+	// ignore validation error
+	_ = validate.XRefTable(ctx)
+	// necessary for image extraction
+	_ = pdfcpu.OptimizeXRefTable(ctx)
 	return &Document{ctx: *ctx, path: path, pages: ctx.PageCount}, nil
 }
 
@@ -79,15 +93,13 @@ func (d *Document) MetadataMap() cache.DocumentMetadata {
 }
 
 func (d *Document) Text(i int) (string, bool) {
-	text, err := extractPageText(&d.ctx, i+1)
-	if err != nil {
-		// FIXME
-		panic(err)
+	img, _ := pdfcpu.ExtractPageImages(&d.ctx, i+1, true)
+	text, _ := extractPageText(&d.ctx, i+1)
+	var str string
+	if text != nil || text.Len() > 0 {
+		str = text.String()
 	}
-	if text == nil {
-		return "", false
-	}
-	return text.String(), false
+	return str, len(img) > 0
 }
 
 func (d *Document) StreamText(w io.Writer) error {
