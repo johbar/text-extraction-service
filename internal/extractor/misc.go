@@ -19,16 +19,15 @@ import (
 )
 
 func (e *Extractor) parseForOcrOnce(d cache.Document, ctx *model.Context, origin string) (*model.Context, error) {
-	if ctx == nil {
-		if len(d.Path()) == 0 {
-			e.log.Debug("Parsing data with pdfcpu for image extraction", "origin", origin)
-			return pdfproc.ParseForImageExtraction(*d.Data())
-		} else {
-			e.log.Debug("Parsing file with pdfcpu for image extraction", "origin", origin)
-			return pdfproc.ParsePathForImageExtraction(d.Path())
-		}
+	if ctx != nil {
+		return ctx, nil
 	}
-	return ctx, nil
+	e.log.Debug("Parsing PDF with pdfcpu for image extraction", "origin", origin)
+	if len(d.Path()) == 0 {
+		return pdfproc.ParseForImageExtraction(*d.Data())
+	} else {
+		return pdfproc.ParsePathForImageExtraction(d.Path())
+	}
 }
 
 func (e *Extractor) WriteTextOrRunOcr(d cache.Document, w io.Writer, origin string) error {
