@@ -57,7 +57,6 @@ func (df *DocFactory) loadPdfLib(libName, libPath string) error {
 			LibDescription: "Experimental pure Go implementation",
 			LibPath:        "n/a",
 		}
-		df.log.Warn("Using experimental native fallback PDF implementation. This is not recommended for production.")
 		return nil
 	}
 }
