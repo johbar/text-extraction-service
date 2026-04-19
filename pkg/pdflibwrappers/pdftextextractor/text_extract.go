@@ -160,8 +160,9 @@ func extractPageText(ctx *model.Context, pageNr int) (*bytes.Buffer, error) {
 	}
 
 	fontMap := buildFontMap(ctx.XRefTable, inhPAttrs.Resources)
+	xobjMap := buildXObjMap(ctx.XRefTable, inhPAttrs.Resources)
 
-	text, err := extractTextFromContent(content, fontMap)
+	text, err := extractTextFromContent(content, fontMap, xobjMap)
 	if err != nil {
 		return nil, fmt.Errorf("extractPageText: page %d parse: %w", pageNr, err)
 	}
@@ -334,6 +335,96 @@ func buildFontMap(xRefTable *model.XRefTable, resources types.Dict) map[string]*
 	}
 
 	return fontMap
+}
+
+// xObject holds the decoded content stream and resolved font map for a Form
+// XObject.  The matrix field is the XObject's own /Matrix entry, which must be
+// pre-multiplied into the caller's CTM before parsing the stream (PDF spec
+// §8.10.1).  It is the identity when the XObject has no /Matrix entry.
+type xObject struct {
+	content []byte
+	fontMap map[string]*pdfFont
+	xobjMap map[string]xObject // nested XObjects from this XObject's /Resources
+	matrix  matrix3
+}
+
+// buildXObjMap collects all Form XObjects from a page's resource dictionary.
+// Only /Subtype /Form streams carry renderable text; image XObjects are skipped.
+// Nested XObjects (Form XObjects that themselves reference other Form XObjects)
+// are resolved recursively so that a Do operator inside a Form XObject works.
+func buildXObjMap(xRefTable *model.XRefTable, resources types.Dict) map[string]xObject {
+	return buildXObjMapDepth(xRefTable, resources, 0)
+}
+
+const maxXObjDepth = 8 // guard against pathological circular references
+
+func buildXObjMapDepth(xRefTable *model.XRefTable, resources types.Dict, depth int) map[string]xObject {
+	m := make(map[string]xObject)
+	if resources == nil || depth > maxXObjDepth {
+		return m
+	}
+
+	xobjRef, found := resources.Find("XObject")
+	if !found {
+		return m
+	}
+	xobjDict, err := xRefTable.DereferenceDict(xobjRef)
+	if err != nil || xobjDict == nil {
+		return m
+	}
+
+	for name, ref := range xobjDict {
+		sd, _, err := xRefTable.DereferenceStreamDict(ref)
+		if err != nil || sd == nil {
+			continue
+		}
+		// Only process Form XObjects; skip Image and other subtypes.
+		subtype, _ := sd.Dict.Find("Subtype")
+		if n, ok := subtype.(types.Name); !ok || n.Value() != "Form" {
+			continue
+		}
+		if err := sd.Decode(); err != nil {
+			continue
+		}
+
+		// /Matrix: the XObject's coordinate transform (defaults to identity).
+		mat := identityMatrix()
+		if matObj, ok := sd.Dict.Find("Matrix"); ok {
+			if matArr, err := xRefTable.DereferenceArray(matObj); err == nil && len(matArr) == 6 {
+				vals := [6]float64{}
+				allOK := true
+				for i, v := range matArr {
+					switch n := v.(type) {
+					case types.Float:
+						vals[i] = n.Value()
+					case types.Integer:
+						vals[i] = float64(n.Value())
+					default:
+						allOK = false
+					}
+				}
+				if allOK {
+					mat = matrix3{a: vals[0], b: vals[1], c: vals[2], d: vals[3], e: vals[4], f: vals[5]}
+				}
+			}
+		}
+
+		// /Resources: the XObject's own font and XObject dictionaries.
+		// These are merged with the parent's — child fonts shadow parent fonts
+		// when names collide, which is the correct scoping behaviour.
+		var xobjResources types.Dict
+		if resRef, ok := sd.Dict.Find("Resources"); ok {
+			xobjResources, _ = xRefTable.DereferenceDict(resRef)
+		}
+
+		m[name] = xObject{
+			content: sd.Content,
+			fontMap: buildFontMap(xRefTable, xobjResources),
+			xobjMap: buildXObjMapDepth(xRefTable, xobjResources, depth+1),
+			matrix:  mat,
+		}
+	}
+	return m
 }
 
 // parseSimpleFontWidths extracts the Widths array from a simple font dict
@@ -847,50 +938,94 @@ func parseFloatBytes(b []byte) (float64, error) {
 // handled correctly, and the q/Q graphics-state save/restore stack is honoured
 // so nested cm operators accumulate properly.
 //
+// Form XObjects referenced by Do operators are recursively parsed and their
+// spans are merged into the same span pool before sorting, so XObject text
+// (watermarks, shared headers, stamps) is positioned correctly relative to
+// the page body.
+//
 // Tokens are produced on-demand by tokenIter and kept in a fixed-size sliding
 // window (ring buffer) so that operator handlers can still look back at their
 // operands by negative offset, matching PDF's postfix convention, without
 // allocating a full token slice for the content stream.
-//
-// Text runs are collected as (devY, devX, text) spans and sorted by descending
-// Y then ascending X before joining. This corrects for PDFs that write footer
-// or header decorations before the body content in the stream, which is common
-// in professionally typeset documents where the stream order reflects paint
-// order rather than reading order.
-func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.Buffer, error) {
-	gs := newGraphicsState()
-	ts := &textState{fontMap: fontMap}
-
-	// spans accumulates all horizontal text runs. cur is the run being written.
+func extractTextFromContent(content []byte, fontMap map[string]*pdfFont, xobjMap map[string]xObject) (bytes.Buffer, error) {
 	var spans []textSpan
 	cur := &textSpan{}
 
+	gs := newGraphicsState()
+	parseContentStream(content, fontMap, xobjMap, gs, &spans, &cur)
+
+	// Seal the last open span.
+	if cur.text.Len() > 0 {
+		spans = append(spans, *cur)
+	}
+
+	// Sort spans into reading order: descending Y (top of page first),
+	// then ascending X (left to right). This corrects for stream-order
+	// mismatch between decorative elements and body text, and also places
+	// XObject text (watermarks, headers) at the right position relative to
+	// page content regardless of which stream was processed first.
+	sort.Slice(spans, func(i, j int) bool {
+		if spans[i].devY != spans[j].devY {
+			return spans[i].devY > spans[j].devY
+		}
+		return spans[i].devX < spans[j].devX
+	})
+
+	// Join sorted spans, inserting newlines between spans on different
+	// baselines and spaces between spans on the same baseline.
+	var out bytes.Buffer
+	for k, sp := range spans {
+		if k == 0 {
+			out.Write(sp.text.Bytes())
+			continue
+		}
+		prev := spans[k-1]
+		dy := prev.devY - sp.devY
+		if dy > 1 || dy < -1 {
+			out.WriteByte('\n')
+		} else if sp.devX > prev.devX {
+			out.WriteByte(' ')
+		}
+		out.Write(sp.text.Bytes())
+	}
+
+	result := normaliseWhitespace(out.Bytes())
+	return result, nil
+}
+
+// parseContentStream is the inner recursive parser shared by
+// extractTextFromContent (for page content streams) and the Do operator
+// handler (for Form XObject streams). It appends text spans to the shared
+// pool pointed to by spans/cur, using the provided graphics state as the
+// starting CTM so that XObject text is positioned in device space correctly.
+//
+// fontMap and xobjMap are the effective resource maps for this stream:
+// for a Form XObject these are the XObject's own resources; the caller is
+// responsible for resolving inheritance before passing them in.
+func parseContentStream(
+	content []byte,
+	fontMap map[string]*pdfFont,
+	xobjMap map[string]xObject,
+	gs graphicsState,
+	spans *[]textSpan,
+	cur **textSpan,
+) {
+	ts := &textState{fontMap: fontMap}
+
 	// curWriter returns the buffer of the current span, used as the write
 	// target for text showing operators.
-	curWriter := func() *bytes.Buffer { return &cur.text }
+	curWriter := func() *bytes.Buffer { return &(*cur).text }
 
-	// winSize must be > the maximum operand count of any operator we handle.
-	// The largest is Tm/cm with 6 operands, so 7 slots is sufficient.
-	// We use 8 to keep the size a power of two for cheap modulo arithmetic.
 	const winSize = 8
 	const winMask = winSize - 1
-	var win [winSize][]byte // ring buffer of the last winSize tokens
-	pos := 0                // total tokens seen so far (before storing current tok)
+	var win [winSize][]byte
+	pos := 0
 
-	// atBack returns the token that arrived n steps before the current operator
-	// (n=1 is the immediately preceding token, n=6 is six back), matching
-	// the tokens[i-n] indexing used in the original implementation.
-	// Must only be called during token dispatch, before pos is incremented
-	// for the current token.
 	atBack := func(n int) []byte {
 		return win[(pos-n)&winMask]
 	}
 
 	for tok := range tokenIter(content) {
-		// Store the incoming token into the ring AFTER the dispatch so that
-		// atBack(n) addresses the n-th preceding token from the operator's
-		// perspective. The operator keyword itself is in tok; its operands
-		// are atBack(1) … atBack(6) (stored in earlier iterations).
 		switch string(tok) {
 
 		// -----------------------------------------------------------------
@@ -898,17 +1033,13 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 		// -----------------------------------------------------------------
 
 		case "q":
-			// Save the current graphics state (push CTM onto stack).
 			gs.push()
 
 		case "Q":
-			// Restore the most recently saved graphics state (pop CTM).
 			gs.pop()
-			// The font size must be recomputed against the restored CTM.
 			ts.updateFontSize(&gs)
 
 		case "cm":
-			// a b c d e f cm — concatenate matrix with the CTM.
 			if pos >= 7 {
 				a, ea := parseFloatBytes(atBack(6))
 				b, eb := parseFloatBytes(atBack(5))
@@ -918,9 +1049,53 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 				f, ef := parseFloatBytes(atBack(1))
 				if ea == nil && eb == nil && ec == nil && ed == nil && ee == nil && ef == nil {
 					m := matrix3{a: a, b: b, c: c, d: d, e: e, f: f}
-					// PDF spec: new CTM = m × CTM  (m is pre-multiplied)
 					gs.ctm = m.multiply(gs.ctm)
 					ts.updateFontSize(&gs)
+				}
+			}
+
+		// -----------------------------------------------------------------
+		// XObject invocation
+		// -----------------------------------------------------------------
+
+		case "Do":
+			// /Name Do — paint a Form XObject.
+			// The XObject is painted using the current CTM, with the XObject's
+			// own /Matrix pre-multiplied in (PDF spec §8.10.1). We seal the
+			// current span first so that XObject text sorts independently, then
+			// recurse with a new graphics state whose CTM is xobj.matrix × CTM.
+			if pos >= 2 {
+				name := string(stripSlash(atBack(1)))
+				if xobj, ok := xobjMap[name]; ok {
+					// Seal the current span before recursing so the XObject's
+					// spans sort on their own device coordinates.
+					if (*cur).text.Len() > 0 {
+						*spans = append(*spans, **cur)
+						*cur = &textSpan{}
+					}
+
+					// Build the child CTM: xobj.matrix × parent CTM.
+					// This transforms XObject local coordinates into device space.
+					childGS := graphicsState{ctm: xobj.matrix.multiply(gs.ctm)}
+
+					// Merge font maps: XObject fonts shadow parent fonts when
+					// names collide, matching PDF scoping rules.
+					childFonts := fontMap
+					if len(xobj.fontMap) > 0 {
+						merged := make(map[string]*pdfFont, len(fontMap)+len(xobj.fontMap))
+						maps.Copy(merged, fontMap)
+						maps.Copy(merged, xobj.fontMap)
+						childFonts = merged
+					}
+
+					parseContentStream(xobj.content, childFonts, xobj.xobjMap, childGS, spans, cur)
+
+					// Seal whatever the XObject left in cur so it doesn't bleed
+					// into the parent stream's next span.
+					if (*cur).text.Len() > 0 {
+						*spans = append(*spans, **cur)
+						*cur = &textSpan{}
+					}
 				}
 			}
 
@@ -930,25 +1105,18 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 
 		case "BT":
 			ts.inBT = true
-			// Reset Tm and Tlm to the identity matrix (PDF spec §9.4.1).
-			// The cursor is intentionally NOT reset so that emitGap can
-			// compare across ET/BT boundaries (common in tagged PDFs where
-			// every word gets its own BT/ET pair).
 			ts.tlm = identityMatrix()
 			ts.tm = identityMatrix()
 			ts.updateFontSize(&gs)
 
 		case "ET":
 			ts.inBT = false
-			// No separator emitted here — emitGap decides when the next
-			// positioning operator fires.
 
 		// -----------------------------------------------------------------
 		// Text state operators
 		// -----------------------------------------------------------------
 
 		case "Tf":
-			// /FontName size Tf
 			if pos >= 3 {
 				fontName := stripSlash(atBack(2))
 				if f, ok := fontMap[string(fontName)]; ok {
@@ -983,7 +1151,6 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 		// -----------------------------------------------------------------
 
 		case "Tm":
-			// a b c d tx ty Tm — set Tm and Tlm to a new absolute matrix.
 			if ts.inBT && pos >= 7 {
 				a, ea := parseFloatBytes(atBack(6))
 				b, eb := parseFloatBytes(atBack(5))
@@ -993,19 +1160,15 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 				f, ef := parseFloatBytes(atBack(1))
 				if ea == nil && eb == nil && ec == nil && ed == nil && ee == nil && ef == nil {
 					mat := matrix3{a: a, b: b, c: c, d: d, e: e, f: f}
-					// Compute the device-space origin BEFORE updating state
-					// so emitGap can compare old cursor vs new position.
 					combined := mat.multiply(gs.ctm)
 					newDevX, newDevY := combined.transformPoint(0, 0)
 					ts.setTm(mat, &gs)
-					ts.emitGap(&spans, &cur, newDevX, newDevY)
+					ts.emitGap(spans, cur, newDevX, newDevY)
 					ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				}
 			}
 
 		case "Td", "TD":
-			// tx ty Td — move text line position by (tx, ty) in text space.
-			// TD also updates leading to -ty.
 			if ts.inBT && pos >= 3 {
 				ty, errY := parseFloatBytes(atBack(1))
 				tx, errX := parseFloatBytes(atBack(2))
@@ -1015,17 +1178,16 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 					}
 					ts.applyTd(tx, ty, &gs)
 					newDevX, newDevY := ts.deviceOrigin(&gs)
-					ts.emitGap(&spans, &cur, newDevX, newDevY)
+					ts.emitGap(spans, cur, newDevX, newDevY)
 					ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				}
 			}
 
 		case "T*":
-			// Equivalent to 0 -leading Td.
 			if ts.inBT {
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
-				ts.emitGap(&spans, &cur, newDevX, newDevY)
+				ts.emitGap(spans, cur, newDevX, newDevY)
 				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 			}
 
@@ -1043,11 +1205,10 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			}
 
 		case "'":
-			// Move to next line then show string.
 			if ts.inBT && pos >= 2 {
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
-				ts.emitGap(&spans, &cur, newDevX, newDevY)
+				ts.emitGap(spans, cur, newDevX, newDevY)
 				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				raw, ok := parsePDFString(atBack(1))
 				if ok {
@@ -1057,13 +1218,12 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			}
 
 		case "\"":
-			// aw ac string " — set word/char spacing, move to next line, show.
 			if ts.inBT && pos >= 4 {
 				ts.wordSpacing, _ = parseFloatBytes(atBack(3))
 				ts.charSpacing, _ = parseFloatBytes(atBack(2))
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
-				ts.emitGap(&spans, &cur, newDevX, newDevY)
+				ts.emitGap(spans, cur, newDevX, newDevY)
 				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 				raw, ok := parsePDFString(atBack(1))
 				if ok {
@@ -1073,57 +1233,15 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont) (bytes.
 			}
 
 		case "TJ":
-			// Interleaved strings and kerning numbers.
 			if ts.inBT && pos >= 2 {
 				gsKernAdj, allRaw := decodeTJInto(atBack(1), ts.currentFont, curWriter())
 				ts.advanceTmGS(gsKernAdj, allRaw, &gs)
 			}
 		}
 
-		// Append current token to the ring so it becomes available as
-		// atBack(1) for the next operator.
 		win[pos&winMask] = tok
 		pos++
 	}
-
-	// Seal the last open span.
-	if cur.text.Len() > 0 {
-		spans = append(spans, *cur)
-	}
-
-	// Sort spans into reading order: descending Y (top of page first),
-	// then ascending X (left to right). This corrects for stream-order
-	// mismatch between decorative elements (headers/footers written first)
-	// and body text (written later in the stream but higher on the page).
-	sort.Slice(spans, func(i, j int) bool {
-		if spans[i].devY != spans[j].devY {
-			return spans[i].devY > spans[j].devY
-		}
-		return spans[i].devX < spans[j].devX
-	})
-
-	// Join sorted spans, inserting newlines between spans on different baselines
-	// and spaces between spans on the same baseline. "Same baseline" means the
-	// Y coordinates are within 1 point — spans sorted to the same devY bucket
-	// by the sort above may still differ by floating-point rounding.
-	var out bytes.Buffer
-	for k, sp := range spans {
-		if k == 0 {
-			out.Write(sp.text.Bytes())
-			continue
-		}
-		prev := spans[k-1]
-		dy := prev.devY - sp.devY
-		if dy > 1 || dy < -1 {
-			out.WriteByte('\n')
-		} else if sp.devX > prev.devX {
-			out.WriteByte(' ')
-		}
-		out.Write(sp.text.Bytes())
-	}
-
-	result := normaliseWhitespace(out.Bytes())
-	return result, nil
 }
 
 // decodeRaw decodes raw PDF string bytes to UTF-8 via the font's tables,
