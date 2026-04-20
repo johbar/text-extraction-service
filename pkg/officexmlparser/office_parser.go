@@ -242,7 +242,11 @@ func (d *XmlBasedDocument) StreamText(w io.Writer) error {
 }
 
 func (d *XmlBasedDocument) Pages() int {
-	// it is not possible to query these docs page per page
+	// pptx has slides in separate files
+	if len(d.contentFiles) > 1 {
+		return len(d.contentFiles)
+	}
+	// it is not possible to query other XML docs page per page
 	// so by convention we return -1
 	return -1
 }
@@ -259,8 +263,16 @@ func (d *XmlBasedDocument) MetadataMap() map[string]string {
 	return d.metadata
 }
 
-func (d *XmlBasedDocument) Text(_ int) (string, bool) {
-	panic("not allowed")
+func (d *XmlBasedDocument) Text(page int) (string, bool) {
+	if page > len(d.contentFiles)-1 || d.Pages() < 1 {
+		return "", false
+	}
+	if r, err := d.contentFiles[page].Open(); err == nil {
+		var sb strings.Builder
+		_ = XmlToText(r, &sb, d.bodyTag, breaks)
+		return sb.String(), false
+	}
+	return "", false
 }
 
 func (d *XmlBasedDocument) HasNewlines() bool {
