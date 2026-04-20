@@ -264,7 +264,7 @@ func (d *XmlBasedDocument) MetadataMap() map[string]string {
 }
 
 func (d *XmlBasedDocument) Text(page int) (string, bool) {
-	if page > len(d.contentFiles)-1 || d.Pages() < 1 {
+	if page < 0 || page > d.Pages()-1 {
 		return "", false
 	}
 	if r, err := d.contentFiles[page].Open(); err == nil {
