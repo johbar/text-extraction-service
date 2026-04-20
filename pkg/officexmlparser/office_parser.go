@@ -127,7 +127,7 @@ func readFileFromZip(f *zip.File) ([]byte, error) {
 	}
 	buf := make([]byte, f.UncompressedSize64)
 	_, err = io.ReadFull(r, buf)
-	return nil, err
+	return buf, err
 }
 
 func mapMsOfficeCoreMetadata(metadata map[string]string, data []byte) {
