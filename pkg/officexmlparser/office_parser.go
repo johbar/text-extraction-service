@@ -122,12 +122,12 @@ func readFileFromZip(f *zip.File) ([]byte, error) {
 		return nil, err
 	}
 	defer r.Close()
-	buf := make([]byte, f.UncompressedSize64)
-	_, err = r.Read(buf)
-	if err == io.EOF {
-		return buf, nil
+	if f.UncompressedSize64 > 50*1024*1024 {
+		return nil, fmt.Errorf("readFileFromZip: UncompressedSize64 of '%s' is too big. Is: %d, max: 50 MiB", f.Name, f.UncompressedSize64)
 	}
-	return buf, nil
+	buf := make([]byte, f.UncompressedSize64)
+	_, err = io.ReadFull(r, buf)
+	return nil, err
 }
 
 func mapMsOfficeCoreMetadata(metadata map[string]string, data []byte) {
