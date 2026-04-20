@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"slices"
@@ -96,6 +97,21 @@ func New(r io.ReaderAt, size int64, ext string) (*XmlBasedDocument, error) {
 	}
 	if len(d.contentFiles) == 0 {
 		return nil, ErrContentNotFound
+	}
+	// The order of files in ZIP might not represent the order slides in the slideshow
+	// Applies to pptx only.
+	if len(d.contentFiles) > 1 {
+		slices.SortFunc(d.contentFiles, func(a *zip.File, b *zip.File) int {
+			var numA int
+			var numB int
+			if _, err := fmt.Sscanf(a.Name, "ppt/slides/slide%d.xml", &numA); err != nil {
+				return 0
+			}
+			if _, err := fmt.Sscanf(b.Name, "ppt/slides/slide%d.xml", &numB); err != nil {
+				return 0
+			}
+			return numA - numB
+		})
 	}
 	return d, nil
 }
