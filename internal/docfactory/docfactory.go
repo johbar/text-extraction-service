@@ -192,13 +192,11 @@ func (df *DocFactory) NewFromBytes(data []byte, origin string) (cache.Document, 
 	}
 
 	// there is no extension (like .doc) associated with these types
-	if docparser.Initialized {
-		switch mtype.String() {
-		case "application/msword":
-			fallthrough
-		case "application/x-ole-storage":
-			return docparser.NewFromBytes(data)
-		}
+	switch mtype.String() {
+	case "application/msword":
+		fallthrough
+	case "application/x-ole-storage":
+		return docparser.NewFromBytes(data)
 	}
 	if tesswrap.Initialized && strings.HasPrefix(mtype.String(), "image/") {
 		return imageparser.NewFromBytes(data, mtype.Extension()), nil
@@ -225,13 +223,11 @@ func (df *DocFactory) NewFromPath(path, origin string) (cache.Document, error) {
 	}
 
 	// there is no extension (like .doc) associated with these types
-	if docparser.Initialized {
-		switch mtype.String() {
-		case "application/msword":
-			fallthrough
-		case "application/x-ole-storage":
-			return docparser.Open(path)
-		}
+	switch mtype.String() {
+	case "application/msword":
+		fallthrough
+	case "application/x-ole-storage":
+		return docparser.Open(path)
 	}
 	if tesswrap.Initialized && strings.HasPrefix(mtype.String(), "image/") {
 		return imageparser.Open(path, mtype.Extension()), nil
