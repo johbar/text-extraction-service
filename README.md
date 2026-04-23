@@ -81,7 +81,7 @@ The other is the integration of an optional cache and the algorithm used when se
 
 Additional design considerations and assumptions:
 
-- Do everything in-memory and in-process, whenever you can. No disk I/O for small files, no invocation of external programs in most cases (exceptions being `wvWare`/`antword`/`catdoc` for DOCs and `tesseract` for OCR).
+- Do everything in-memory and in-process, whenever you can. No disk I/O for small files, no invocation of external programs in most cases (with the exception of `tesseract` for OCR).
 - The web service client does not care that much about, say, the PDF itself, but rather the textual content and some metadata.
   They don't want to download it to post it to TES, but they know the URL, so that's all TES needs to do the job.
 - The client does not care that much about the PDFs layout as they do about its textual content.
