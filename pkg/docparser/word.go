@@ -333,6 +333,7 @@ func encodeRune(p []byte, r rune) int {
 //	U+0004  column break                     → '\n'
 //	U+0007  table cell / row mark            → '\t'
 //	U+0009  horizontal tab                   → '\t'
+//	U+0014  field separator                  → ' '
 //	U+000A  line feed                        → '\n'
 //	U+000B  vertical tab / manual line break → '\n'
 //	U+000C  page break / section break       → '\n'
@@ -349,7 +350,6 @@ func encodeRune(p []byte, r rune) int {
 //	U+0006  footnote / endnote reference mark
 //	U+0008  drawn object / frame anchor
 //	U+0013  field begin
-//	U+0014  field separator
 //	U+0015  field end
 //	other control characters < U+0020
 func filterRune(r rune) rune {
@@ -360,6 +360,8 @@ func filterRune(r rune) rune {
 		return '\t'
 	case 0x0009:
 		return '\t'
+	case 0x0014:
+		return ' '
 	case 0x000A, 0x000B, 0x000C, 0x000D:
 		return '\n'
 	default:
