@@ -18,11 +18,12 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 
 - Support for common document formats:
   - PDF
-  - RTF
   - ODT and ODP
   - DOCX and PPTX
-  - legacy MS Word (.doc) files (with external helper)
-- Support for three runtime-pluggable C/C++ PDF engines + a Go native experimental implementation
+  - legacy MS Word (.doc) and PowerPoint (.ppt) files
+  - RTF
+- Pure Go PDF Engine
+- Additional Support for three mature runtime-pluggable C/C++ PDF engines
     - Google Chromium's [PDFium](https://pdfium.googlesource.com/pdfium/)
     - Free Desktops [Poppler](https://poppler.freedesktop.org/)
     - Artifex' [MuPDF](https://mupdf.com/)
@@ -110,8 +111,6 @@ On *nix systems you need to `chmod +x` the binary after `gunzip`ing it.
 Building only requires a recent Go SDK (v1.25) thanks to `purego`.
 But testing and running TES requires additional shared libs.
 Depending on the PDF engine you choose (see below for comparison) you need it installed in your dev/build environment.
-
-The `docparser` package (for legacy MS Word files) can work with either of the CLI tools `wvWare`, `antiword` or `catdoc`.
 
 All instructions supplied here suppose a Linux environment.
 
