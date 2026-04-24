@@ -19,7 +19,7 @@ RUN go build -trimpath -ldflags=-w -buildvcs=false -tags goexperiment.jsonv2 -o 
 FROM docker.io/alpine:latest
 COPY --from=builder /go/text-extraction-service /usr/local/bin/text-extraction-service
 
-RUN apk update && apk add --no-cache mupdf-libs antiword && \
+RUN apk update && apk add --no-cache mupdf-libs && \
     ln -s /usr/lib/libmupdf.so* /usr/lib/libmupdf.so && \
     rm /var/cache/apk/*
 

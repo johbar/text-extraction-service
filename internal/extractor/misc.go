@@ -14,7 +14,6 @@ import (
 
 	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/model"
 	"github.com/johbar/text-extraction-service/v4/pkg/dehyphenator"
-	"github.com/johbar/text-extraction-service/v4/pkg/docparser"
 	"github.com/johbar/text-extraction-service/v4/pkg/tesswrap"
 )
 
@@ -179,10 +178,6 @@ func (e *Extractor) LogAndFixConfigIssues() {
 			e.log.Warn("Language config is invalid. Tesseract will be disabled.", "reason", whyNot)
 			tesswrap.Initialized = false
 		}
-	}
-
-	if !docparser.Initialized {
-		e.log.Info("Neither wvWare, antiword nor catdoc found in PATH. We will not be able to extract legacy MS Word documents.")
 	}
 
 	e.log.Info("PDF implementation", "lib", e.df.PdfImpl())

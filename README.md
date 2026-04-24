@@ -18,11 +18,12 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 
 - Support for common document formats:
   - PDF
-  - RTF
   - ODT and ODP
   - DOCX and PPTX
-  - legacy MS Word (.doc) files (with external helper)
-- Support for three runtime-pluggable C/C++ PDF engines + a Go native experimental implementation
+  - legacy MS Word (.doc) and PowerPoint (.ppt) files
+  - RTF
+- Pure Go PDF Engine
+- Additional Support for three mature runtime-pluggable C/C++ PDF engines
     - Google Chromium's [PDFium](https://pdfium.googlesource.com/pdfium/)
     - Free Desktops [Poppler](https://poppler.freedesktop.org/)
     - Artifex' [MuPDF](https://mupdf.com/)
@@ -38,7 +39,7 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 - Processing local files with the `file:` transport
 - Processing password protected files
 - Processing files from web servers that require authentication of any kind (cookie, header, referral, user agent etc)
-- a lot of file formats, e.g. ppt, markdown, ods/xlsx, html
+- a lot of file formats, e.g. Markdown, ODS/XSLX/XSL, HTML
 
 ## License
 
@@ -80,7 +81,7 @@ The other is the integration of an optional cache and the algorithm used when se
 
 Additional design considerations and assumptions:
 
-- Do everything in-memory and in-process, whenever you can. No disk I/O for small files, no invocation of external programs in most cases (exceptions being `wvWare`/`antword`/`catdoc` for DOCs and `tesseract` for OCR).
+- Do everything in-memory and in-process, whenever you can. No disk I/O for small files, no invocation of external programs in most cases (with the exception of `tesseract` for OCR).
 - The web service client does not care that much about, say, the PDF itself, but rather the textual content and some metadata.
   They don't want to download it to post it to TES, but they know the URL, so that's all TES needs to do the job.
 - The client does not care that much about the PDFs layout as they do about its textual content.
@@ -110,8 +111,6 @@ On *nix systems you need to `chmod +x` the binary after `gunzip`ing it.
 Building only requires a recent Go SDK (v1.25) thanks to `purego`.
 But testing and running TES requires additional shared libs.
 Depending on the PDF engine you choose (see below for comparison) you need it installed in your dev/build environment.
-
-The `docparser` package (for legacy MS Word files) can work with either of the CLI tools `wvWare`, `antiword` or `catdoc`.
 
 All instructions supplied here suppose a Linux environment.
 
