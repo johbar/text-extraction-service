@@ -39,7 +39,7 @@ Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mat
 - Processing local files with the `file:` transport
 - Processing password protected files
 - Processing files from web servers that require authentication of any kind (cookie, header, referral, user agent etc)
-- a lot of file formats, e.g. ppt, markdown, ods/xlsx, html
+- a lot of file formats, e.g. Markdown, ODS/XSLX/XSL, HTML
 
 ## License
 
