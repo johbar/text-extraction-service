@@ -93,13 +93,19 @@ func (d *Document) MetadataMap() cache.DocumentMetadata {
 }
 
 func (d *Document) Text(i int) (string, bool) {
-	img, _ := pdfcpu.ExtractPageImages(&d.ctx, i+1, true)
+	imgs, _ := pdfcpu.ExtractPageImages(&d.ctx, i+1, true)
+	for x, img := range imgs {
+		if img.Thumb {
+			// ignore thumbnail images
+			delete(imgs, x)
+		}
+	}
 	text, _ := extractPageText(&d.ctx, i+1)
 	var str string
-	if text != nil || text.Len() > 0 {
+	if text != nil && text.Len() > 0 {
 		str = text.String()
 	}
-	return str, len(img) > 0
+	return str, len(imgs) > 0
 }
 
 func (d *Document) StreamText(w io.Writer) error {
