@@ -1,4 +1,4 @@
-name: Release Artefacts
+name: Release Artifacts
 on:
   push: 
     tags: "v*"
@@ -9,7 +9,7 @@ env:
   GOEXPERIMENT: jsonv2
 jobs:
   compile-linux:
-    name: Build glibc Linux Release Artefacts
+    name: Build glibc Linux Release Artifacts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -45,7 +45,7 @@ jobs:
             done
           done
           ls -lah ./dist/
-      - name: Save GNU Linux and Windows Artefacts
+      - name: Save GNU Linux and Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: "tes-linux-window-pdfium-embedded"
