@@ -8,11 +8,9 @@ This started as an exercise in using Golang and cgo.
 But it is being used in production (at least for PDFs).
 The use case is the fast processing of binary documents for repeated search machine indexation (see below for details).
 
-The RegEx-based RTF parser is rather inefficient.
-
 The parser for XML-based office formats is not very sophisticated and might need more testing.
 
-Apache [Tika](https://tika.apache.org/) is definitively a more versatile and mature solution to be considered.
+Apache [Tika](https://tika.apache.org/) and [Kreuzberg](https://kreuzberg.dev/) are definitively more versatile and mature solutions to be considered.
 
 ## Features
 
