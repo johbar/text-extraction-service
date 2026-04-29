@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf16"
-	"unicode/utf8"
 	"unsafe"
 
 	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/model"
@@ -716,6 +715,9 @@ type textState struct {
 	// Computed as tfSize × ||CTM × Tm||(x-scale) whenever Tm or the CTM
 	// changes. Used for all gap-detection thresholds.
 	fontSize float64
+
+	currentMCID int // Tracks the active logical block ID (-1 if none)
+	th          float64
 }
 
 // deviceOrigin maps the current text-line-matrix origin through the CTM
@@ -989,7 +991,7 @@ func extractTextFromContent(content []byte, fontMap map[string]*pdfFont, xobjMap
 		out.Write(sp.text.Bytes())
 	}
 
-	result := normaliseWhitespace(out.Bytes())
+	result := out
 	return result, nil
 }
 
@@ -1400,6 +1402,9 @@ func unescapePDFLiteralString(s []byte) []byte {
 		if s[i] == '\\' && i+1 < len(s) {
 			i++
 			switch s[i] {
+			case '\n', '\r':
+				// ignore line breaks after the line contiuation marker
+				// line splitting inside literal strings is purely optical
 			case 'n':
 				buf = append(buf, '\n')
 			case 'r':
@@ -1527,43 +1532,71 @@ func parseBfChar(block string, m map[uint16]string) {
 }
 
 func parseBfRange(block string, m map[uint16]string) {
-	// Each bfrange entry is three tokens: <lo> <hi> <base-or-[array]>.
-	// As with bfchar, tokens may appear without whitespace between them.
 	for line := range strings.SplitSeq(block, "\n") {
-		// Array form starts with '[' after the two code tokens; handle it
-		// by checking the raw line before token extraction.
-		if strings.Contains(line, "[") {
-			continue // array form not yet supported
-		}
 		toks := scanHexTokens(line)
+
+		// Array form: <lo> <hi> [<d0> <d1> …]
+		if strings.Contains(line, "[") {
+			if len(toks) < 2 {
+				continue
+			}
+			lo, err1 := parseHexToken(toks[0])
+			hi, err2 := parseHexToken(toks[1])
+			if err1 != nil || err2 != nil {
+				continue
+			}
+			// Collect everything between '[' and ']'.
+			start := strings.IndexByte(line, '[')
+			end := strings.LastIndexByte(line, ']')
+			if start < 0 || end <= start {
+				continue
+			}
+			arrToks := scanHexTokens(line[start+1 : end])
+			code := lo
+			for _, tok := range arrToks {
+				dst, err := parseUnicodeHexToken(tok)
+				if err == nil {
+					m[code] = dst
+				}
+				if code == hi {
+					break
+				}
+				code++
+			}
+			continue
+		}
+
+		// Scalar form: <lo> <hi> <base>
 		if len(toks) < 3 {
 			continue
 		}
-		lo, err := parseHexToken(toks[0])
-		if err != nil {
-			continue
-		}
-		hi, err := parseHexToken(toks[1])
-		if err != nil {
-			continue
-		}
-		base, err := parseUnicodeHexToken(toks[2])
-		if err != nil {
+		lo, err1 := parseHexToken(toks[0])
+		hi, err2 := parseHexToken(toks[1])
+		base, err3 := parseUnicodeHexToken(toks[2])
+		if err1 != nil || err2 != nil || err3 != nil {
 			continue
 		}
 		baseRunes := []rune(base)
 		if len(baseRunes) == 0 {
 			continue
 		}
-		baseRune := baseRunes[len(baseRunes)-1]
-		for code := lo; code <= hi; code++ {
+		baseRune := baseRunes[0]
+		for code := lo; ; code++ {
 			m[code] = string(baseRune + rune(code-lo))
+			if code == hi {
+				break
+			}
 		}
 	}
 }
 
 func parseHexToken(s string) (uint16, error) {
-	s = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "<"), ">"))
+	s = strings.Map(func(r rune) rune {
+		if r == '<' || r == '>' || r == ' ' || r == '\t' || r == '\r' || r == '\n' {
+			return -1
+		}
+		return r
+	}, s)
 	val, err := strconv.ParseUint(s, 16, 32)
 	if err != nil {
 		return 0, err
@@ -1572,7 +1605,13 @@ func parseHexToken(s string) (uint16, error) {
 }
 
 func parseUnicodeHexToken(s string) (string, error) {
-	s = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "<"), ">"))
+	// compact and clean the string
+	s = strings.Map(func(r rune) rune {
+		if r == '<' || r == '>' || r == ' ' || r == '\t' || r == '\r' || r == '\n' {
+			return -1
+		}
+		return r
+	}, s)
 	b, err := hex.DecodeString(s)
 	if err != nil {
 		return "", err
@@ -1820,44 +1859,6 @@ func findClosingParen(s []byte, start int) int {
 		i++
 	}
 	return -1
-}
-
-// ---------------------------------------------------------------------------
-// Post-processing
-// ---------------------------------------------------------------------------
-
-// normaliseWhitespace collapses space runs, collapses newline runs, drops
-// spaces before newlines, and trims leading/trailing whitespace.
-func normaliseWhitespace(s []byte) bytes.Buffer {
-	var sb bytes.Buffer
-	sb.Grow(len(s)) // at most as long as the input
-	prevNewline := false
-	pendingSpace := false
-
-	for len(s) > 0 {
-		r, size := utf8.DecodeRune(s)
-		s = s[size:]
-		switch r {
-		case '\n', '\r':
-			pendingSpace = false
-			if !prevNewline {
-				sb.WriteByte('\n')
-			}
-			prevNewline = true
-		case ' ', '\t':
-			if !prevNewline {
-				pendingSpace = true
-			}
-		default:
-			if pendingSpace {
-				sb.WriteByte(' ')
-				pendingSpace = false
-			}
-			sb.WriteRune(r)
-			prevNewline = false
-		}
-	}
-	return *bytes.NewBuffer(bytes.TrimSpace(sb.Bytes()))
 }
 
 // ---------------------------------------------------------------------------

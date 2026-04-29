@@ -76,6 +76,10 @@ func (d *Document) Close() {
 }
 
 func (d *Document) MetadataMap() cache.DocumentMetadata {
+	tagged := "false"
+	if d.ctx.Tagged {
+		tagged = "true"
+	}
 	return map[string]string{
 		"x-document-author":   d.ctx.Author,
 		"x-document-creator":  d.ctx.Creator,
@@ -89,6 +93,7 @@ func (d *Document) MetadataMap() cache.DocumentMetadata {
 		"x-document-modified": pdfdateparser.PdfDateToIso(d.ctx.ModDate),
 		"x-parsed-by":         "text-extraction-service",
 		"x-doc-type":          "pdf",
+		"x-pdf-tagged":        tagged,
 	}
 }
 
@@ -100,21 +105,20 @@ func (d *Document) Text(i int) (string, bool) {
 			delete(imgs, x)
 		}
 	}
-	text, _ := extractPageText(&d.ctx, i+1)
-	var str string
-	if text != nil && text.Len() > 0 {
-		str = text.String()
+	text, _ := extractPageTextTaggedOrder(&d.ctx, i+1)
+
+	if text == nil {
+		return "", len(imgs) > 0
 	}
-	return str, len(imgs) > 0
+	return text.String(), len(imgs) > 0
 }
 
 func (d *Document) StreamText(w io.Writer) error {
+	var text *bytes.Buffer
+	var err error
 	for i := range d.Pages() {
-		text, err := extractPageText(&d.ctx, i+1)
-		if err != nil {
-			continue
-		}
-		if text == nil {
+		text, err = extractPageTextTaggedOrder(&d.ctx, i+1)
+		if err != nil || text == nil {
 			continue
 		}
 		_, err = text.WriteTo(w)
