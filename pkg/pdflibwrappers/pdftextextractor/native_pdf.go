@@ -106,10 +106,10 @@ func (d *Document) Text(i int) (string, bool) {
 		}
 	}
 	text, _ := extractPageTextTaggedOrder(&d.ctx, i+1)
-
 	if text == nil {
 		return "", len(imgs) > 0
 	}
+	_, _ = text.WriteRune('\n')
 	return text.String(), len(imgs) > 0
 }
 
@@ -121,6 +121,7 @@ func (d *Document) StreamText(w io.Writer) error {
 		if err != nil || text == nil {
 			continue
 		}
+		_, _ = text.WriteRune('\n')
 		_, err = text.WriteTo(w)
 		if err != nil {
 			return err
