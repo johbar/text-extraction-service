@@ -1,4 +1,5 @@
 package pdftextextractor
+
 // content-stream-order variant of the PDF text extractor.
 //
 // When a page content stream contains BDC or BMC marked-content operators,
@@ -19,6 +20,7 @@ import (
 	"maps"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf16"
 
 	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/model"
@@ -39,6 +41,23 @@ type tagEntry struct {
 	hasActualText bool
 	// actualText is the decoded UTF-8 replacement string (valid when hasActualText).
 	actualText string
+}
+
+var spanBufPool = sync.Pool{
+	New: func() any { return new(bytes.Buffer) },
+}
+
+func getSpanBuf() *bytes.Buffer {
+	b := spanBufPool.Get().(*bytes.Buffer)
+	b.Reset()
+	return b
+}
+
+func putSpanBuf(b *bytes.Buffer) {
+	// Don't retain pathologically large buffers in the pool.
+	if b != nil && b.Cap() <= 64<<10 {
+		spanBufPool.Put(b)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +105,7 @@ func extractPageTextTaggedOrder(ctx *model.Context, pageNr int) (*bytes.Buffer, 
 // reading order (untagged fallback).
 func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, xobjMap map[string]xObject) (bytes.Buffer, error) {
 	var spans []textSpan
-	cur := &textSpan{}
+	cur := &textSpan{text: getSpanBuf()}
 	tagged := false
 
 	parseContentStreamTagged(content, fontMap, xobjMap, newGraphicsState(), &spans, &cur, &tagged)
@@ -115,6 +134,7 @@ func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, x
 	for k, sp := range spans {
 		if k == 0 {
 			out.Write(sp.text.Bytes())
+			putSpanBuf(sp.text)
 			continue
 		}
 		prev := spans[k-1]
@@ -125,6 +145,7 @@ func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, x
 			out.WriteByte(' ')
 		}
 		out.Write(sp.text.Bytes())
+		putSpanBuf(sp.text)
 	}
 	return out, nil
 }
@@ -176,8 +197,8 @@ func parseContentStreamTagged(
 
 	// throwaway is a reused discard buffer for suppressed glyph output, avoiding
 	// allocating a fresh buffer on every suppressed showing operator.
-	var throwaway bytes.Buffer
-
+	throwaway := getSpanBuf()
+	defer putSpanBuf(throwaway)
 	// sink returns the span write buffer when output is live, or the throwaway
 	// buffer when inside an Artifact or ActualText suppression range.
 	//
@@ -190,9 +211,9 @@ func parseContentStreamTagged(
 	sink := func() *bytes.Buffer {
 		if artifactDepth > 0 || actualTextDepth > 0 {
 			throwaway.Reset()
-			return &throwaway
+			return throwaway
 		}
-		return &(*cur).text
+		return (*cur).text
 	}
 
 	// emitGapOrTrack calls ts.emitGap (which may seal spans and write inter-word
@@ -317,7 +338,7 @@ func parseContentStreamTagged(
 					// spans sort on their own device coordinates.
 					if (*cur).text.Len() > 0 {
 						*spans = append(*spans, **cur)
-						*cur = &textSpan{}
+						*cur = &textSpan{text: getSpanBuf()}
 					}
 					// Build the child CTM: xobj.matrix × parent CTM.
 					childGS := graphicsState{ctm: xobj.matrix.multiply(gs.ctm)}
@@ -334,7 +355,7 @@ func parseContentStreamTagged(
 					// parent stream's next span.
 					if (*cur).text.Len() > 0 {
 						*spans = append(*spans, **cur)
-						*cur = &textSpan{}
+						*cur = &textSpan{text: getSpanBuf()}
 					}
 				}
 			}

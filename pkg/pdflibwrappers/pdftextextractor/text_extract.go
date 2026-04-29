@@ -837,7 +837,7 @@ func (ts *textState) tcTwAdvance(b []byte) float64 {
 // being joined into the final output.
 type textSpan struct {
 	devY, devX float64
-	text       bytes.Buffer
+    text       *bytes.Buffer  
 }
 
 // emitGap compares the device-space origin of the next text chunk against the
@@ -865,7 +865,7 @@ func (ts *textState) emitGap(spans *[]textSpan, cur **textSpan, newDevX, newDevY
 		if (*cur).text.Len() > 0 {
 			*spans = append(*spans, **cur)
 		}
-		*cur = &textSpan{devY: newDevY, devX: newDevX}
+		*cur = &textSpan{devY: newDevY, devX: newDevX, text: getSpanBuf()}
 	} else {
 		// Same baseline — emit a space for any visible gap between the end of
 		// the last glyph and the start of the next chunk. The threshold of
