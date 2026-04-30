@@ -155,6 +155,8 @@ type pdfFont struct {
 	// defaultWidth is used for codes absent from widths. Overridden by the
 	// FontDescriptor's MissingWidth; falls back to 500 (half an em).
 	defaultWidth float64
+
+	isComposite bool // true for Type0/CIDFont — enables 2-byte code lookup
 }
 
 // glyphAdvance returns the advance width for the glyph encoded at b[i] in
@@ -200,7 +202,7 @@ func (f *pdfFont) rawStringWidth(b []byte) float64 {
 // encoding tables, writing the result directly into dst.
 func (f *pdfFont) decodeBytes(b []byte, dst *bytes.Buffer) {
 	for i := 0; i < len(b); {
-		if f.toUnicode != nil && i+1 < len(b) {
+		if f.toUnicode != nil && f.isComposite && i+1 < len(b) {
 			code := (uint16(b[i]) << 8) | uint16(b[i+1])
 			if s, ok := f.toUnicode[code]; ok {
 				dst.WriteString(s)
@@ -274,6 +276,7 @@ func buildFontMap(xRefTable *model.XRefTable, resources types.Dict) map[string]*
 		// use the FirstChar/LastChar/Widths triplet.
 		subtype, _ := fd.Find("Subtype")
 		if n, ok := subtype.(types.Name); ok && n.Value() == "Type0" {
+			f.isComposite = true
 			f.widths = parseCIDFontWidths(xRefTable, fd)
 		} else {
 			f.widths = parseSimpleFontWidths(xRefTable, fd)
@@ -837,7 +840,7 @@ func (ts *textState) tcTwAdvance(b []byte) float64 {
 // being joined into the final output.
 type textSpan struct {
 	devY, devX float64
-    text       *bytes.Buffer  
+	text       *bytes.Buffer
 }
 
 // emitGap compares the device-space origin of the next text chunk against the

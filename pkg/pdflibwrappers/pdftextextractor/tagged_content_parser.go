@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"unicode/utf16"
@@ -104,7 +104,7 @@ func extractPageTextTaggedOrder(ctx *model.Context, pageNr int) (*bytes.Buffer, 
 // resulting spans either in content-stream order (tagged PDFs) or visual
 // reading order (untagged fallback).
 func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, xobjMap map[string]xObject) (bytes.Buffer, error) {
-	var spans []textSpan
+	spans := make([]textSpan, 0, 64)
 	cur := &textSpan{text: getSpanBuf()}
 	tagged := false
 
@@ -118,11 +118,20 @@ func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, x
 	if !tagged {
 		// No marked-content operators found: sort into visual reading order,
 		// giving output identical to the untagged extractor.
-		sort.Slice(spans, func(i, j int) bool {
-			if spans[i].devY != spans[j].devY {
-				return spans[i].devY > spans[j].devY
+		slices.SortFunc(spans, func(a, b textSpan) int {
+			if a.devY != b.devY {
+				if a.devY > b.devY {
+					return -1
+				}
+				return 1
 			}
-			return spans[i].devX < spans[j].devX
+			if a.devX < b.devX {
+				return -1
+			}
+			if a.devX > b.devX {
+				return 1
+			}
+			return 0
 		})
 	}
 	// When tagged, spans are already in content-stream order; no sort needed.
