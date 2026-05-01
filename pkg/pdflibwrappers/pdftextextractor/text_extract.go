@@ -969,9 +969,9 @@ func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) (gsKernAdj float64, a
 				continue
 			}
 
-			// Emit a pending kern-space unless this chunk starts with 0x20
+			// Emit a pending kern-space unless this chunk starts with whitespace
 			// (the space is already present in the text).
-			if pendingKernSpace && raw[0] != 0x20 {
+			if pendingKernSpace && !isWhitespaceByte(raw[0]) {
 				w.WriteByte(' ')
 			}
 			pendingKernSpace = false
@@ -1482,7 +1482,7 @@ func tokenIter(content []byte) func(yield func([]byte) bool) {
 }
 
 func isWhitespaceByte(b byte) bool {
-	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\f' || b == 0
+	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\f' || b == 0 || b == 0xA0
 }
 
 func isDelimiter(b byte) bool {
