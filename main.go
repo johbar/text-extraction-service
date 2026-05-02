@@ -16,7 +16,6 @@ import (
 	"github.com/johbar/text-extraction-service/v4/internal/extractor"
 	"github.com/nats-io/nats.go"
 
-	"github.com/johbar/text-extraction-service/v4/pkg/dehyphenator"
 	"github.com/johbar/text-extraction-service/v4/pkg/tesswrap"
 )
 
@@ -37,7 +36,6 @@ func main() {
 	log = slog.New(h)
 	// set static/global config of submodules
 	tesswrap.Languages = tesConfig.TesseractLangs
-	dehyphenator.RemoveNewlines = tesConfig.RemoveNewlines
 	docFactory := docfactory.New(tesConfig, log)
 
 	var tesCache cache.Cache

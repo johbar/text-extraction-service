@@ -16,7 +16,7 @@ type Document interface {
 	Text(int) (string, bool)
 	// Data returns the underlying byte array or nil if the document was loaded from disk
 	Data() *[]byte
-	// Path returns the filesystem path a document was loaded from or an empty string if the was not loaded from disk
+	// Path returns the filesystem path a document was loaded from or an empty string if it was not loaded from disk
 	Path() string
 	// MetadataMap returns a map of Document properties, such as Author, Title etc.
 	MetadataMap() DocumentMetadata

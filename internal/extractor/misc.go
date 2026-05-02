@@ -37,7 +37,7 @@ func (e *Extractor) WriteTextOrRunOcr(d cache.Document, w io.Writer, origin stri
 	}
 	for i := range d.Pages() {
 		text, hasImages := d.Text(i)
-		if len(text) == 0 && hasImages && tesswrap.Initialized {
+		if len(text) < 200 && hasImages && tesswrap.Initialized {
 			ctx, err = e.parseForOcrOnce(d, ctx, origin)
 			if err != nil {
 				e.log.Error("pdfcpu failed", "err", err, "origin", origin)
@@ -74,28 +74,6 @@ func (e *Extractor) WriteTextOrRunOcr(d cache.Document, w io.Writer, origin stri
 		}
 	}
 	return nil
-}
-
-// RunDehyphenator starts the dehyphenator process on another Go routine.
-// It returns a pipewriter to write the input to
-func (e *Extractor) RunDehyphenator(w io.Writer) (*io.PipeWriter, chan struct{}) {
-	pr, pw := io.Pipe()
-	finished := make(chan struct{})
-	go func() {
-		err := dehyphenator.DehyphenateReaderToWriter(pr, w)
-		if err != nil {
-			// If the dehyphenator failed, we proceed in streaming the content
-			e.log.Warn("Dehyphenator failed", "err", err)
-			if _, err := io.Copy(w, pr); err != nil {
-				e.log.Error("RunDehyphenator: Could not write to output stream", "err", err)
-			}
-		}
-		if err := pr.Close(); err != nil {
-			e.log.Error("RunDehyphenator: Could not close PipeReader in go routine")
-		}
-		finished <- struct{}{}
-	}()
-	return pw, finished
 }
 
 // PrintMetadataAndTextToStdout prints a file's metadata (as JSON) on the first line, followed by the file's text content.
@@ -150,10 +128,9 @@ func (e *Extractor) PrintMetadataAndTextToStdout(url string) {
 		e.log.Error("Could not write to output", "err", err)
 		os.Exit(1)
 	}
-	w, dehyphFinished := e.RunDehyphenator(os.Stdout)
-	err = e.WriteTextOrRunOcr(doc, w, url)
-	w.Close()
-	<-dehyphFinished
+	dw := dehyphenator.New(os.Stdout, e.tesConfig.RemoveNewlines)
+	err = e.WriteTextOrRunOcr(doc, dw, url)
+	dw.Close()
 	doc.Close()
 	if len(doc.Path()) > 1 && doc.Path() != url {
 		err = os.Remove(doc.Path())

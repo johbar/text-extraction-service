@@ -13,6 +13,7 @@ import (
 	"github.com/johbar/text-extraction-service/v4/internal/cache"
 	"github.com/johbar/text-extraction-service/v4/internal/config"
 	"github.com/johbar/text-extraction-service/v4/internal/docfactory"
+	"github.com/johbar/text-extraction-service/v4/pkg/dehyphenator"
 )
 
 type RequestParams struct {
@@ -98,10 +99,9 @@ func (e *Extractor) ExtractBody(w http.ResponseWriter, r *http.Request) {
 	defer doc.Close()
 	metadata := doc.MetadataMap()
 	addMetadataAsHeaders(w.Header(), metadata)
-	pw, dehyphFinished := e.RunDehyphenator(w)
-	_ = e.WriteTextOrRunOcr(doc, pw, "<POST req>")
-	pw.Close()
-	<-dehyphFinished
+	dw := dehyphenator.New(w, e.tesConfig.RemoveNewlines)
+	_ = e.WriteTextOrRunOcr(doc, dw, "<POST req>")
+	dw.Close()
 }
 
 func (e *Extractor) fetch(url string, noCache bool) (*http.Response, cache.DocumentMetadata, error) {
@@ -169,24 +169,19 @@ func (e *Extractor) DocFromUrl(params RequestParams, w io.Writer, header http.He
 	} else {
 		mWriter = io.MultiWriter(w, &text)
 	}
+	var dstw io.Writer
 	if skipDehyphenator {
-		err = doc.StreamText(mWriter)
-		if err != nil {
-			e.log.Error("Could not extract text from file or write to output stream", "url", url, "err", err)
-			doc.Close()
-			return 499, err
-		}
+		dstw = mWriter
 	} else {
-		pw, dehyphFinished := e.RunDehyphenator(mWriter)
-		if err := e.WriteTextOrRunOcr(doc, pw, url); err != nil {
-			pw.Close()
-			doc.Close()
-			// Client might have closed connection, so text couldn't be written
-			// and is not complete. We don't want to save incomplete docs.
-			return 499, err
-		}
-		pw.Close()
-		<-dehyphFinished
+		dw := dehyphenator.New(mWriter, e.tesConfig.RemoveNewlines)
+		dstw = dw
+		defer dw.Close()
+	}
+	if err := e.WriteTextOrRunOcr(doc, dstw, url); err != nil {
+		doc.Close()
+		// Client might have closed connection, so text couldn't be written
+		// and is not complete. We don't want to save incomplete docs.
+		return 499, err
 	}
 
 	if !silent {
