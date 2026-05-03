@@ -570,14 +570,19 @@ func parseMarkedContentProps(tok []byte) (mcid int, actualText string, hasActual
 // unescaped/un-hexed by parsePDFString) into a UTF-8 Go string.
 //
 // Strings that begin with the UTF-16BE byte-order mark 0xFE 0xFF are decoded
-// via utf16.Decode.  All other byte sequences are interpreted as PDFDocEncoding
+// via utf16.Decode. All other byte sequences are interpreted as PDFDocEncoding
 // (a superset of Latin-1), with C0 and DEL control bytes filtered out.
 func decodeActualText(b []byte) string {
 	if len(b) >= 2 && b[0] == 0xFE && b[1] == 0xFF {
 		// UTF-16BE with BOM.
 		u16 := make([]uint16, 0, (len(b)-2)/2)
 		for i := 2; i+1 < len(b); i += 2 {
-			u16 = append(u16, (uint16(b[i])<<8)|uint16(b[i+1]))
+			decoded := (uint16(b[i]) << 8) | uint16(b[i+1])
+			// translate non-breaking spaces and tabs to normal white space
+			if decoded == 0xA0 || decoded == '\t' {
+				decoded = ' '
+			}
+			u16 = append(u16, decoded)
 		}
 		return string(utf16.Decode(u16))
 	}
@@ -586,6 +591,11 @@ func decodeActualText(b []byte) string {
 	sb.Grow(len(b))
 	for _, c := range b {
 		if c >= 0x20 && c != 0x7f {
+			// translate non-breaking spaces and tabs to normal white space
+			if c == 0xA0 || c == '\t' {
+				sb.WriteByte(' ')
+				continue
+			}
 			sb.WriteByte(c)
 		}
 	}

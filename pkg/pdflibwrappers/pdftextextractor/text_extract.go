@@ -96,8 +96,10 @@ var (
 		"fraction": '\u2044', "perthousand": '\u2030',
 		"mu": '\u00B5', "periodcentered": '\u00B7', "ordmasculine": '\u00BA',
 		"ordfeminine": '\u00AA', "questiondown": '\u00BF', "exclamdown": '\u00A1',
-		"notsign": '\u00AC', "softhyphen": '\u00AD', "nonbreakingspace": '\u00A0',
-		"florin": '\u0192', "lozenge": '\u25CA',
+		"notsign": '\u00AC', "softhyphen": '\u00AD',
+		// "nonbreakingspace": '\u00A0',
+		"nonbreakingspace": ' ',
+		"florin":           '\u0192', "lozenge": '\u25CA',
 	}
 
 	standardEnc map[byte]rune = map[byte]rune{
@@ -119,7 +121,9 @@ var (
 		0x7A: 'z',
 		// Common Adobe Standard extras.
 		0x91: '\u2018', 0x92: '\u2019', 0x93: '\u201C', 0x94: '\u201D',
-		0x96: '\u2013', 0x97: '\u2014', 0xA0: '\u00A0',
+		0x96: '\u2013', 0x97: '\u2014',
+		// 0xA0: '\u00A0',
+		0xA0: ' ',
 		0xAD: '\u00AD', 0xC6: '\u00C6', 0xE6: '\u00E6',
 	}
 
@@ -734,7 +738,7 @@ func (ts *textState) applyTd(tx, ty float64, gs *graphicsState) {
 // text-space advance of the glyph sequence encoded in raw bytes b, following
 // PDF spec §9.4.4:
 //
-//	tx = (w₀/1000 + Tc) × Tfs          for every glyph
+//	tx = (w₀/1000 + Tc) × Tfs            for every glyph
 //	tx += Tw × Tfs                       additionally for code 0x20 (word space)
 //
 // Both Tc (charSpacing) and Tw (wordSpacing) are applied in text space so that
@@ -1553,7 +1557,9 @@ func macRomanEncoding() map[byte]rune {
 		'\u2264', '\u2265', '\u00A5', '\u00B5', '\u2202', '\u2211', '\u220F', '\u03C0',
 		'\u222B', '\u00AA', '\u00BA', '\u03A9', '\u00E6', '\u00F8', '\u00BF', '\u00A1',
 		'\u00AC', '\u221A', '\u0192', '\u2248', '\u2206', '\u00AB', '\u00BB', '\u2026',
-		'\u00A0', '\u00C0', '\u00C3', '\u00D5', '\u0152', '\u0153', '\u2013', '\u2014',
+		// '\u00A0',
+		' ',
+		'\u00C0', '\u00C3', '\u00D5', '\u0152', '\u0153', '\u2013', '\u2014',
 		'\u201C', '\u201D', '\u2018', '\u2019', '\u00F7', '\u25CA', '\u00FF', '\u0178',
 		'\u2044', '\u20AC', '\u2039', '\u203A', '\uFB01', '\uFB02', '\u2021', '\u00B7',
 		'\u201A', '\u201E', '\u2030', '\u00C2', '\u00CA', '\u00C1', '\u00CB', '\u00C8',
