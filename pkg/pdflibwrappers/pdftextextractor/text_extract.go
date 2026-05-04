@@ -873,23 +873,26 @@ func (ts *textState) emitGap(spans *[]textSpan, cur **textSpan, newDevX, newDevY
 			*spans = append(*spans, **cur)
 		}
 		*cur = &textSpan{devY: newDevY, devX: newDevX, text: getSpanBuf()}
-	} else {
-		// Same baseline — emit a space for any visible gap between the end of
-		// the last glyph and the start of the next chunk. The threshold of
-		// ~20% of font size clears normal kerning (±50–200 glyph units) while
-		// catching genuine word gaps. There is no upper cap: large gaps such as
-		// those between left- and right-aligned elements on the same header line
-		// still produce a single space, which is the correct extraction result.
-		spaceThreshold := ts.fontSize * 0.2
-		if spaceThreshold < 1 {
-			spaceThreshold = 1
+		} else {
+			// Same baseline: emit space only for a genuine forward gap.
+			spaceThreshold := ts.fontSize * 0.2
+			if spaceThreshold < 1 {
+				spaceThreshold = 1
+			}
+			if newDevX-ts.cursorDevX > spaceThreshold {
+				(*cur).text.WriteByte(' ')
+			}
+			// Only advance cursorDevX; never retreat it on the same baseline.
+			// A backward Tm merely repositions the text-matrix reference point
+			// and does not mean the rendered advance has gone backward.
+			if newDevX > ts.cursorDevX {
+				ts.cursorDevX = newDevX
+			}
+			ts.cursorDevY = newDevY
+			return  // skip the unconditional assignment below
 		}
-		if newDevX-ts.cursorDevX > spaceThreshold {
-			(*cur).text.WriteByte(' ')
-		}
-	}
-
-	ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
+		
+		ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
 }
 
 // parseFloatBytes parses a float from a byte slice without allocating a string.

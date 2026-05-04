@@ -237,7 +237,7 @@ func parseContentStreamTagged(
 	// Tracking the cursor manually preserves enough information for the first
 	// real emitGap call after the Artifact ends to fire correctly.
 	emitGapOrTrack := func(newDevX, newDevY float64) {
-		if artifactDepth > 0 {
+		if artifactDepth > 0 || actualTextDepth > 0 {
 			ts.cursorDevX = newDevX
 			ts.cursorDevY = newDevY
 			return
@@ -432,7 +432,10 @@ func parseContentStreamTagged(
 					newDevX, newDevY := mat.multiply(gs.ctm).transformPoint(0, 0)
 					ts.setTm(mat, &gs)
 					emitGapOrTrack(newDevX, newDevY)
-					ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
+					if newDevX > ts.cursorDevX {
+						ts.cursorDevX = newDevX
+					}
+					ts.cursorDevY = newDevY
 				}
 			}
 
@@ -447,7 +450,10 @@ func parseContentStreamTagged(
 					ts.applyTd(tx, ty, &gs)
 					newDevX, newDevY := ts.deviceOrigin(&gs)
 					emitGapOrTrack(newDevX, newDevY)
-					ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
+					if newDevX > ts.cursorDevX {
+						ts.cursorDevX = newDevX
+					}
+					ts.cursorDevY = newDevY
 				}
 			}
 
@@ -456,7 +462,10 @@ func parseContentStreamTagged(
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
 				emitGapOrTrack(newDevX, newDevY)
-				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
+				if newDevX > ts.cursorDevX {
+					ts.cursorDevX = newDevX
+				}
+				ts.cursorDevY = newDevY
 			}
 
 		// -------------------------------------------------------------------
@@ -482,14 +491,17 @@ func parseContentStreamTagged(
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
 				emitGapOrTrack(newDevX, newDevY)
-				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
+				if newDevX > ts.cursorDevX {
+					ts.cursorDevX = newDevX
+				}
+				ts.cursorDevY = newDevY
 				if raw, ok := parsePDFString(atBack(1)); ok {
 					decodeRaw(raw, ts.currentFont, sink())
 					ts.advanceTm(raw, &gs)
 				}
 			}
 
-		case "\"":
+		case `"`:
 			// Set word/char spacing, move to next line, then show string.
 			if ts.inBT && pos >= 4 {
 				ts.wordSpacing, _ = parseFloatBytes(atBack(3))
@@ -497,7 +509,10 @@ func parseContentStreamTagged(
 				ts.applyTd(0, -ts.leading, &gs)
 				newDevX, newDevY := ts.deviceOrigin(&gs)
 				emitGapOrTrack(newDevX, newDevY)
-				ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
+				if newDevX > ts.cursorDevX {
+					ts.cursorDevX = newDevX
+				}
+				ts.cursorDevY = newDevY
 				if raw, ok := parsePDFString(atBack(1)); ok {
 					decodeRaw(raw, ts.currentFont, sink())
 					ts.advanceTm(raw, &gs)
