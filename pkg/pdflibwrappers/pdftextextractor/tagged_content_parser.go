@@ -41,6 +41,9 @@ type tagEntry struct {
 	hasActualText bool
 	// actualText is the decoded UTF-8 replacement string (valid when hasActualText).
 	actualText string
+	// cursorDevX when this tag was entered
+	devX float64
+	devY float64
 }
 
 var spanBufPool = sync.Pool{
@@ -282,7 +285,12 @@ func parseContentStreamTagged(
 			*tagged = true
 			if pos >= 2 {
 				name := string(stripSlash(atBack(1)))
-				tagStack = append(tagStack, tagEntry{name: name, mcid: -1})
+				tagStack = append(tagStack, tagEntry{
+					name: name,
+					mcid: -1,
+					devX: ts.cursorDevX,
+					devY: ts.cursorDevY,
+				})
 				if name == "Artifact" {
 					artifactDepth++
 				}
@@ -302,6 +310,8 @@ func parseContentStreamTagged(
 					mcid:          mcid,
 					hasActualText: hasActualText,
 					actualText:    actualText,
+					devX:          ts.cursorDevX,
+					devY:          ts.cursorDevY,
 				})
 				if name == "Artifact" {
 					artifactDepth++
@@ -317,13 +327,20 @@ func parseContentStreamTagged(
 				tagStack = tagStack[:len(tagStack)-1]
 				if top.name == "Artifact" && artifactDepth > 0 {
 					artifactDepth--
+					if artifactDepth == 0 {
+						dy := ts.cursorDevY - top.devY
+						lineThreshold := ts.fontSize * 0.5
+						if lineThreshold < 1 {
+							lineThreshold = 1
+						}
+						if dy > -lineThreshold && dy < lineThreshold &&
+							ts.cursorDevX > top.devX+ts.fontSize*0.2 {
+							(*cur).text.WriteByte(' ')
+						}
+					}
 				}
 				if top.hasActualText && actualTextDepth > 0 {
 					actualTextDepth--
-					// All glyphs in the marked-content span have been suppressed.
-					// Write the ActualText replacement now — unless we are still
-					// inside an enclosing Artifact, in which case the whole run
-					// is discarded anyway.
 					if artifactDepth == 0 {
 						(*cur).text.WriteString(top.actualText)
 					}
