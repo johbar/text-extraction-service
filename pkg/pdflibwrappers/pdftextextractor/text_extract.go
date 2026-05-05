@@ -935,11 +935,12 @@ func decodeRaw(raw []byte, f *pdfFont, dst *bytes.Buffer) {
 // either adjacent string chunk) are emitted as ASCII spaces. The threshold is
 // 150 glyph-space units — well above any optical kern pair (~150 max) and well
 // below the ~200–500 unit gaps that represent word spaces in practice.
-func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) (gsKernAdj float64, allRaw []byte) {
+func decodeTJInto(tok []byte, f *pdfFont, charSpacing float64, w *bytes.Buffer) (gsKernAdj float64, allRaw []byte) {
 	tok = bytes.TrimSpace(tok)
 	if len(tok) < 2 || tok[0] != '[' || tok[len(tok)-1] != ']' {
 		return 0, nil
 	}
+	const tcSpaceThreshold = 0.2 // text-space units; mirrors emitGap's fontSize*0.2
 	inner := tok[1 : len(tok)-1]
 	allRaw = make([]byte, 0, len(inner)) // upper-bound pre-allocation
 
@@ -990,7 +991,18 @@ func decodeTJInto(tok []byte, f *pdfFont, w *bytes.Buffer) (gsKernAdj float64, a
 			}
 			pendingKernSpace = false
 
-			decodeRaw(raw, f, w)
+			if charSpacing > tcSpaceThreshold {
+				for i := 0; i < len(raw); {
+					_, n := f.glyphAdvance(raw, i) // respects 1- vs 2-byte codes
+					decodeRaw(raw[i:i+n], f, w)
+					i += n
+					if i < len(raw) && raw[i] != 0x20 {
+						w.WriteByte(' ')
+					}
+				}
+			} else {
+				decodeRaw(raw, f, w)
+			}
 			if f != nil {
 				gsKernAdj += f.rawStringWidth(raw)
 			} else {

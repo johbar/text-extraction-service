@@ -542,7 +542,7 @@ func parseContentStreamTagged(
 			if ts.inBT && pos >= 2 {
 				// decodeTJInto returns (gsKernAdj, allRaw) even when writing to
 				// the throwaway buffer, which advanceTmGS requires for Tc/Tw.
-				gsKernAdj, allRaw := decodeTJInto(atBack(1), ts.currentFont, sink())
+				gsKernAdj, allRaw := decodeTJInto(atBack(1), ts.currentFont, ts.charSpacing, sink())
 				ts.advanceTmGS(gsKernAdj, allRaw, &gs)
 			}
 		}
