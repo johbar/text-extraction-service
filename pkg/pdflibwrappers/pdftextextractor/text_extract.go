@@ -844,6 +844,7 @@ func (ts *textState) tcTwAdvance(b []byte) float64 {
 // being joined into the final output.
 type textSpan struct {
 	devY, devX float64
+	devXEnd    float64 // cursorDevX after last glyph
 	text       *bytes.Buffer
 }
 
@@ -869,30 +870,36 @@ func (ts *textState) emitGap(spans *[]textSpan, cur **textSpan, newDevX, newDevY
 	dy := ts.cursorDevY - newDevY // positive = moved down the page (PDF y up)
 	if dy > lineThreshold || dy < -lineThreshold {
 		// Different baseline: seal the current span and open a new one.
-		if (*cur).text.Len() > 0 {
-			*spans = append(*spans, **cur)
-		}
+		ts.sealCur(spans, cur, newDevX, newDevY)
 		*cur = &textSpan{devY: newDevY, devX: newDevX, text: getSpanBuf()}
-		} else {
-			// Same baseline: emit space only for a genuine forward gap.
-			spaceThreshold := ts.fontSize * 0.2
-			if spaceThreshold < 1 {
-				spaceThreshold = 1
-			}
-			if newDevX-ts.cursorDevX > spaceThreshold {
-				(*cur).text.WriteByte(' ')
-			}
-			// Only advance cursorDevX; never retreat it on the same baseline.
-			// A backward Tm merely repositions the text-matrix reference point
-			// and does not mean the rendered advance has gone backward.
-			if newDevX > ts.cursorDevX {
-				ts.cursorDevX = newDevX
-			}
-			ts.cursorDevY = newDevY
-			return  // skip the unconditional assignment below
+	} else {
+		// Same baseline: emit space only for a genuine forward gap.
+		spaceThreshold := ts.fontSize * 0.2
+		if spaceThreshold < 1 {
+			spaceThreshold = 1
 		}
-		
-		ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
+		if newDevX-ts.cursorDevX > spaceThreshold {
+			(*cur).text.WriteByte(' ')
+		}
+		// Only advance cursorDevX; never retreat it on the same baseline.
+		// A backward Tm merely repositions the text-matrix reference point
+		// and does not mean the rendered advance has gone backward.
+		if newDevX > ts.cursorDevX {
+			ts.cursorDevX = newDevX
+		}
+		ts.cursorDevY = newDevY
+		return // skip the unconditional assignment below
+	}
+
+	ts.cursorDevX, ts.cursorDevY = newDevX, newDevY
+}
+
+func (ts *textState) sealCur(spans *[]textSpan, cur **textSpan, newDevX, newDevY float64) {
+	if (*cur).text.Len() > 0 {
+		(*cur).devXEnd = ts.cursorDevX
+		*spans = append(*spans, **cur)
+	}
+	*cur = &textSpan{devY: newDevY, devX: newDevX, text: getSpanBuf()}
 }
 
 // parseFloatBytes parses a float from a byte slice without allocating a string.

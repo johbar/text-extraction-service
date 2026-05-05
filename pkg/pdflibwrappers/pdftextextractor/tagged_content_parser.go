@@ -111,10 +111,11 @@ func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, x
 	cur := &textSpan{text: getSpanBuf()}
 	tagged := false
 
-	parseContentStreamTagged(content, fontMap, xobjMap, newGraphicsState(), &spans, &cur, &tagged)
+	cursorDevX := parseContentStreamTagged(content, fontMap, xobjMap, newGraphicsState(), &spans, &cur, &tagged)
 
 	// Seal whatever the last operator left in the open span.
 	if cur.text.Len() > 0 {
+		(*cur).devXEnd = cursorDevX
 		spans = append(spans, *cur)
 	}
 
@@ -153,7 +154,9 @@ func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, x
 		dy := prev.devY - sp.devY
 		if dy > 1 || dy < -1 {
 			out.WriteByte('\n')
-		} else if sp.devX > prev.devX {
+		// fixed space threshold here because textstate
+		// and font are not available.
+		} else if sp.devX-prev.devXEnd > 1 {
 			out.WriteByte(' ')
 		}
 		out.Write(sp.text.Bytes())
@@ -185,6 +188,7 @@ func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, x
 // tracking remains accurate after the suppressed run.
 //
 // Form XObjects invoked inside an Artifact run are skipped entirely.
+// It returns the last cursor X position.
 func parseContentStreamTagged(
 	content []byte,
 	fontMap map[string]*pdfFont,
@@ -193,7 +197,7 @@ func parseContentStreamTagged(
 	spans *[]textSpan,
 	cur **textSpan,
 	tagged *bool,
-) {
+) float64 {
 	ts := &textState{fontMap: fontMap}
 
 	const winSize = 8
@@ -362,10 +366,7 @@ func parseContentStreamTagged(
 				if xobj, ok := xobjMap[string(stripSlash(atBack(1)))]; ok {
 					// Seal the current span before recursing so the XObject's
 					// spans sort on their own device coordinates.
-					if (*cur).text.Len() > 0 {
-						*spans = append(*spans, **cur)
-						*cur = &textSpan{text: getSpanBuf()}
-					}
+					ts.sealCur(spans, cur, ts.cursorDevX, ts.cursorDevY)
 					// Build the child CTM: xobj.matrix × parent CTM.
 					childGS := graphicsState{ctm: xobj.matrix.multiply(gs.ctm)}
 					// Merge font maps; XObject fonts shadow parent fonts when names collide.
@@ -376,10 +377,11 @@ func parseContentStreamTagged(
 						maps.Copy(merged, xobj.fontMap)
 						childFonts = merged
 					}
-					parseContentStreamTagged(xobj.content, childFonts, xobj.xobjMap, childGS, spans, cur, tagged)
+					devX := parseContentStreamTagged(xobj.content, childFonts, xobj.xobjMap, childGS, spans, cur, tagged)
 					// Seal whatever the XObject left so it doesn't bleed into the
 					// parent stream's next span.
 					if (*cur).text.Len() > 0 {
+						(*cur).devXEnd = devX
 						*spans = append(*spans, **cur)
 						*cur = &textSpan{text: getSpanBuf()}
 					}
@@ -548,6 +550,7 @@ func parseContentStreamTagged(
 		win[pos&winMask] = tok
 		pos++
 	}
+	return ts.cursorDevX
 }
 
 // ---------------------------------------------------------------------------
