@@ -154,8 +154,8 @@ func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, x
 		dy := prev.devY - sp.devY
 		if dy > 1 || dy < -1 {
 			out.WriteByte('\n')
-		// fixed space threshold here because textstate
-		// and font are not available.
+			// fixed space threshold here because textstate
+			// and font are not available.
 		} else if sp.devX-prev.devXEnd > 1 {
 			out.WriteByte(' ')
 		}
@@ -540,10 +540,8 @@ func parseContentStreamTagged(
 
 		case "TJ":
 			if ts.inBT && pos >= 2 {
-				// decodeTJInto returns (gsKernAdj, allRaw) even when writing to
-				// the throwaway buffer, which advanceTmGS requires for Tc/Tw.
-				gsKernAdj, allRaw := decodeTJInto(atBack(1), ts.currentFont, ts.charSpacing, sink())
-				ts.advanceTmGS(gsKernAdj, allRaw, &gs)
+				gsAdv, tcTwAdv := parseTJArray(atBack(1), ts, sink())
+				ts.advanceTmGS(gsAdv, tcTwAdv, &gs)
 			}
 		}
 

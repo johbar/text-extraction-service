@@ -175,7 +175,7 @@ func (f *pdfFont) glyphAdvance(b []byte, i int) (width float64, consumed int) {
 		return dw, 1
 	}
 	// Try 2-byte code first (composite / CIDFont).
-	if i+1 < len(b) {
+	if f.isComposite && i+1 < len(b) {
 		if w, ok := f.widths[(uint16(b[i])<<8)|uint16(b[i+1])]; ok {
 			return w, 2
 		}
@@ -607,6 +607,9 @@ func (m matrix3) transformPoint(x, y float64) (float64, float64) {
 // scaleX returns the x-axis scale factor of the matrix (length of the x
 // basis vector), used to derive the effective font size in device space.
 func (m matrix3) scaleX() float64 {
+	if m.b == 0 {
+		return math.Abs(m.a)
+	}
 	return math.Sqrt(m.a*m.a + m.b*m.b)
 }
 
@@ -755,18 +758,29 @@ func (ts *textState) advanceTm(b []byte, gs *graphicsState) {
 	ts.cursorDevX, ts.cursorDevY = combined.transformPoint(0, 0)
 }
 
-// advanceTmGS is like advanceTm but accepts a pre-computed net glyph-space
-// advance (kerning already folded in) plus the original raw bytes, so that Tc
-// and Tw can be applied per character. Used by TJ which interleaves strings
-// with kerning numbers: the kerning part is passed in gsKernAdj (already
-// accumulated as a signed glyph-space delta), while Tc/Tw are derived from b.
-func (ts *textState) advanceTmGS(gsKernAdj float64, b []byte, gs *graphicsState) {
+// advanceTmGS updates the text matrix after a TJ operator, given the two
+// advance components that parseTJArray computes in a single pass:
+//
+//   - gsAdv: the net glyph-space advance after all kerning adjustments have
+//     been folded in (positive values move right in the default writing
+//     direction). Divided by 1000 and scaled by tfSize to convert to text
+//     space, matching PDF spec §9.4.4.
+//
+//   - tcTwAdv: the total Tc/Tw contribution in text-space units, already
+//     accumulated per character by parseTJArray (charSpacing added for every
+//     glyph, wordSpacing added for every 0x20 byte). Kept separate from
+//     gsAdv because kerning numbers in TJ arrays adjust glyph advances but
+//     must not interact with the per-character Tc/Tw terms.
+//
+// The combined text-space advance tx = gsAdv/1000×tfSize + tcTwAdv is
+// applied as a pure translation to the text matrix, and the resulting
+// device-space position is stored in cursorDevX/cursorDevY so that the
+// next emitGap call sees the correct pen position.
+func (ts *textState) advanceTmGS(gsAdv float64, tcTwAdv float64, gs *graphicsState) {
 	if ts.tfSize == 0 {
 		return
 	}
-	// gsKernAdj is the net glyph-space advance after kerning adjustments.
-	// Convert to text space, then add per-character Tc/Tw on top.
-	tx := gsKernAdj/1000.0*ts.tfSize + ts.tcTwAdvance(b)
+	tx := gsAdv/1000.0*ts.tfSize + tcTwAdv
 	adv := matrix3{a: 1, d: 1, e: tx}
 	ts.tm = adv.multiply(ts.tm)
 	combined := ts.tm.multiply(gs.ctm)
@@ -922,35 +936,35 @@ func decodeRaw(raw []byte, f *pdfFont, dst *bytes.Buffer) {
 	f.decodeBytes(raw, dst)
 }
 
-// decodeTJInto decodes the array operand of a TJ operator, writes the decoded
-// text to w, and returns:
+// parseTJArray parses a TJ array operand in a single pass, simultaneously:
+//   - writing decoded glyph text into w
+//   - accumulating the net glyph-space advance (gsAdv, kerning folded in)
+//   - accumulating the total Tc/Tw contribution in text space (tcTwAdv)
 //
-//   - gsKernAdj: net glyph-space advance after folding in all kerning numbers
-//     (positive numbers in the array reduce the advance; negative numbers
-//     increase it — PDF spec §9.4.3).
-//   - allRaw: concatenation of all raw character-code bytes across every string
-//     element in the array, used by the caller to apply Tc and Tw.
+// Both advance values are returned so the caller can update the text matrix
+// via advanceTmGS without any further iteration over the raw bytes.
 //
-// Word spaces encoded purely as large negative kerning numbers (no 0x20 byte in
-// either adjacent string chunk) are emitted as ASCII spaces. The threshold is
-// 150 glyph-space units — well above any optical kern pair (~150 max) and well
-// below the ~200–500 unit gaps that represent word spaces in practice.
-func decodeTJInto(tok []byte, f *pdfFont, charSpacing float64, w *bytes.Buffer) (gsKernAdj float64, allRaw []byte) {
+// When ts.charSpacing is large enough to represent a visible inter-character
+// gap (> 0.2 text-space units), a space is emitted between consecutive glyphs
+// within a single string chunk, reproducing the visual separation that Tc
+// creates (e.g. "Dr. h. c. Wolfgang" encoded as [(.h)...(.c)...(.W)...]).
+func parseTJArray(tok []byte, ts *textState, w *bytes.Buffer) (gsAdv float64, tcTwAdv float64) {
 	tok = bytes.TrimSpace(tok)
 	if len(tok) < 2 || tok[0] != '[' || tok[len(tok)-1] != ']' {
-		return 0, nil
+		return 0, 0
 	}
-	const tcSpaceThreshold = 0.2 // text-space units; mirrors emitGap's fontSize*0.2
 	inner := tok[1 : len(tok)-1]
-	allRaw = make([]byte, 0, len(inner)) // upper-bound pre-allocation
 
-	// lastRaw holds the raw bytes of the most recently decoded string chunk so
-	// that the kerning branch can inspect its last byte.
-	var lastRaw []byte
-	// pendingKernSpace is set when a large negative kern was seen between two
-	// string chunks with no adjacent space byte; the space is emitted lazily
-	// (before the next chunk) so it is never appended at the very end.
+	f := ts.currentFont
+	tcf := ts.charSpacing * ts.tfSize
+	twf := ts.wordSpacing * ts.tfSize
+	// Emit a space between characters within a chunk when Tc alone is wide
+	// enough to constitute a visible gap (mirrors the fontSize*0.2 threshold
+	// used by emitGap, expressed in text-space units: threshold/fontSize = 0.2).
+	emitCharSpaces := ts.charSpacing > 0.2
+
 	pendingKernSpace := false
+	lastEndsWithSpace := false
 
 	i := 0
 	for i < len(inner) {
@@ -973,7 +987,7 @@ func decodeTJInto(tok []byte, f *pdfFont, charSpacing float64, w *bytes.Buffer) 
 				raw, ok = parsePDFString(inner[i : end+1])
 				i = end + 1
 			} else {
-				end := bytes.IndexByte(inner[i+1:], '>') // faster than bytes.Index with slice literal
+				end := bytes.IndexByte(inner[i+1:], '>')
 				if end < 0 {
 					break
 				}
@@ -984,32 +998,76 @@ func decodeTJInto(tok []byte, f *pdfFont, charSpacing float64, w *bytes.Buffer) 
 				continue
 			}
 
-			// Emit a pending kern-space unless this chunk starts with whitespace
-			// (the space is already present in the text).
 			if pendingKernSpace && !isWhitespaceByte(raw[0]) {
 				w.WriteByte(' ')
 			}
 			pendingKernSpace = false
 
-			if charSpacing > tcSpaceThreshold {
-				for i := 0; i < len(raw); {
-					_, n := f.glyphAdvance(raw, i) // respects 1- vs 2-byte codes
-					decodeRaw(raw[i:i+n], f, w)
-					i += n
-					if i < len(raw) && raw[i] != 0x20 {
-						w.WriteByte(' ')
+			// Single pass: advance accumulation + decode.
+			if f == nil {
+				// No font loaded: assume 500-unit advance per byte, Latin-1 decode.
+				for j := 0; j < len(raw); j++ {
+					gsAdv += 500
+					tcTwAdv += tcf
+					if raw[j] == 0x20 {
+						tcTwAdv += twf
+					}
+					r := rune(raw[j])
+					if r >= 0x20 && r != 0x7f {
+						w.WriteRune(r)
 					}
 				}
 			} else {
-				decodeRaw(raw, f, w)
+				prevWasSpace := false
+				for j := 0; j < len(raw); {
+					width, n := f.glyphAdvance(raw, j)
+					gsAdv += width
+					tcTwAdv += tcf
+					isSpace := n == 1 && raw[j] == 0x20
+					if isSpace {
+						tcTwAdv += twf
+					}
+
+					// Inter-character space when Tc is visually significant.
+					if emitCharSpaces && j > 0 && !isSpace && !prevWasSpace {
+						w.WriteByte(' ')
+					}
+					prevWasSpace = isSpace
+
+					// Use isComposite (not n from glyphAdvance) to determine code width.
+					// glyphAdvance may return n=1 for composite glyphs missing from the
+					// widths map (defaultWidth fallback), which would misalign the decode.
+					var code uint16
+					if f.isComposite && j+1 < len(raw) {
+						code = (uint16(raw[j]) << 8) | uint16(raw[j+1])
+						n = 2 // override to keep j advancement consistent with code width
+					} else {
+						code = uint16(raw[j])
+					}
+					if f.toUnicode != nil {
+						if s, ok := f.toUnicode[code]; ok {
+							w.WriteString(s)
+							j += n
+							continue
+						}
+					}
+					if n == 1 {
+						if f.encoding != nil {
+							if r, ok := f.encoding[raw[j]]; ok {
+								w.WriteRune(r)
+								j++
+								continue
+							}
+						}
+						r := rune(raw[j])
+						if r >= 0x20 && r != 0x7f {
+							w.WriteRune(r)
+						}
+					}
+					j += n
+				}
 			}
-			if f != nil {
-				gsKernAdj += f.rawStringWidth(raw)
-			} else {
-				gsKernAdj += float64(len(raw)) * 500
-			}
-			allRaw = append(allRaw, raw...)
-			lastRaw = raw
+			lastEndsWithSpace = len(raw) > 0 && raw[len(raw)-1] == 0x20
 
 		} else {
 			// Kerning number — positive tightens, negative opens.
@@ -1021,16 +1079,14 @@ func decodeTJInto(tok []byte, f *pdfFont, charSpacing float64, w *bytes.Buffer) 
 			if err != nil {
 				continue
 			}
-			gsKernAdj -= n
+			gsAdv -= n
 
-			// A large negative kern (rightward shift > 150 glyph units) between
-			// two string chunks with no adjacent 0x20 byte encodes a word space.
-			if n < -150 && len(lastRaw) > 0 && lastRaw[len(lastRaw)-1] != 0x20 {
+			if n < -150 && !lastEndsWithSpace {
 				pendingKernSpace = true
 			}
 		}
 	}
-	return gsKernAdj, allRaw
+	return gsAdv, tcTwAdv
 }
 
 // parsePDFString parses a PDF string literal (literal or hex form).
@@ -1043,22 +1099,23 @@ func parsePDFString(s []byte) ([]byte, bool) {
 		return unescapePDFLiteralString(s[1 : len(s)-1]), true
 	}
 	if s[0] == '<' && s[len(s)-1] == '>' {
-		// Strip all whitespace from the hex body in a single pass into a
-		// reused stack buffer, avoiding the three-chain ReplaceAll that each
-		// allocates. The result is at most (len(s)-2) bytes so it fits in a
-		// slice grown once from an initial nil.
+		// Strip all whitespace from the hex body
 		body := s[1 : len(s)-1]
-		filtered := make([]byte, 0, len(body))
-		for _, b := range body {
-			if b != ' ' && b != '\t' && b != '\n' && b != '\r' && b != '\f' {
-				filtered = append(filtered, b)
+		if bytes.ContainsAny(body, "\t\n\r\f") {
+			filtered := make([]byte, 0, len(body))
+			for _, b := range body {
+				if b != ' ' && b != '\t' && b != '\n' && b != '\r' && b != '\f' {
+					filtered = append(filtered, b)
+				}
 			}
+			body = filtered
 		}
-		if len(filtered)%2 != 0 {
-			filtered = append(filtered, '0')
+
+		if len(body)%2 != 0 {
+			body = append(body, '0')
 		}
-		out := make([]byte, len(filtered)/2)
-		if _, err := hex.Decode(out, filtered); err != nil {
+		out := make([]byte, len(body)/2)
+		if _, err := hex.Decode(out, body); err != nil {
 			return nil, false
 		}
 		return out, true
