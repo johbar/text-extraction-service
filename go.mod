@@ -12,10 +12,10 @@ require (
 	github.com/johbar/pdfcpu-lite v0.12.0
 	github.com/klauspost/compress v1.18.6
 	github.com/nats-io/nats-server/v2 v2.14.0
-	github.com/nats-io/nats.go v1.51.0
+	github.com/nats-io/nats.go v1.52.0
 	github.com/richardlehane/mscfb v1.0.6
 	go-simpler.org/env v0.12.0
-	golang.org/x/text v0.36.0
+	golang.org/x/text v0.37.0
 )
 
 require (
@@ -30,8 +30,8 @@ require (
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
-	golang.org/x/crypto v0.50.0 // indirect
-	golang.org/x/image v0.39.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/crypto v0.51.0 // indirect
+	golang.org/x/image v0.40.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )
