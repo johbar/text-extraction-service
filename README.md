@@ -189,10 +189,10 @@ It is not fully accurate.
 
 NOTE: This feature is not well tested and thus considered experimental.
 
-##  PDFium, MuPDF or Poppler?
+## PDFium, MuPDF or Poppler?
 
 Concerning the quality of text extracted by theses libs in my experience *Poppler* and *PDFium* are a bit better than *MuPDF*.
-But complicated as the Portable Document Format is there are a lot of edge cases one lib handles better than the other–and some where neither can do right.
+But complicated as the Portable Document Format is there are a lot of edge cases one lib handles better than the other — and some where neither can do right.
 
 Regarding speed with ordinary (rather small) files *PDFium* and *MuPDF* are mostly astride.
 
@@ -215,6 +215,25 @@ See [Containerfile](Containerfile.pdfiumlo-ubuntu) on how to use this shared lib
 
 ³ *PDFium* is not thread safe.
 For that reason TES uses a lock to protect the lib instance against concurrent access and a multi-processing approach (forking a new TES process, connected with pipes, if PDFium is busy)
+
+## What about the native PDF implementation?
+
+Regarding quality it might not be as good and mature as PDFium and Poppler.
+But a lot of effort and testing with different types of PDFs have been put into it in order to ensure white space handling and text decoding are correct.
+In terms of performance an memory efficiency it offers a good compromise.
+
+For small files it is
+
+- a bit slower than PDFium, same RSS (~20 MB)
+- a bit faster than Poppler (which needs ~32 MB RSS)
+
+For big files it is
+
+- slightly faster than PDFium with significantly lower RSS (351 MB instead of 8 GB)
+- slower than Poppler (which only needs ~67 MB RSS)
+
+All in all, this implemention is a good-enough solution for pure Go text extraction.
+It can not leak memory like PDFium seems to do and it is thread-safe.
 
 ## Build container images
 
