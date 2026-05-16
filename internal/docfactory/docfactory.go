@@ -30,18 +30,18 @@ var (
 )
 
 type DocFactory struct {
+	log              *slog.Logger
+	pool             *mmappool.Mempool
+	executable       string
+	pdfImpl          pdfImplementation
 	MaxInMemoryBytes uint64
 	MaxFileSizeBytes uint64
-	pdfImpl          pdfImplementation
-	log              *slog.Logger
-	executable       string
-	pool             *mmappool.Mempool
 }
 
 type PooledDoc struct {
 	cache.Document
-	poolBuffer []byte
 	df         *DocFactory
+	poolBuffer []byte
 }
 
 func (d *PooledDoc) Close() {
@@ -130,7 +130,7 @@ func (df *DocFactory) handleUnknownSize(r io.Reader, origin string) (cache.Docum
 	if isAll {
 		// no error, file read was smaller than buf
 		d, err := df.NewFromBytes(buf[:bytesRead], origin)
-		return &PooledDoc{d, buf, df}, err
+		return &PooledDoc{d, df, buf}, err
 	}
 	return nil, err
 }
@@ -156,7 +156,7 @@ func (df *DocFactory) handleSmallSize(r io.Reader, size int64, origin string) (c
 		return nil, err
 	}
 	d, err := df.NewFromBytes(buf[:n], origin)
-	return &PooledDoc{d, buf, df}, err
+	return &PooledDoc{d, df, buf}, err
 }
 
 func (df *DocFactory) NewDocFromStream(r io.Reader, size int64, origin string) (cache.Document, error) {

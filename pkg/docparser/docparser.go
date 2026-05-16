@@ -25,9 +25,9 @@ import (
 
 type WordDoc struct {
 	data       *[]byte
-	path       string
 	docStreams *docStreams
 	f          *os.File
+	path       string
 }
 
 func NewFromBytes(data []byte) (*WordDoc, error) {

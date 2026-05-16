@@ -36,6 +36,9 @@ import (
 // Metadata holds document properties extracted from the two OLE property
 // streams that Word Binary files always carry.
 type Metadata struct {
+	Created     time.Time
+	LastSaved   time.Time
+	LastPrinted time.Time
 	// From \005SummaryInformation
 	Title          string
 	Subject        string
@@ -46,26 +49,24 @@ type Metadata struct {
 	LastAuthor     string
 	RevisionNumber string
 	Application    string
-	Created        time.Time
-	LastSaved      time.Time
-	LastPrinted    time.Time
-	PageCount      int32
-	WordCount      int32
-	CharCount      int32
-	Security       int32
 
 	// From \005DocumentSummaryInformation
-	Category      string
-	Manager       string
-	Company       string
+	Category  string
+	Manager   string
+	Company   string
+	PageCount int32
+	WordCount int32
+	CharCount int32
+	Security  int32
+
 	CharCountFull int32 // chars including spaces (pid 0x0010 in DocSummary)
 }
 
 // ── Property Set parsing ──────────────────────────────────────────────────────
 
 type propVal struct {
-	vt   uint16
 	data []byte // raw bytes immediately after the 4-byte type indicator
+	vt   uint16
 }
 
 // parsePropertySet parses a single-section OLE property set stream.

@@ -10,9 +10,9 @@ import (
 
 type Mempool struct {
 	mmaps      chan mmap.MMap
+	log        *slog.Logger
 	elemSize   int
 	NumCreated atomic.Int32
-	log        *slog.Logger
 }
 
 // New creates a new memory pool of max size `poolsize` which emits []byte of size and capacity `elemsize`.

@@ -15,12 +15,12 @@ import (
 
 type XmlBasedDocument struct {
 	data         *[]byte
-	contentFiles []*zip.File
+	metadata     map[string]string
+	file         *os.File
 	ext          string
 	bodyTag      string
-	metadata     map[string]string
 	path         string
-	file         *os.File
+	contentFiles []*zip.File
 }
 
 var (

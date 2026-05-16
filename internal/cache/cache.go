@@ -30,10 +30,10 @@ type DocumentMetadata = map[string]string
 
 // ExtractedDocument contains pointers to metadata, textual content and URL of origin
 type ExtractedDocument struct {
+	Doc      Document
 	Url      *string
 	Metadata *map[string]string
 	Text     []byte
-	Doc      Document
 }
 
 type Cache interface {

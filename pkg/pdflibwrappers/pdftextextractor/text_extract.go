@@ -311,9 +311,9 @@ func buildFontMap(xRefTable *model.XRefTable, resources types.Dict) map[string]*
 // pre-multiplied into the caller's CTM before parsing the stream (PDF spec
 // §8.10.1).  It is the identity when the XObject has no /Matrix entry.
 type xObject struct {
-	content []byte
 	fontMap map[string]*pdfFont
 	xobjMap map[string]xObject // nested XObjects from this XObject's /Resources
+	content []byte
 	matrix  matrix3
 }
 
@@ -620,8 +620,8 @@ func (m matrix3) scaleX() float64 {
 // graphicsState holds the subset of the PDF graphics state needed for text
 // extraction: the current transformation matrix and its save/restore stack.
 type graphicsState struct {
-	ctm   matrix3
 	stack []matrix3
+	ctm   matrix3
 }
 
 func newGraphicsState() graphicsState {
@@ -646,9 +646,16 @@ func (gs *graphicsState) pop() {
 // All position arithmetic is performed in device space (after composing the
 // current transformation matrix with the text matrix and the text line matrix).
 type textState struct {
-	inBT        bool
 	currentFont *pdfFont
 	fontMap     map[string]*pdfFont
+
+	// Text line matrix (Tlm) and text matrix (Tm) per PDF spec §9.4.
+	// Tlm is the reference point updated by Td/TD/T*/Tm.
+	// After every showing operator Tm is also updated (Tlm is not).
+	// We store both as full 3×3 matrices so that composition with the CTM
+	// is exact regardless of rotation, shear, or non-uniform scale.
+	tlm matrix3 // text line matrix
+	tm  matrix3 // text matrix (equals tlm at line-start; advances with glyphs)
 
 	// charSpacing is the Tc text state parameter (set by the "Tc" operator and
 	// by the " operator). It is added to the advance of every glyph in text
@@ -660,18 +667,6 @@ type textState struct {
 	// character code is 0x20 (the single-byte word-space code) in text space
 	// units. PDF spec §9.3.3.
 	wordSpacing float64
-
-	// Text line matrix (Tlm) and text matrix (Tm) per PDF spec §9.4.
-	// Tlm is the reference point updated by Td/TD/T*/Tm.
-	// After every showing operator Tm is also updated (Tlm is not).
-	// We store both as full 3×3 matrices so that composition with the CTM
-	// is exact regardless of rotation, shear, or non-uniform scale.
-	tlm matrix3 // text line matrix
-	tm  matrix3 // text matrix (equals tlm at line-start; advances with glyphs)
-
-	// tlSet is true once at least one positioning operator has fired inside
-	// the current BT/ET block, making tlm/tm valid reference points.
-	tlSet bool
 
 	// cursorDevX/cursorDevY is the device-space pen position after the last
 	// rendered glyph. It is compared against the device-space origin of the
@@ -691,6 +686,11 @@ type textState struct {
 
 	currentMCID int // Tracks the active logical block ID (-1 if none)
 	th          float64
+	inBT        bool
+
+	// tlSet is true once at least one positioning operator has fired inside
+	// the current BT/ET block, making tlm/tm valid reference points.
+	tlSet bool
 }
 
 // deviceOrigin maps the current text-line-matrix origin through the CTM
@@ -857,9 +857,9 @@ func (ts *textState) tcTwAdvance(b []byte) float64 {
 // Spans are collected during parsing and sorted into reading order before
 // being joined into the final output.
 type textSpan struct {
+	text       *bytes.Buffer
 	devY, devX float64
 	devXEnd    float64 // cursorDevX after last glyph
-	text       *bytes.Buffer
 }
 
 // emitGap compares the device-space origin of the next text chunk against the

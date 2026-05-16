@@ -74,9 +74,9 @@ var (
 )
 
 type Document struct {
-	handle document
-	path   string
 	data   *[]byte
+	path   string
+	handle document
 	pages  int
 }
 

@@ -32,8 +32,6 @@ const tailSize = 16
 // through to the underlying writer; only a small tail (≤ tailSize bytes) is
 // buffered at any time.
 type DehyphenWriter struct {
-	removeNewlines bool
-
 	out io.Writer
 
 	// tail holds the last few bytes of the current incomplete line. It is at
@@ -45,15 +43,16 @@ type DehyphenWriter struct {
 	// 0x00 when no such hyphen is pending.
 	lastHyphen rune
 
-	// lineStarted is true once we have written at least one byte of the current
-	// line to out (leading whitespace trimmed, lastHyphen decision resolved).
-	lineStarted bool
-
 	// prevContentRune is the last non-space rune that was written to out for
 	// the current line. It is needed when the tail shrinks to a single hyphen
 	// rune, so we can still determine whether the rune immediately before the
 	// hyphen was uppercase — even though that rune has already been flushed.
 	prevContentRune rune
+	removeNewlines  bool
+
+	// lineStarted is true once we have written at least one byte of the current
+	// line to out (leading whitespace trimmed, lastHyphen decision resolved).
+	lineStarted bool
 }
 
 // New returns a new DehyphenWriter that writes to out. When removeNewlines is

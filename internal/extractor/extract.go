@@ -29,9 +29,9 @@ type Extractor struct {
 	df                  *docfactory.DocFactory
 	log                 *slog.Logger
 	httpClient          *http.Client
-	cacheNop            bool
 	postprocessDocsChan chan cache.ExtractedDocument
 	tesConfig           *config.TesConfig
+	cacheNop            bool
 }
 
 const lastModified string = "last-modified"

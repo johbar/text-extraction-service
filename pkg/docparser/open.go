@@ -22,19 +22,19 @@ import (
 type docStreams struct {
 	// Text extraction in Word files
 	wordDocument io.ReaderAt // mscfb entry kept open for per-piece ReadAt
-	wordDocSize  int64
+	metaErr      error
+	metaVal      *Metadata
 	table        []byte // whichever of 0Table/1Table the FIB selects
 	// streams only present in PowerPoint files
 	pptDoc      []byte
 	currentUser []byte
 
 	// Metadata — raw bytes stashed at open time, parsed lazily on first request.
-	siRaw  []byte // \x05SummaryInformation stream, nil if absent
-	dsiRaw []byte // \x05DocumentSummaryInformation stream, nil if absent
+	siRaw       []byte // \x05SummaryInformation stream, nil if absent
+	dsiRaw      []byte // \x05DocumentSummaryInformation stream, nil if absent
+	wordDocSize int64
 	// Lazy metadata cache.
 	metaOnce sync.Once
-	metaVal  *Metadata
-	metaErr  error
 }
 
 // metadata parses the OLE property streams on the first call and caches the

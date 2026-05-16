@@ -9,9 +9,9 @@ import (
 )
 
 type RichTextDoc struct {
-	data  []byte
 	input io.ReadSeekCloser
 	path  string
+	data  []byte
 }
 
 type closableBytesReader struct{ *bytes.Reader }

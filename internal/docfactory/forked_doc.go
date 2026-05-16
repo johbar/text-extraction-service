@@ -20,13 +20,13 @@ var AlienationErr error = errors.New("don't know who I am")
 
 // ForkedDoc represents a Document processed by forked subprocess of this service
 type ForkedDoc struct {
+	textStream io.Reader
 	cmd        *exec.Cmd
 	metadata   map[string]string
-	textStream io.Reader
 	cancel     context.CancelFunc
+	log        *slog.Logger
 	origin     string
 	path       string
-	log        *slog.Logger
 }
 
 func (df *DocFactory) NewDocFromForkedProcessPath(path, origin string) (*ForkedDoc, error) {

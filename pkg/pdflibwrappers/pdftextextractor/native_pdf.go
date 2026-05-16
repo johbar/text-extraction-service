@@ -15,9 +15,9 @@ import (
 var pdfcpuConfig *model.Configuration = model.NewDefaultConfiguration()
 
 type Document struct {
+	data  *[]byte
 	ctx   model.Context
 	path  string
-	data  *[]byte
 	pages int
 }
 

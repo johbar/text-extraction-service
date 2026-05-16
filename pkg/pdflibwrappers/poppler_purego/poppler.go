@@ -17,9 +17,9 @@ import (
 )
 
 type GError struct {
+	message *byte
 	_       uint32
 	_       int32
-	message *byte
 }
 
 // Page represents a PDF page opened by Poppler
@@ -29,9 +29,9 @@ type doc uintptr
 
 // Document represents a PDF opened by Poppler
 type Document struct {
-	handle doc
-	path   string
 	data   *[]byte
+	path   string
+	handle doc
 	pages  int
 }
 

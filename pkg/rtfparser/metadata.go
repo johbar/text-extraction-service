@@ -12,6 +12,10 @@ import (
 // Metadata holds document properties extracted from the RTF \info group.
 // Fields are empty/zero if not present in the document.
 type Metadata struct {
+
+	// Timestamps — nil if absent or unparseable
+	Created   *time.Time
+	Modified  *time.Time
 	Title     string
 	Subject   string
 	Author    string
@@ -26,10 +30,6 @@ type Metadata struct {
 
 	// Numeric revision count
 	Version int
-
-	// Timestamps — nil if absent or unparseable
-	Created  *time.Time
-	Modified *time.Time
 }
 
 // infoDestinations are the \info sub-destinations that contain plain text.
@@ -77,22 +77,18 @@ type metaParser struct {
 	r    *bufio.Reader
 	meta *Metadata
 
-	// group stack depth
-	depth int
-
-	// are we currently inside \info?
-	inInfo bool
-	// depth at which \info opened (so we know when it closes)
-	infoDepth int
-
 	// current info sub-destination (e.g. "author", "title")
 	subDest string
-	// are we inside a time sub-destination?
-	inTimeDest bool
 	// accumulator for the current sub-destination's text
 	textBuf strings.Builder
 	// partial time being assembled for a time sub-destination
 	pendingTime partialTime
+
+	// group stack depth
+	depth int
+
+	// depth at which \info opened (so we know when it closes)
+	infoDepth int
 
 	// unicode state
 	ucValue     int
@@ -100,6 +96,11 @@ type metaParser struct {
 
 	// code page
 	codePage int
+
+	// are we currently inside \info?
+	inInfo bool
+	// are we inside a time sub-destination?
+	inTimeDest bool
 }
 
 type partialTime struct {

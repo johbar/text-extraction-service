@@ -35,15 +35,15 @@ import (
 type tagEntry struct {
 	// name is the tag role without the leading "/" (e.g. "P", "Span", "Artifact").
 	name string
-	// mcid is the value of the /MCID property; -1 when the property is absent.
-	mcid int
-	// hasActualText is true when the BDC property dict contained /ActualText.
-	hasActualText bool
 	// actualText is the decoded UTF-8 replacement string (valid when hasActualText).
 	actualText string
+	// mcid is the value of the /MCID property; -1 when the property is absent.
+	mcid int
 	// cursorDevX when this tag was entered
 	devX float64
 	devY float64
+	// hasActualText is true when the BDC property dict contained /ActualText.
+	hasActualText bool
 }
 
 var spanBufPool = sync.Pool{

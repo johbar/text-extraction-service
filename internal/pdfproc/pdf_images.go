@@ -12,8 +12,8 @@ import (
 )
 
 type PdfMetaData struct {
-	Author, Title, Subject string
 	Created, Modified      time.Time
+	Author, Title, Subject string
 	PageCount              int
 }
 

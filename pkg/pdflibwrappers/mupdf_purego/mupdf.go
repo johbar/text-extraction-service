@@ -17,13 +17,13 @@ import (
 
 // Document represents fitz document.
 type Document struct {
-	ctx    fzContext
 	data   *[]byte
 	path   string
+	ctx    fzContext
 	doc    fzDocument
-	mtx    sync.Mutex
 	stream fzStream
 	pages  int
+	mtx    sync.Mutex
 }
 
 type fzContext uintptr

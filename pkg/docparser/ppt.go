@@ -58,11 +58,11 @@ import (
 
 // SlideText holds the extracted plain text for a single presentation slide.
 type SlideText struct {
-	// SlideNumber is 1-based.
-	SlideNumber int
 	// Text contains all text runs from the slide's shapes, joined with newlines.
 	// The final newline of a paragraph is normalised to '\n'.
 	Text string
+	// SlideNumber is 1-based.
+	SlideNumber int
 }
 
 // ── Record header ─────────────────────────────────────────────────────────────
