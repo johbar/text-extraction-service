@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 	"unicode/utf16"
+	"unsafe"
 
 	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/model"
 )
@@ -253,7 +254,8 @@ func parseContentStreamTagged(
 	}
 
 	for tok := range tokenIter(content) {
-		switch string(tok) {
+		s := unsafe.String(&tok[0], len(tok))
+		switch s {
 
 		// -------------------------------------------------------------------
 		// Graphics state operators
@@ -578,7 +580,7 @@ func parseMarkedContentProps(tok []byte) (mcid int, actualText string, hasActual
 	inner := tok[2 : len(tok)-2]
 	var key string
 	for t := range tokenIter(inner) {
-		s := string(t)
+		s := unsafe.String(&t[0], len(t))
 		if len(s) > 0 && s[0] == '/' {
 			key = s[1:] // PDF name: advance to its value on the next iteration
 			continue

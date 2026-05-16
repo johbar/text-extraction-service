@@ -1193,7 +1193,7 @@ func decodeLatin1(b []byte, dst *bytes.Buffer) {
 
 func parseToUnicodeCMap(content []byte) map[uint16]string {
 	m := make(map[uint16]string)
-	text := string(content)
+	text := unsafe.String(&content[0], len(content))
 
 	for {
 		start := strings.Index(text, "beginbfchar")
@@ -1208,7 +1208,7 @@ func parseToUnicodeCMap(content []byte) map[uint16]string {
 		text = text[start+end+len("endbfchar"):]
 	}
 
-	text = string(content)
+	text = unsafe.String(&content[0], len(content))
 	for {
 		start := strings.Index(text, "beginbfrange")
 		if start < 0 {
