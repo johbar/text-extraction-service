@@ -3,6 +3,7 @@ package pdftextextractor
 import (
 	"bytes"
 	"io"
+	"os"
 	"strconv"
 
 	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu"
@@ -16,6 +17,7 @@ var pdfcpuConfig *model.Configuration = model.NewDefaultConfiguration()
 
 type Document struct {
 	data  *[]byte
+	f     *os.File
 	ctx   model.Context
 	path  string
 	pages int
@@ -45,16 +47,19 @@ func Load(data []byte) (*Document, error) {
 }
 
 func Open(path string) (*Document, error) {
-	ctx, err := pdfcpu.ReadFile(path, pdfcpuConfig)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-
+	ctx, err := pdfcpu.Read(f, pdfcpuConfig)
+	if err != nil {
+		return nil, err
+	}
 	// ignore validation error
 	_ = validate.XRefTable(ctx)
 	// necessary for image extraction
 	_ = pdfcpu.OptimizeXRefTable(ctx)
-	return &Document{ctx: *ctx, path: path, pages: ctx.PageCount}, nil
+	return &Document{ctx: *ctx, path: path, pages: ctx.PageCount, f: f}, nil
 }
 
 func (d *Document) Pages() int {
@@ -72,7 +77,9 @@ func (d *Document) Data() *[]byte {
 func (d *Document) HasNewlines() bool { return true }
 
 func (d *Document) Close() {
-	// noop
+	if d.f != nil {
+		d.f.Close()
+	}
 }
 
 func (d *Document) MetadataMap() cache.DocumentMetadata {
@@ -109,20 +116,20 @@ func (d *Document) Text(i int) (string, bool) {
 	if text == nil {
 		return "", len(imgs) > 0
 	}
+	defer text.Close()
 	_, _ = text.WriteRune('\n')
 	return text.String(), len(imgs) > 0
 }
 
 func (d *Document) StreamText(w io.Writer) error {
-	var text *bytes.Buffer
-	var err error
 	for i := range d.Pages() {
-		text, err = extractPageTextTaggedOrder(&d.ctx, i+1)
+		text, err := extractPageTextTaggedOrder(&d.ctx, i+1)
 		if err != nil || text == nil {
 			continue
 		}
 		_, _ = text.WriteRune('\n')
 		_, err = text.WriteTo(w)
+		_ = text.Close()
 		if err != nil {
 			return err
 		}

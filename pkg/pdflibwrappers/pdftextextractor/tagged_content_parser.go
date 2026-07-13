@@ -47,32 +47,43 @@ type tagEntry struct {
 	hasActualText bool
 }
 
-var spanBufPool = sync.Pool{
-	New: func() any { return new(bytes.Buffer) },
+// pooledBuffer wraps a *bytes.Buffer that came from a pool and returns it
+// to the pool when Close is called.  It exposes io.ReadCloser so callers
+// that only need io.Reader still work (io.ReadCloser satisfies io.Reader).
+type pooledBuffer struct {
+	*bytes.Buffer
 }
 
-func getSpanBuf() *bytes.Buffer {
-	b := spanBufPool.Get().(*bytes.Buffer)
+// Close returns the underlying buffer to the pool. The caller must not read
+// from this pooledBuffer after Close returns.
+func (pb *pooledBuffer) Close() error {
+	pb.Buffer.Reset()
+	pageContentPool.Put(pb.Buffer)
+	pb.Buffer = nil
+	return nil
+}
+
+var pageContentPool = sync.Pool{
+	New: func() any {
+		return bytes.NewBuffer(make([]byte, 0, 4096))
+	},
+}
+
+func getBuf() *bytes.Buffer {
+	b := pageContentPool.Get().(*bytes.Buffer)
 	b.Reset()
 	return b
 }
 
-func putSpanBuf(b *bytes.Buffer) {
-	// Don't retain pathologically large buffers in the pool.
-	if b != nil && b.Cap() <= 64<<10 {
-		spanBufPool.Put(b)
-	}
+func putBuf(b *bytes.Buffer) {
+	pageContentPool.Put(b)
 }
-
-// ---------------------------------------------------------------------------
-// Public entry point
-// ---------------------------------------------------------------------------
 
 // extractPageTextTaggedOrder is the tagged variant of extractPageText.
 //
 // The caller interface is identical to extractPageText; only the span-ordering
 // strategy changes when marked-content operators are detected.
-func extractPageTextTaggedOrder(ctx *model.Context, pageNr int) (*bytes.Buffer, error) {
+func extractPageTextTaggedOrder(ctx *model.Context, pageNr int) (*pooledBuffer, error) {
 	if pageNr < 1 || pageNr > ctx.PageCount {
 		return nil, fmt.Errorf("extractPageTextTaggedOrder: invalid page number %d (document has %d pages)", pageNr, ctx.PageCount)
 	}
@@ -83,7 +94,9 @@ func extractPageTextTaggedOrder(ctx *model.Context, pageNr int) (*bytes.Buffer, 
 	if pageDict == nil {
 		return nil, fmt.Errorf("extractPageTextTaggedOrder: page %d not found", pageNr)
 	}
-	content, err := ctx.XRefTable.PageContent(pageDict, pageNr)
+	content := getBuf()
+	defer putBuf(content)
+	err = ctx.XRefTable.PageContentInto(pageDict, pageNr, content)
 	if err != nil {
 		if err == model.ErrNoContent {
 			return nil, nil
@@ -93,11 +106,12 @@ func extractPageTextTaggedOrder(ctx *model.Context, pageNr int) (*bytes.Buffer, 
 	fontMap := buildFontMap(ctx.XRefTable, inhPAttrs.Resources)
 	xobjMap := buildXObjMap(ctx.XRefTable, inhPAttrs.Resources)
 
-	text, err := extractTextFromContentTagged(content, fontMap, xobjMap)
+	text, err := extractTextFromContentTagged(content.Bytes(), fontMap, xobjMap)
 	if err != nil {
 		return nil, fmt.Errorf("extractPageTextTaggedOrder: page %d parse: %w", pageNr, err)
 	}
-	return &text, nil
+
+	return &pooledBuffer{&text}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +123,7 @@ func extractPageTextTaggedOrder(ctx *model.Context, pageNr int) (*bytes.Buffer, 
 // reading order (untagged fallback).
 func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, xobjMap map[string]xObject) (bytes.Buffer, error) {
 	spans := make([]textSpan, 0, 64)
-	cur := &textSpan{text: getSpanBuf()}
+	cur := &textSpan{text: getBuf()}
 	tagged := false
 
 	cursorDevX := parseContentStreamTagged(content, fontMap, xobjMap, newGraphicsState(), &spans, &cur, &tagged)
@@ -144,11 +158,11 @@ func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, x
 	// Join spans, inserting whitespace inferred from device-space coordinates.
 	// This logic works correctly in both sorted and stream order because each
 	// span carries its own devX/devY regardless of how they were ordered.
-	var out bytes.Buffer
+	out := getBuf()
 	for k, sp := range spans {
 		if k == 0 {
 			out.Write(sp.text.Bytes())
-			putSpanBuf(sp.text)
+			putBuf(sp.text)
 			continue
 		}
 		prev := spans[k-1]
@@ -161,9 +175,9 @@ func extractTextFromContentTagged(content []byte, fontMap map[string]*pdfFont, x
 			out.WriteByte(' ')
 		}
 		out.Write(sp.text.Bytes())
-		putSpanBuf(sp.text)
+		putBuf(sp.text)
 	}
-	return out, nil
+	return *out, nil
 }
 
 // parseContentStreamTagged is the tagged variant of parseContentStream.
@@ -214,8 +228,8 @@ func parseContentStreamTagged(
 
 	// throwaway is a reused discard buffer for suppressed glyph output, avoiding
 	// allocating a fresh buffer on every suppressed showing operator.
-	throwaway := getSpanBuf()
-	defer putSpanBuf(throwaway)
+	throwaway := getBuf()
+	defer putBuf(throwaway)
 	// sink returns the span write buffer when output is live, or the throwaway
 	// buffer when inside an Artifact or ActualText suppression range.
 	//
@@ -385,7 +399,7 @@ func parseContentStreamTagged(
 					if (*cur).text.Len() > 0 {
 						(*cur).devXEnd = devX
 						*spans = append(*spans, **cur)
-						*cur = &textSpan{text: getSpanBuf()}
+						*cur = &textSpan{text: getBuf()}
 					}
 				}
 			}

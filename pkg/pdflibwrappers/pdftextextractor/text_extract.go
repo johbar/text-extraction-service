@@ -885,7 +885,6 @@ func (ts *textState) emitGap(spans *[]textSpan, cur **textSpan, newDevX, newDevY
 	if dy > lineThreshold || dy < -lineThreshold {
 		// Different baseline: seal the current span and open a new one.
 		ts.sealCur(spans, cur, newDevX, newDevY)
-		*cur = &textSpan{devY: newDevY, devX: newDevX, text: getSpanBuf()}
 	} else {
 		// Same baseline: emit space only for a genuine forward gap.
 		spaceThreshold := ts.fontSize * 0.2
@@ -913,7 +912,7 @@ func (ts *textState) sealCur(spans *[]textSpan, cur **textSpan, newDevX, newDevY
 		(*cur).devXEnd = ts.cursorDevX
 		*spans = append(*spans, **cur)
 	}
-	*cur = &textSpan{devY: newDevY, devX: newDevX, text: getSpanBuf()}
+	*cur = &textSpan{devY: newDevY, devX: newDevX, text: getBuf()}
 }
 
 // parseFloatBytes parses a float from a byte slice without allocating a string.
