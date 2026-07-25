@@ -4,13 +4,13 @@ go 1.25.0
 
 require (
 	github.com/dustin/go-humanize v1.0.1
-	github.com/ebitengine/purego v0.10.1
+	github.com/ebitengine/purego v0.10.2
 	github.com/edsrzf/mmap-go v1.2.0
-	github.com/gabriel-vasile/mimetype v1.4.13
+	github.com/gabriel-vasile/mimetype v1.4.15
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/go-chi/httplog/v2 v2.1.1
 	github.com/johbar/pdfcpu-lite v0.12.2-0.20260713204316-fc9d09653f6e
-	github.com/klauspost/compress v1.19.0
+	github.com/klauspost/compress v1.19.1
 	github.com/nats-io/nats-server/v2 v2.14.3
 	github.com/nats-io/nats.go v1.52.0
 	github.com/richardlehane/mscfb v1.0.7
@@ -24,7 +24,7 @@ require (
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/tiff v1.0.6 // indirect
-	github.com/mattn/go-runewidth v0.0.24 // indirect
+	github.com/mattn/go-runewidth v0.0.27 // indirect
 	github.com/minio/highwayhash v1.0.4 // indirect
 	github.com/nats-io/jwt/v2 v2.8.2 // indirect
 	github.com/nats-io/nkeys v0.4.16 // indirect
