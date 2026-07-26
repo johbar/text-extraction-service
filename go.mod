@@ -1,6 +1,6 @@
 module github.com/johbar/text-extraction-service/v4
 
-go 1.25.0
+go 1.25.5
 
 require (
 	github.com/dustin/go-humanize v1.0.1
@@ -21,6 +21,7 @@ require (
 require (
 	github.com/antithesishq/antithesis-sdk-go v0.7.2 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
+	github.com/go-webgpu/goffi v0.5.3 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/tiff v1.0.6 // indirect
@@ -35,3 +36,5 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )
+
+replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.6
