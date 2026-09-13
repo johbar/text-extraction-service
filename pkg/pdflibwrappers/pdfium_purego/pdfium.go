@@ -50,7 +50,7 @@ var (
 	FPDFText_CountChars func(textPage) int
 
 	// Extract unicode text string from the page, in UTF-16LE encoding.
-	// Returns Number of characters written into parameter result buffer, excluding the trailing terminator.
+	// Returns Number of characters written into parameter result buffer, including the trailing terminator.
 	FPDFText_GetText    func(textHandle textPage, startIndex int, count int, resultBuf []byte) (charsWritten int)
 	FPDFText_GetUnicode func(textHandle textPage, index int) rune
 	/*
@@ -119,7 +119,7 @@ func InitLib(path string) (string, error) {
 	// use for debugging mempool usage:
 	// log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})).With("mod", "pdfium")
 	log := slog.New(slog.DiscardHandler)
-	mempool = mmappool.New(65536, 10, log)
+	mempool = mmappool.New(262144, 10, log)
 	return path, nil
 }
 
@@ -194,7 +194,8 @@ func (t textPage) countChars() int {
 func (t textPage) utf8Text() []byte {
 	charData, _ := mempool.Get()
 	Lock.Lock()
-	chars := FPDFText_GetText(t, 0, cap(charData), charData)
+	// number of requested utf16 chars + NUL terminator must not be greater than buffer capacity
+	chars := FPDFText_GetText(t, 0, cap(charData)/2-2, charData)
 	Lock.Unlock()
 	if chars == 0 {
 		//empty page or error
@@ -338,7 +339,7 @@ func (d *Document) MetadataMap() map[string]string {
 }
 
 // transformUtf16LeToUtf8 returns mempooled byte slice containing the
-// ut8 encoded bytes of charData.
+// utf8 encoded bytes of charData.
 // The caller needs to return the result to the pool.
 func transformUtf16LeToUtf8(charData []byte) ([]byte, error) {
 	dst, _ := mempool.Get()
