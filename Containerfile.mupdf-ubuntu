@@ -20,7 +20,7 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-RUN go build -trimpath -ldflags="-w" -tags "goexperiment.jsonv2 $BUILD_TAGS" -v -o /go/text-extraction-service
+RUN go build -trimpath -ldflags="-w" -tags "$BUILD_TAGS" -v -o /go/text-extraction-service
 
 ## Build MuPDF - stripped down shared lib
 

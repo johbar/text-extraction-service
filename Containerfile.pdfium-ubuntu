@@ -16,7 +16,7 @@ RUN go mod download && go mod verify
 COPY . .
 
 RUN pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
-RUN go build -trimpath -ldflags="-w" -tags "goexperiment.jsonv2 $BUILD_TAGS" -v -o /go/text-extraction-service
+RUN go build -trimpath -ldflags="-w" -tags "$BUILD_TAGS" -v -o /go/text-extraction-service
 
 ## Runtime Image ##
 FROM $RUNTIME_IMG

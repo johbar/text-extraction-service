@@ -17,7 +17,7 @@ COPY . .
 
 ENV CGO_ENABLED=1 DEBIAN_FRONTEND=noninteractive
 
-RUN go build -trimpath -ldflags="-w" -tags "goexperiment.jsonv2 ${BUILD_TAGS}" -v -o /go/text-extraction-service
+RUN go build -trimpath -ldflags="-w" -tags "${BUILD_TAGS}" -v -o /go/text-extraction-service
 ## Runtime Image ##
 FROM $RUNTIME_IMG
 ARG DEBIAN_FRONTEND=noninteractive

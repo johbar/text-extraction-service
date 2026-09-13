@@ -16,7 +16,7 @@ COPY . .
 
 RUN go mod download && go mod verify
 
-RUN go build -trimpath -ldflags="-w" -buildvcs=false -tags goexperiment.jsonv2 -o /go/text-extraction-service
+RUN go build -trimpath -ldflags="-w" -buildvcs=false -o /go/text-extraction-service
 
 FROM docker.io/alpine:latest
 

@@ -66,7 +66,7 @@ Initially I used `cgo` to integrate these libs with Go (using open source wrappe
 Build tags were used to decide which lib to link against.
 Later I facilitated [purego](https://github.com/ebitengine/purego) to get rid of it all.
 No more `cgo`, C header files, `pkg-config` or build tags!
-There are still a lot of runtime dependencies, but the build system can be as simple as `go build`, including cross compiling.
+There are still a some runtime dependencies, but the build system can be as simple as `go build`, including cross compiling.
 
 Using C/C++ PDF libs to do the heavy lifting of text extraction is one part of the solution.
 The other is the integration of an optional cache and the algorithm used when serving extraction requests:
@@ -84,7 +84,7 @@ Additional design considerations and assumptions:
   They don't want to download it to post it to TES, but they know the URL, so that's all TES needs to do the job.
 - The client does not care that much about the PDFs layout as they do about its textual content.
   So text returned by TES should only be semantically correct concerning the order of words on pages etc. but not accurate in presentation.
-  ➡️> Join words that have been split up by hyphens on line endings, remove newlines in order to save bandwidth etc.
+  ➡️> Join words that have been split up by hyphens at line endings, remove newlines in order to save bandwidth etc.
 
 ## Quick start
 
@@ -106,7 +106,7 @@ On *nix systems you need to `chmod +x` the binary after `gunzip`ing it.
 
 ## Dev Setup - Building TES
 
-Building only requires a recent Go SDK (v1.25) thanks to `purego`.
+Building only requires a recent Go SDK (v1.27) thanks to `purego`/`goffi`.
 But testing and running TES requires additional shared libs.
 Depending on the PDF engine you choose (see below for comparison) you need it installed in your dev/build environment.
 
@@ -144,7 +144,7 @@ Otherwise or if you prefer a current version of the upstream lib:
 ## Build locally
 
 ```sh
-GOEXPERIMENT=jsonv2 go build -o tes
+go build -o tes
 ```
 
 ## Embed NATS
@@ -152,7 +152,7 @@ GOEXPERIMENT=jsonv2 go build -o tes
 If you want to run NATS embedded in TES with zero config use the build tag `embed_nats`.
 
 ```sh
-GOEXPERIMENT=jsonv2 go build -tags embed_nats -o tes
+go build -tags embed_nats -o tes
 ```
 
 ## Embed PDFium
@@ -161,7 +161,7 @@ PDFium can be embedded into TES.
 It needs to be available in `pkg/pdflibwrappers/pdfium_purego/lib` with name according to the OS TES is being built for: `libpdfium.so`, `libpdfium.dylib` or `pdfium.dll`
 
 ```sh
-GOEXPERIMENT=jsonv2 go build -tags embed_pdfium -o tes
+go build -tags embed_pdfium -o tes
 ```
 
 NOTE: If PDFium is available in a standard system path or at path specified by `TES_PDF_LIB_PATH` at runtime, it will be preferred to the embedded lib.
@@ -220,7 +220,7 @@ For that reason TES uses a lock to protect the lib instance against concurrent a
 
 Regarding quality it might not be as good and mature as PDFium and Poppler.
 But a lot of effort and testing with different types of PDFs have been put into it in order to ensure white space handling and text decoding are correct.
-In terms of performance an memory efficiency it offers a good compromise.
+In terms of performance and memory efficiency it offers a good compromise.
 
 For small files it is
 
@@ -232,7 +232,7 @@ For big files it is
 - slightly faster than PDFium with significantly lower RSS (351 MB instead of 8 GB)
 - slower than Poppler (which only needs ~67 MB RSS)
 
-All in all, this implemention is a good-enough solution for pure Go text extraction.
+All in all, this implementation is a good-enough solution for pure Go text extraction.
 It can not leak memory like PDFium seems to do and it is thread-safe.
 
 ## Build container images

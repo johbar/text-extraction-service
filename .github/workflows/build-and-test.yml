@@ -4,7 +4,6 @@ env:
   GOARM64: v8.0
   GOAMD64: v2
   GOFLAGS: '-trimpath -ldflags=-w -buildmode=pie'
-  GOEXPERIMENT: jsonv2
 on:
   push:
     tags-ignore: "*"
@@ -19,11 +18,11 @@ jobs:
   build-embedded-on-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27'
       - name: Download libpdfium
         shell: bash
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
@@ -38,11 +37,11 @@ jobs:
   build-on-ubuntu:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27'
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
@@ -65,11 +64,11 @@ jobs:
   build-embedded-on-ubuntu:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27'
       - name: Download libpdfium
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
       - name: Build service
@@ -79,11 +78,11 @@ jobs:
   build-embedded-on-darwin:
     runs-on: "macos-latest"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27'
       - name: Download libpdfium
         run: pkg/pdflibwrappers/pdfium_purego/download-pdfium.sh
       - name: Build service
@@ -102,7 +101,7 @@ jobs:
       env:
         MUPDF_VERSION: "1.26.11"
       steps:
-        - uses: actions/checkout@v6
+        - uses: actions/checkout@v7
         - name: Install some tools
           run: apk update && apk add --no-cache file binutils tzdata
         - name: Download libpdfium
