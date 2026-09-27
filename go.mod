@@ -3,17 +3,17 @@ module github.com/johbar/text-extraction-service/v4
 go 1.27.0
 
 require (
-	github.com/dustin/go-humanize v1.0.1
-	github.com/ebitengine/purego v0.11.0
+	github.com/dustin/go-humanize v1.1.0
+	github.com/ebitengine/purego v0.11.1
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/gabriel-vasile/mimetype v1.4.15
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-chi/httplog/v2 v2.1.1
 	github.com/johbar/pdfcpu-lite v0.12.2-0.20260713204316-fc9d09653f6e
-	github.com/klauspost/compress v1.20.0
-	github.com/nats-io/nats-server/v2 v2.14.6
-	github.com/nats-io/nats.go v1.53.1
-	github.com/richardlehane/mscfb v1.0.8
+	github.com/klauspost/compress v1.20.1
+	github.com/nats-io/nats-server/v2 v2.15.0
+	github.com/nats-io/nats.go v1.54.0
+	github.com/richardlehane/mscfb v1.0.9
 	go-simpler.org/env v0.12.0
 	golang.org/x/text v0.42.0
 )
