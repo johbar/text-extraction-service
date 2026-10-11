@@ -3,12 +3,13 @@ package pdfproc
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"time"
 
-	"github.com/johbar/pdfcpu-lite/pkg/api"
-	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu"
-	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/model"
+	"github.com/pdfcpu/pdfcpu/pkg/api"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
 type PdfMetaData struct {
@@ -30,7 +31,7 @@ func init() {
 func ParseForImageExtraction(pdfData []byte) (*model.Context, error) {
 	var ctx *model.Context
 	rs := bytes.NewReader(pdfData)
-	ctx, err := api.ReadValidateAndOptimize(rs, pdfConf)
+	ctx, err := api.ReadValidateAndOptimize(context.Background(), rs, pdfConf, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +46,7 @@ func ParsePathForImageExtraction(path string) (*model.Context, error) {
 		return nil, err
 	}
 	defer f.Close()
-	ctx, err = api.ReadValidateAndOptimize(f, pdfConf)
+	ctx, err = api.ReadValidateAndOptimize(context.Background(), f, pdfConf, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +55,7 @@ func ParsePathForImageExtraction(path string) (*model.Context, error) {
 
 func GetImages(ctx *model.Context, page int) ([]model.Image, error) {
 	// pdfcpu page numbers start at 1, ours at 0
-	images, err := pdfcpu.ExtractPageImages(ctx, page+1, false)
+	images, err := pdfcpu.ExtractPageImages(context.Background(), ctx, page+1, false)
 	if err != nil {
 		return nil, err
 	}

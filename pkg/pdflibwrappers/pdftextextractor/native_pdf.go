@@ -2,15 +2,16 @@ package pdftextextractor
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"strconv"
 
-	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu"
-	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/model"
-	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/validate"
 	"github.com/johbar/text-extraction-service/v4/internal/cache"
 	"github.com/johbar/text-extraction-service/v4/internal/pdfdateparser"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/validate"
 )
 
 var pdfcpuConfig *model.Configuration = model.NewDefaultConfiguration()
@@ -30,8 +31,9 @@ func init() {
 }
 
 func Load(data []byte) (*Document, error) {
+	gtx := context.Background()
 	rs := bytes.NewReader(data)
-	ctx, err := pdfcpu.Read(rs, pdfcpuConfig)
+	ctx, err := pdfcpu.Read(gtx, rs, pdfcpuConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -39,9 +41,9 @@ func Load(data []byte) (*Document, error) {
 	// api.ReadAndValidate() doesn't handle validation issues gracefully.
 	// But the validation step seems to be necessary for fully initializing ctx.
 	// So we use lower-level APIs instead but ignore validation errors.
-	_ = validate.XRefTable(ctx)
+	_ = validate.XRefTable(gtx, ctx)
 	// necessary for image extraction
-	_ = pdfcpu.OptimizeXRefTable(ctx)
+	_ = pdfcpu.OptimizeXRefTable(gtx, ctx)
 
 	return &Document{ctx: *ctx, data: &data, pages: ctx.PageCount}, nil
 }
@@ -51,14 +53,15 @@ func Open(path string) (*Document, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, err := pdfcpu.Read(f, pdfcpuConfig)
+	gtx := context.Background()
+	ctx, err := pdfcpu.Read(gtx, f, pdfcpuConfig)
 	if err != nil {
 		return nil, err
 	}
 	// ignore validation error
-	_ = validate.XRefTable(ctx)
+	_ = validate.XRefTable(gtx, ctx)
 	// necessary for image extraction
-	_ = pdfcpu.OptimizeXRefTable(ctx)
+	_ = pdfcpu.OptimizeXRefTable(gtx, ctx)
 	return &Document{ctx: *ctx, path: path, pages: ctx.PageCount, f: f}, nil
 }
 
@@ -105,7 +108,8 @@ func (d *Document) MetadataMap() cache.DocumentMetadata {
 }
 
 func (d *Document) Text(i int) (string, bool) {
-	imgs, _ := pdfcpu.ExtractPageImages(&d.ctx, i+1, true)
+	gtx := context.Background()
+	imgs, _ := pdfcpu.ExtractPageImages(gtx, &d.ctx, i+1, true)
 	for x, img := range imgs {
 		if img.Thumb {
 			// ignore thumbnail images

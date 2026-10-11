@@ -16,6 +16,7 @@ package pdftextextractor
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"maps"
 	"slices"
@@ -24,7 +25,7 @@ import (
 	"unicode/utf16"
 	"unsafe"
 
-	"github.com/johbar/pdfcpu-lite/pkg/pdfcpu/model"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
 // ---------------------------------------------------------------------------
@@ -87,7 +88,8 @@ func extractPageTextTaggedOrder(ctx *model.Context, pageNr int) (*pooledBuffer, 
 	if pageNr < 1 || pageNr > ctx.PageCount {
 		return nil, fmt.Errorf("extractPageTextTaggedOrder: invalid page number %d (document has %d pages)", pageNr, ctx.PageCount)
 	}
-	pageDict, _, inhPAttrs, err := ctx.XRefTable.PageDict(pageNr, true /*consolidateRes*/)
+	gtx := context.Background()
+	pageDict, _, inhPAttrs, err := ctx.XRefTable.PageDict(gtx, pageNr, true /*consolidateRes*/)
 	if err != nil {
 		return nil, fmt.Errorf("extractPageTextTaggedOrder: page %d: %w", pageNr, err)
 	}
@@ -96,7 +98,7 @@ func extractPageTextTaggedOrder(ctx *model.Context, pageNr int) (*pooledBuffer, 
 	}
 	content := getBuf()
 	defer putBuf(content)
-	err = ctx.XRefTable.PageContentInto(pageDict, pageNr, content)
+	err = pageContentInto(ctx.XRefTable, pageDict, pageNr, content)
 	if err != nil {
 		if err == model.ErrNoContent {
 			return nil, nil
